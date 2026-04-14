@@ -8,7 +8,9 @@
 
 CKB Transaction Firewall is a **safety primitive for AI agents operating on Nervos CKB**. It prevents agents from sending transactions to blacklisted addresses — addresses known to be exploit contracts, drainer wallets, or compromised protocols.
 
-The enforcement happens at two independent layers: once in the agent's signing flow (fast, pre-broadcast, developer-friendly), and once at CKB consensus (authoritative, bypass-proof, enforced by every miner on the network). Both layers check the same community-maintained blacklist, which lives entirely on-chain as a CKB cell.
+The enforcement happens at two independent layers: once in the agent's signing flow (fast, pre-broadcast, developer-friendly), and once at CKB consensus (authoritative, enforced by every miner on the network). Both layers check the same community-maintained blacklist, which lives entirely on-chain as a CKB cell.
+
+> **Important:** The consensus layer is bypass-proof only for agents whose wallet cells use the Firewall Lock Script as their lock. An agent cell using a standard secp256k1 lock receives no consensus-layer protection. The lock script must be deliberately adopted — see [Integrating the Firewall Lock Script](#integrating-the-firewall-lock-script).
 
 This is foundational infrastructure. It is the safety floor that all other agent tooling on CKB is built on top of. The [CKB Agent Control Hub](https://github.com/digitaldrreamer/ckb-agent-control-hub) — the authorization and identity layer for CKB agents — uses the Transaction Firewall as its enforcement backend.
 
@@ -18,7 +20,7 @@ This is foundational infrastructure. It is the safety floor that all other agent
 
 AI agents are increasingly capable of autonomous blockchain action. They can construct transactions, sign them, and broadcast them without human confirmation at each step. That's the point — autonomy is the value. But autonomy without a safety floor is dangerous for several reasons that are specific to the AI agent threat model, not just to general blockchain security:
 
-**Prompt injection via on-chain data.** An agent reading cell data from an untrusted source could receive embedded instructions designed to redirect its next transaction. The agent, operating autonomously, may comply before any human can intervene.
+**Prompt injection via on-chain data.** An agent reading cell data from an untrusted source could receive embedded instructions designed to redirect its next transaction. The agent, operating autonomously, may comply before any human can intervene. This is not hypothetical: [published research (arXiv 2503.16248)](https://arxiv.org/abs/2503.16248) demonstrated that malicious prompts embedded in on-chain data successfully triggered unauthorized transfers against production AI agent frameworks.
 
 **Compromised tool outputs.** Agents rely on tools — price feeds, DEX quotes, protocol state queries — to make decisions. A compromised tool returning a fabricated address as a "safe" recipient gives the agent no way to verify the claim independently. The Firewall provides that independent verification at the protocol layer.
 
@@ -29,7 +31,7 @@ AI agents are increasingly capable of autonomous blockchain action. They can con
 Existing approaches to this problem are insufficient:
 
 - **Simulation / static analysis** is reactive. It tells you what a transaction *would* do, but only if you run it before signing. Agents under adversarial conditions can be directed to skip simulation.
-- **Application-level checks** (SDK guards, pre-flight validation in agent code) can be bypassed if the agent's own code is compromised or manipulated.
+- **Application-level checks** (SDK guards, pre-flight validation in agent code) can be bypassed if the agent's own code is compromised or manipulated. Research confirms that prompt-based defenses in agent code are insufficient against context manipulation attacks.
 - **Off-chain monitoring** catches problems after they happen. On a blockchain, after is too late — transactions are final.
 
 None of these approaches enforce at the protocol layer. The Transaction Firewall does.
@@ -42,9 +44,11 @@ This is not a generic blockchain project. The Transaction Firewall is built the 
 
 ### Lock Scripts Are First-Class Validation Logic
 
-On Ethereum, wallet addresses are either externally-owned accounts (with no programmable validation logic) or smart contracts (which require explicit coding of every validation rule and carry significant deployment overhead). There is no native way to say "any transaction spending from this address must pass this blacklist check" without either deploying a custom contract wallet or modifying every application that interacts with the address.
+On Ethereum, the traditional account model separates externally-owned accounts (EOAs, with no programmable validation logic) from smart contracts (which require explicit coding of every validation rule and carry deployment overhead). There is no native way to say "any transaction spending from this address must pass this blacklist check" without deploying a custom contract wallet or modifying every application that interacts with the address.
 
-On CKB, every cell has a **lock script** — arbitrary RISC-V code that runs at consensus every time the cell is spent. The lock script is not an application contract. It is the spending condition itself, evaluated by every CKB node on the network as part of transaction validation.
+This gap has narrowed with recent Ethereum upgrades. [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702), shipped in the Pectra upgrade (May 2025), allows EOAs to delegate execution to contract code for the duration of a transaction, and [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337) (live since 2023) enables arbitrary validation logic via smart contract wallets. These are meaningful steps toward programmable validation at the address level.
+
+However, CKB's model is structurally different in ways that matter for this use case. On CKB, every cell has a **lock script** — arbitrary RISC-V code that runs at consensus every time the cell is spent. The lock script is not an application contract. It is the spending condition itself, evaluated by every CKB node as part of transaction validation. This is a permanent, unconditional constraint baked into the cell — not a transaction-scoped delegation (as in EIP-7702) or a separate infrastructure layer requiring bundlers and an alt mempool (as in ERC-4337).
 
 This means a firewall lock script can be applied to any agent wallet cell. When the agent tries to spend its funds, the lock script runs, checks the blacklist, and either permits or rejects the transaction — at the miner level, not the application level. No contract deployment per wallet. No trust in the agent's own code. The check is simply part of what it means to spend the cell.
 
@@ -59,6 +63,8 @@ The Blacklist Registry Cell contains the current blacklist data. Scripts referen
 - The Registry Cell's integrity is protected by its own type script, which requires valid governance signatures for any update. The blacklist cannot be silently modified.
 
 This architecture is not possible on account-model chains without significantly more complexity. On CKB it is the natural pattern.
+
+> **Governance sequencing note:** When a governance transaction destroys the Registry Cell to replace it, any in-flight transactions that reference the old cell as a `cell_dep` may cause miners to fail block template generation if the cells are in the same mempool window. Governance updates should be timed and sequenced carefully. This is an inherent property of the CKB cell model and is not unique to this project. See [CKB security advisory GHSA-v666-6w97-pcwm](https://github.com/nervosnetwork/ckb/security/advisories/GHSA-v666-6w97-pcwm) for context.
 
 ### No Oracle Dependency
 
@@ -95,7 +101,7 @@ The Firewall enforces at two layers. This is intentional and necessary — they 
 ┌──────────────────────────────────────────────────────────────────┐
 │                  LAYER 2 — CKB Consensus Enforcement             │
 │                                                                  │
-│  Purpose: authoritative, bypass-proof, miner-enforced            │
+│  Purpose: authoritative, miner-enforced (requires Firewall lock) │
 │                                                                  │
 │  - Firewall Lock Script runs during transaction validation        │
 │  - References Blacklist Registry Cell as a cell_dep              │
@@ -112,7 +118,7 @@ The consensus layer alone is also insufficient on its own from a developer exper
 
 Together, they form a complete system. The SDK layer gives fast, contextual feedback during development and normal operation. The consensus layer provides the ground truth that no application-layer logic can override. This pattern — application-layer pre-flight plus protocol-layer enforcement — is standard in every mature security system. Network firewalls work this way. TradFi payment systems work this way. USDC's blacklist works this way (the application checks before signing; the contract enforces at settlement). The Transaction Firewall applies the same pattern to CKB agent transactions.
 
-A useful way to think about it: **the SDK layer is for the agent's benefit, the consensus layer is for everyone else's.** The SDK helps the agent fail fast and cheaply. The consensus layer means that even if the agent never runs the SDK, the network will still reject the transaction.
+A useful way to think about it: **the SDK layer is for the agent's benefit, the consensus layer is for everyone else's.** The SDK helps the agent fail fast and cheaply. The consensus layer means that even if the agent never runs the SDK, the network will still reject the transaction — provided the Firewall Lock Script is in use as the cell's lock.
 
 ---
 
@@ -312,6 +318,7 @@ See `governance/voting.md` for the complete process, including how to become a r
 - Addresses not yet on the blacklist. New exploits require governance proposals before protection applies.
 - Malicious logic within a transaction that does not involve blacklisted *addresses* specifically (e.g., data corruption, non-financial exploits). The Firewall is an address-based blacklist, not a general transaction safety analyzer.
 - Compromise of the governance keyholder set itself. This is mitigated by the multisig threshold and review window, but not eliminated.
+- Agent wallet cells that do not use the Firewall Lock Script. Consensus enforcement only applies to cells explicitly protected with this lock.
 
 **Fail-safe behavior:**
 If the Firewall Lock Script cannot read the Registry Cell during validation (e.g., the cell dep is missing from the transaction), it defaults to **rejecting the transaction**. A firewall that fails open is not a firewall. Agents must ensure the Registry Cell outpoint is included as a `cell_dep` in every transaction using the Firewall lock.
@@ -334,7 +341,7 @@ CKB Agent Control Hub
 
 CKB Transaction Firewall  ← this repo
   └── Enforces what no agent is ever allowed to do
-       (blacklisted addresses, consensus-level, bypass-proof)
+       (blacklisted addresses, consensus-level, requires Firewall lock)
 ```
 
 An agent operating on CKB should use both. The Firewall provides the absolute floor — the rules that apply to every agent regardless of configuration. The Control Hub provides the policy layer above that floor — the rules that are specific to each agent's authorized scope.
