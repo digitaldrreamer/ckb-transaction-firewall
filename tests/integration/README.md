@@ -12,8 +12,8 @@ Integration tests validate full system behavior with real transaction assembly a
 
 ## Environment
 
-- Preferred: CKB testnet endpoint.
-- Optional: local devnet for reproducible CI.
+- Preferred for CI: local CKB devnet (deterministic, fewer flakes).
+- Optional / periodic smoke: public testnet (e.g. `https://testnet.ckb.dev`) for realistic network behavior.
 
 ## Minimum Scenario Matrix
 

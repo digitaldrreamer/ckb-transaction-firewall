@@ -31,7 +31,7 @@ Expected capabilities:
 
 - add/remove entry actions,
 - proposal id linkage,
-- schema validation prior to tx build,
+- schema validation before tx build,
 - optional `--submit` toggle (build-only by default),
 - emergency temporary-add path with enforced TTL metadata fields.
 

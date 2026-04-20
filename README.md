@@ -309,23 +309,7 @@ The blacklist is community property. It is not controlled by any single develope
 
 The threshold for adding an address to the blacklist is evidence of malicious intent — confirmed exploit contracts, active drainer wallets, addresses flagged by multiple independent security researchers. The threshold for removal is evidence that the flagging was erroneous or that the risk has been remediated.
 
-### Governance thresholds (normative)
-
-| Proposal type | Rule |
-|---|---|
-| Ordinary `add_entry` | 9 active validators, quorum 6, pass at least 5 yes and yes > no, 72h review, 3-of-5 multisig execution |
-| Ordinary `remove_entry` | 9 active validators, quorum 7, pass at least 6 yes and yes > no, 72h review, 3-of-5 multisig execution |
-| Meta-governance or script/policy change | quorum 7, pass at least 6 yes and yes > no, 7-day review, 48h execution delay, 3-of-5 multisig execution |
-| Validator onboarding/removal | quorum 6, pass at least 5 yes and yes > no, 7-day review, effective next rotation window |
-
-### Emergency path (temporary add only)
-
-- Scope is strictly limited to temporary blacklist additions for active exploit response.
-- Emergency flow MUST NOT be used for removals, validator changes, quorum changes, or script upgrades.
-- Thresholds: 6 of 9 validator yes votes plus 4 of 5 multisig signatures.
-- Minimum emergency voting window: 6 hours.
-- Emergency entries carry an on-chain `expires_at` (Unix seconds). The firewall lock treats `expires_at` as passed using median chain time, so expired temporaries are ignored for enforcement without requiring a follow-up tx.
-- Ratification extends or replaces temporaries via ordinary governance; governance SHOULD still publish a registry cleanup for auditability and smaller cell data.
+**Normative policy** (quorum, voting, multisig execution, emergency temporary adds with `expires_at`, and housekeeping) lives in [`governance/voting.md`](./governance/voting.md) and the overview in [`docs/governance.md`](./docs/governance.md). This README stays descriptive; those files are the single source of truth so thresholds cannot drift in two places.
 
 See `governance/voting.md` for the complete process, including how to become a registered validator and how to submit a proposal.
 

@@ -78,10 +78,9 @@ Schema is tracked in `governance/proposal-schema.json`.
 ## Risk Controls
 
 - Mandatory cool-down/review window for normal proposals.
-- Emergency path scope is temporary adds only.
-- Emergency path MUST NOT be used for removals, validator changes, quorum changes, or script upgrades.
-- Emergency thresholds: 6/9 validator yes, 4/5 multisig signatures, minimum 6-hour vote window.
-- Emergency entries include `expires_at` in registry data; the firewall lock ignores expired temporaries using median chain time (see `docs/lock-script-spec.md`). Governance SHOULD still remove expired rows in a follow-up registry cell for audit trail and size.
+- Temporary-add-only scope for emergency response; no emergency path for removals, validator seats, quorum, or script upgrades.
+- Thresholds for emergency actions: 6/9 validator yes, 4/5 multisig signatures, minimum 6-hour vote window.
+- For temporary rows, registry data carries `expires_at`; the firewall lock drops them from enforcement after median chain time passes that timestamp (see `docs/lock-script-spec.md`). A follow-up registry cell SHOULD still delete expired rows for audit trail and cell size.
 - Conflict checks to prevent contradictory concurrent updates.
 - Clear appeal/removal process for false positives.
 
