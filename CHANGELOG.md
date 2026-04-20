@@ -37,3 +37,4 @@
 - Integration tests: local devnet as default for CI; testnet for periodic smoke.
 - Module READMEs: emergency scope + registry dep-selection invariants; pinned public error codes in unit test doc.
 - `CHANGELOG` consolidated under one date; scripts README wording tweak.
+- `docs/governance.md`: split frozen lifecycle vs v2 refinement items to avoid contradictory “open decisions” list.
