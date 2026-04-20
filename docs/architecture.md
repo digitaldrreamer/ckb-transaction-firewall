@@ -28,7 +28,7 @@ This document defines the v1 architecture of the CKB Transaction Firewall and th
 
 - Stores serialized blacklist data in on-chain cell data.
 - Protected by a registry type script that validates governance authorization.
-- Identified by stable singleton identity (`registry_type_hash` + `registry_type_args_hash`), not mutable outpoint pinning.
+- Identified by stable **type script identity** (`code_hash`, `hash_type`, `args`) on the registry cell, not mutable outpoint pinning.
 - Referenced read-only as `cell_dep` by transactions using the firewall lock.
 
 ### 3) Agent SDK (pre-flight layer)

@@ -22,3 +22,9 @@
 - Updated remaining docs to align with stable registry identity + exactly-one dep-selection rule.
 - Replaced residual outdated wording and aligned validator lifecycle policy details.
 - Synced SDK/contract/script/test docs to canonical error semantics (including AmbiguousRegistryCellDep).
+
+## 2026-04-20 (PR review follow-up)
+
+- Registry identity: use CKB type script triple in lock args and SDK examples; remove redundant type-hash + args-hash pairing.
+- Error codes: drop unused RegistryIdentityMismatch; renumber public constants 9–17.
+- Emergency TTL: specify expires_at + median-time evaluation in lock spec and governance docs.

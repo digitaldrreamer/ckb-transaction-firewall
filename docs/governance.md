@@ -81,7 +81,7 @@ Schema is tracked in `governance/proposal-schema.json`.
 - Emergency path scope is temporary adds only.
 - Emergency path MUST NOT be used for removals, validator changes, quorum changes, or script upgrades.
 - Emergency thresholds: 6/9 validator yes, 4/5 multisig signatures, minimum 6-hour vote window.
-- Emergency entries auto-expire after 72 hours unless ratified by ordinary governance.
+- Emergency entries include `expires_at` in registry data; the firewall lock ignores expired temporaries using median chain time (see `docs/lock-script-spec.md`). Governance SHOULD still remove expired rows in a follow-up registry cell for audit trail and size.
 - Conflict checks to prevent contradictory concurrent updates.
 - Clear appeal/removal process for false positives.
 

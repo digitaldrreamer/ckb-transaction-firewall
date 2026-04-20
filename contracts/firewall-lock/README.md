@@ -12,9 +12,9 @@ Rust + `ckb-std` lock script that enforces blacklist checks at consensus.
 ## Normative Resolution Rule
 
 - Registry selection is identity-based, not outpoint-pinned.
-- The lock script scans `cell_deps` for candidates matching configured registry identity.
+- The lock script scans `cell_deps` for live cells whose **type script** matches `(registry_code_hash, registry_hash_type, registry_type_args)` from lock args.
 - Validation proceeds only when exactly one candidate is found.
-- Zero matches return `MissingRegistryCellDep`; multiple matches return `AmbiguousRegistryCellDep`.
+- Zero matches return `MissingRegistryCellDep` (`8`); multiple matches return `AmbiguousRegistryCellDep` (`17`).
 
 ## Security Properties
 

@@ -17,9 +17,9 @@ TypeScript implementation of Layer 1 pre-flight checks for CKB agent transaction
 
 ## Registry Resolution Contract
 
-- Registry lookup uses stable identity (`registryTypeHash` + `registryTypeArgsHash`).
+- Registry lookup uses the registry cell’s **type script** triple: `codeHash`, `hashType`, `args` (same bytes as in firewall lock args).
 - SDK MUST scan provided deps/context and enforce exactly-one-match semantics.
-- SDK MUST map zero matches to `MissingRegistryCellDep` and multiple matches to `AmbiguousRegistryCellDep`.
+- SDK MUST map zero matches to `MissingRegistryCellDep` (code `8`) and multiple matches to `AmbiguousRegistryCellDep` (code `17`).
 
 ## Expected layout
 

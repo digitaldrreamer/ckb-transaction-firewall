@@ -98,9 +98,14 @@ For active exploitation scenarios:
 - pass threshold is 6-of-9 validator yes votes,
 - execution threshold is 4-of-5 multisig signatures,
 - each emergency action requires at least two independent evidence sources,
-- each temporary entry auto-expires after 72 hours unless ratified by ordinary governance.
+- each temporary entry MUST include `expires_at` (uint64 LE Unix seconds), normally set to creation median time + 72 hours,
+- on-chain enforcement: the Firewall lock script evaluates blacklist membership using median chain time; when `median_time >= expires_at`, the temporary entry is ignored (same effect as removal for enforcement). Ratification by ordinary governance MAY extend or replace the entry; if ratification fails, enforcement still ends at `expires_at` without requiring a housekeeping transaction.
 
 Emergency mode MUST NOT be used for removals, validator changes, quorum changes, or script upgrades.
+
+### Operational housekeeping
+
+Execution multisig SHOULD broadcast a registry replacement soon after expiry that deletes expired temporary rows so indexers and auditors see a clear on-chain trail. Failure to do so does not extend enforcement past `expires_at`.
 
 ## Reversal and Appeal
 

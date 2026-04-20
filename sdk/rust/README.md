@@ -16,9 +16,9 @@ Rust SDK for pre-flight transaction checks in native runtimes.
 
 ## Registry Resolution Contract
 
-- Registry lookup is stable-identity based (`registry_type_hash` + `registry_type_args_hash`).
+- Registry lookup matches the registry cell **type script** `(code_hash, hash_type, args)` byte-for-byte against configured values.
 - Exactly one matching registry dep is required for successful evaluation.
-- Zero matches map to `MissingRegistryCellDep`; multiple matches map to `AmbiguousRegistryCellDep`.
+- Zero matches map to `MissingRegistryCellDep` (`8`); multiple matches map to `AmbiguousRegistryCellDep` (`17`).
 
 ## Expected layout
 

@@ -250,9 +250,11 @@ import { TransactionFirewall } from '@ckb-firewall/sdk';
 
 const firewall = new TransactionFirewall({
   rpcUrl: 'https://testnet.ckb.dev',
-  blacklistRegistryIdentity: {
-    registryTypeHash: '<registry-type-hash>',
-    registryTypeArgsHash: '<registry-type-args-hash>',
+  // Registry cell type script identity (matches lock args; not an outpoint)
+  blacklistRegistryTypeScript: {
+    codeHash: '<registry-type-code-hash>',
+    hashType: 'type',
+    args: '<registry-type-args-hex>',
   },
 });
 
@@ -283,9 +285,12 @@ const firewallLock = buildFirewallLock({
   // The deployed Firewall Lock Script's code hash and hash type
   firewallCodeHash: '<deployed-firewall-code-hash>',
   firewallHashType: 'type',
-  // Stable Registry identity (used to locate the correct cell_dep at runtime)
-  registryTypeHash: '<registry-type-hash>',
-  registryTypeArgsHash: '<registry-type-args-hash>',
+  // Registry cell type script (used to locate the correct cell_dep at runtime)
+  registryTypeScript: {
+    codeHash: '<registry-type-code-hash>',
+    hashType: 'type',
+    args: '<registry-type-args-hex>',
+  },
 });
 
 // Use firewallLock as the lock for the agent's wallet cells
@@ -319,8 +324,8 @@ The threshold for adding an address to the blacklist is evidence of malicious in
 - Emergency flow MUST NOT be used for removals, validator changes, quorum changes, or script upgrades.
 - Thresholds: 6 of 9 validator yes votes plus 4 of 5 multisig signatures.
 - Minimum emergency voting window: 6 hours.
-- Emergency entries auto-expire after 72 hours unless ratified by ordinary governance.
-- Ratification failure or expiry triggers registry update removing the temporary entry.
+- Emergency entries carry an on-chain `expires_at` (Unix seconds). The firewall lock treats `expires_at` as passed using median chain time, so expired temporaries are ignored for enforcement without requiring a follow-up tx.
+- Ratification extends or replaces temporaries via ordinary governance; governance SHOULD still publish a registry cleanup for auditability and smaller cell data.
 
 See `governance/voting.md` for the complete process, including how to become a registered validator and how to submit a proposal.
 
@@ -343,7 +348,7 @@ See `governance/voting.md` for the complete process, including how to become a r
 If the Firewall Lock Script cannot read the Registry Cell during validation, it defaults to **rejecting the transaction**. A firewall that fails open is not a firewall. Registry lookup uses stable identity matching across `cell_deps`, and validation requires exactly one matching registry dep: zero matches or multiple matches both fail closed.
 
 **Deterministic registry dep selection:**
-The firewall lock MUST scan all `cell_deps` and select registry candidates by stable identity (`registry_type_hash` + `registry_type_args_hash`). Validation continues only when exactly one candidate is found. This prevents ambiguity between SDK and on-chain implementations.
+The firewall lock MUST scan all `cell_deps` and select registry candidates whose **type script** matches the configured `(code_hash, hash_type, args)` triple from lock args. Validation continues only when exactly one candidate is found. This prevents ambiguity between SDK and on-chain implementations.
 
 **Registry Cell integrity:**
 The Registry Cell's type script verifies that any update carries valid multisig authorization. An update transaction that modifies the blacklist without the required signatures will be rejected at consensus. The blacklist cannot be silently poisoned.

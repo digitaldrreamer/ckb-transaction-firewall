@@ -16,7 +16,7 @@ Type script responsible for governance authorization of registry cell updates.
 
 ## Identity Requirement
 
-Registry updates must preserve the stable registry identity used by firewall lock resolution, so blacklist updates do not require per-wallet lock migration.
+Registry updates must preserve the registry cell **type script** identity (`code_hash`, `hash_type`, `args`) expected by firewall lock args, so blacklist updates do not require per-wallet lock migration.
 
 ## Expected layout
 
