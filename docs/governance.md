@@ -90,8 +90,13 @@ Schema is tracked in `governance/proposal-schema.json`.
 - Historical registry states remain reconstructable from chain data.
 - All proposal artifacts are public and reproducible.
 
-## Open Decisions to Finalize
+## Open decisions (v2 refinements)
 
-- Validator onboarding and rotation policy.
-- Anti-sybil and independence attestation model for validators/signers.
+Baseline validator lifecycle is frozen above (onboarding, rotation cadence, participation triggers). The following are **non-blocking** elaborations for a later revision:
+
+- Deeper operational playbook for validator onboarding and rotation (templates, public registry format).
+- Stronger anti-sybil and independence attestation mechanics (beyond the baseline rules in `governance/voting.md`).
+
+## Open decisions
+
 - Formal dispute resolution and appeal SLAs.
