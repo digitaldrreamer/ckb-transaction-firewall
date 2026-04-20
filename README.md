@@ -149,7 +149,7 @@ The mechanism by which the blacklist is updated. The process runs entirely on-ch
 
 1. **Proposal submission** — any community member submits a structured proposal (JSON, conforming to `governance/proposal-schema.json`) to add or remove a blacklist entry, with evidence.
 2. **Review period** — a minimum 72-hour window during which the community reviews the proposal. This prevents rushed additions that could be weaponized to censor legitimate addresses.
-3. **Voting** — registered community validators vote on-chain. Votes are weighted.
+3. **Voting** — registered community validators vote on-chain. One validator equals one vote.
 4. **Multisig execution** — approved proposals are executed via a 3-of-5 multisig transaction that replaces the Registry Cell with an updated version.
 5. **On-chain record** — the old Registry Cell is consumed; the new one's data includes a reference to the governance transaction that authorized the change. The full history is readable on-chain.
 
@@ -250,9 +250,9 @@ import { TransactionFirewall } from '@ckb-firewall/sdk';
 
 const firewall = new TransactionFirewall({
   rpcUrl: 'https://testnet.ckb.dev',
-  blacklistRegistryOutPoint: {
-    txHash: '<registry-deployment-tx-hash>',
-    index: '0x0',
+  blacklistRegistryIdentity: {
+    registryTypeHash: '<registry-type-hash>',
+    registryTypeArgsHash: '<registry-type-args-hash>',
   },
 });
 
@@ -283,8 +283,9 @@ const firewallLock = buildFirewallLock({
   // The deployed Firewall Lock Script's code hash and hash type
   firewallCodeHash: '<deployed-firewall-code-hash>',
   firewallHashType: 'type',
-  // The Registry Cell outpoint (used to locate the cell_dep at runtime)
-  registryOutPoint: '<registry-outpoint>',
+  // Stable Registry identity (used to locate the correct cell_dep at runtime)
+  registryTypeHash: '<registry-type-hash>',
+  registryTypeArgsHash: '<registry-type-args-hash>',
 });
 
 // Use firewallLock as the lock for the agent's wallet cells
@@ -302,6 +303,24 @@ The blacklist is community property. It is not controlled by any single develope
 - **Auditable** — every version of the blacklist is recoverable from on-chain history.
 
 The threshold for adding an address to the blacklist is evidence of malicious intent — confirmed exploit contracts, active drainer wallets, addresses flagged by multiple independent security researchers. The threshold for removal is evidence that the flagging was erroneous or that the risk has been remediated.
+
+### Governance thresholds (normative)
+
+| Proposal type | Rule |
+|---|---|
+| Ordinary `add_entry` | 9 active validators, quorum 6, pass at least 5 yes and yes > no, 72h review, 3-of-5 multisig execution |
+| Ordinary `remove_entry` | 9 active validators, quorum 7, pass at least 6 yes and yes > no, 72h review, 3-of-5 multisig execution |
+| Meta-governance or script/policy change | quorum 7, pass at least 6 yes and yes > no, 7-day review, 48h execution delay, 3-of-5 multisig execution |
+| Validator onboarding/removal | quorum 6, pass at least 5 yes and yes > no, 7-day review, effective next rotation window |
+
+### Emergency path (temporary add only)
+
+- Scope is strictly limited to temporary blacklist additions for active exploit response.
+- Emergency flow MUST NOT be used for removals, validator changes, quorum changes, or script upgrades.
+- Thresholds: 6 of 9 validator yes votes plus 4 of 5 multisig signatures.
+- Minimum emergency voting window: 6 hours.
+- Emergency entries auto-expire after 72 hours unless ratified by ordinary governance.
+- Ratification failure or expiry triggers registry update removing the temporary entry.
 
 See `governance/voting.md` for the complete process, including how to become a registered validator and how to submit a proposal.
 
@@ -321,7 +340,10 @@ See `governance/voting.md` for the complete process, including how to become a r
 - Agent wallet cells that do not use the Firewall Lock Script. Consensus enforcement only applies to cells explicitly protected with this lock.
 
 **Fail-safe behavior:**
-If the Firewall Lock Script cannot read the Registry Cell during validation (e.g., the cell dep is missing from the transaction), it defaults to **rejecting the transaction**. A firewall that fails open is not a firewall. Agents must ensure the Registry Cell outpoint is included as a `cell_dep` in every transaction using the Firewall lock.
+If the Firewall Lock Script cannot read the Registry Cell during validation, it defaults to **rejecting the transaction**. A firewall that fails open is not a firewall. Registry lookup uses stable identity matching across `cell_deps`, and validation requires exactly one matching registry dep: zero matches or multiple matches both fail closed.
+
+**Deterministic registry dep selection:**
+The firewall lock MUST scan all `cell_deps` and select registry candidates by stable identity (`registry_type_hash` + `registry_type_args_hash`). Validation continues only when exactly one candidate is found. This prevents ambiguity between SDK and on-chain implementations.
 
 **Registry Cell integrity:**
 The Registry Cell's type script verifies that any update carries valid multisig authorization. An update transaction that modifies the blacklist without the required signatures will be rejected at consensus. The blacklist cannot be silently poisoned.
