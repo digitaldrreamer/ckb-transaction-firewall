@@ -1,0 +1,20 @@
+[package]
+name = "firewall-lock-tests"
+version = "0.1.0"
+authors = ["digitaldrreamer", "others"]
+edition = "2021"
+
+[dependencies]
+# * CKB testing framework
+ckb-testtool = "0.13"
+
+# * Serialization
+molecule = "0.8"
+
+[dev-dependencies]
+# * Testing utilities
+proptest = "1.0"
+
+[[test]]
+name = "firewall_lock_tests"
+path = "tests/firewall_lock_tests.rs"

@@ -1,0 +1,37 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - feat/**
+  pull_request:
+
+jobs:
+  firewall-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: riscv64imac-unknown-none-elf
+
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run firewall lock unit tests
+        working-directory: contracts/firewall-lock
+        run: cargo test --features std
+
+      - name: Build firewall lock RISC-V release binary
+        working-directory: contracts/firewall-lock
+        run: cargo build --release --target=riscv64imac-unknown-none-elf
+
+      - name: Run firewall lock integration tests
+        working-directory: tests/unit
+        run: cargo test --test firewall_lock_tests
