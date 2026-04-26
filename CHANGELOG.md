@@ -100,3 +100,8 @@
 ### CI
 
 - Added GitHub Actions workflow `.github/workflows/tests.yml` to run firewall lock unit tests, build the RISC-V release binary, and run integration tests on push/PR.
+
+### PR #2 review follow-up
+
+- Added defensive registry entry-count bound check before `Vec::with_capacity` allocation in registry parser.
+- Optimized registry dep scanning to avoid loading full dep cell data when only type-script identity matching is needed.

@@ -53,7 +53,7 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{bytes::Bytes, prelude::*},
     error::SysError,
-    high_level::{load_cell_data, load_script},
+    high_level::{load_script, load_cell_type, load_cell_data},
 };
 
 /// * Custom error codes (frozen v1)
@@ -226,6 +226,12 @@ impl RegistryPayload {
         }
 
         let entry_count = u32::from_le_bytes([data[5], data[6], data[7], data[8]]) as usize;
+        // * Defensive bound: each entry takes at least 9 bytes (len + expires_at),
+        // * so reject impossible counts before allocating.
+        let max_possible_entries = (data.len() - 9) / 9;
+        if entry_count > max_possible_entries {
+            return Err(error::to_sys_error(error::INVALID_REGISTRY_DATA));
+        }
 
         let mut entries = alloc::vec::Vec::with_capacity(entry_count);
         let mut offset = 9;
@@ -302,21 +308,19 @@ fn find_registry_cell_dep(args: &FirewallLockArgs) -> Result<usize, SysError> {
     // * Scan all cell_deps for type script matches
     let mut index = 0;
     loop {
-        match load_cell_data(index, Source::CellDep) {
-            Ok(_) => {
+        match load_cell_type(index, Source::CellDep) {
+            Ok(type_script) => {
                 // * Check if this dep has a type script matching our identity
-                if let Ok(type_script) = ckb_std::high_level::load_cell_type(index, Source::CellDep) {
-                    if let Some(script) = type_script {
-                        let code_hash: [u8; 32] = script.code_hash().unpack();
-                        let hash_type: u8 = script.hash_type().into();
-                        let type_args: Bytes = script.args().unpack();
+                if let Some(script) = type_script {
+                    let code_hash: [u8; 32] = script.code_hash().unpack();
+                    let hash_type: u8 = script.hash_type().into();
+                    let type_args: Bytes = script.args().unpack();
 
-                        if code_hash == args.registry_code_hash
-                            && hash_type == args.registry_hash_type
-                            && type_args.as_ref() == args.registry_type_args.as_ref()
-                        {
-                            matching_indices.push(index);
-                        }
+                    if code_hash == args.registry_code_hash
+                        && hash_type == args.registry_hash_type
+                        && type_args.as_ref() == args.registry_type_args.as_ref()
+                    {
+                        matching_indices.push(index);
                     }
                 }
                 index += 1;
