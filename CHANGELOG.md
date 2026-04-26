@@ -96,3 +96,7 @@
 - Module READMEs: emergency scope + registry dep-selection invariants; pinned public error codes in unit test doc.
 - `CHANGELOG` consolidated under one date; scripts README wording tweak.
 - `docs/governance.md`: split frozen lifecycle vs v2 refinement items to avoid contradictory “open decisions” list.
+
+### CI
+
+- Added GitHub Actions workflow `.github/workflows/tests.yml` to run firewall lock unit tests, build the RISC-V release binary, and run integration tests on push/PR.
