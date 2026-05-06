@@ -14,7 +14,7 @@ ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types
 blake2b-ref = { version = "0.3.1", default-features = false }
 
 [profile.release]
-overflow-checks = false
+overflow-checks = true
 opt-level = "z"        # * Optimize aggressively for binary size
 lto = true             # * Link-time optimization
 codegen-units = 1      # * Better optimization at cost of compile time

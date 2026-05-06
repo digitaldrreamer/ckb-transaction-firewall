@@ -98,6 +98,11 @@ fn parse_registry_payload(data: &[u8]) -> Result<RegistryPayload, FirewallError>
     }
 
     let count = u32::from_le_bytes([data[5], data[6], data[7], data[8]]) as usize;
+    // Bound entry count before allocation to avoid untrusted oversized capacity requests.
+    let max_possible_entries = (data.len() - 9) / 9;
+    if count > max_possible_entries {
+        return Err(FirewallError::InvalidRegistryData);
+    }
     let mut offset = 9usize;
     let mut entries = Vec::with_capacity(count);
 
