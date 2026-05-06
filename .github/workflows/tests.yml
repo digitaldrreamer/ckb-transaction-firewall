@@ -88,6 +88,11 @@ jobs:
           MAX_ARTIFACT_SETS: "3"
         run: ./scripts/phase3_verify.sh
 
+      - name: Report phase 3 closeout status (non-blocking)
+        if: always()
+        continue-on-error: true
+        run: ./scripts/phase3_closeout_check.sh
+
       - name: Upload phase 3 artifacts
         if: always()
         uses: actions/upload-artifact@v4

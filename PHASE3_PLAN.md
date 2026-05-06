@@ -170,3 +170,8 @@ Phase: Phase 3
 Overall status: In progress  
 Last updated: 2026-05-06  
 Owner of this plan file: Protocol/Contracts
+
+## Automation Notes
+
+- CI now runs `scripts/phase3_closeout_check.sh` as a non-blocking status report step to surface remaining Phase 3 gaps on every push/PR.
+- Once governance drill evidence and remaining gate artifacts are complete, this step can be promoted to blocking enforcement.
