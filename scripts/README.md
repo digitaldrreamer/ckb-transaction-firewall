@@ -76,6 +76,19 @@ Expected capabilities:
 - `set` command for scenario status + tx hash + notes,
 - `validate` command delegating to `phase3_governance_drill_check.sh`.
 
+### `phase3_governance_prereq_check.sh`
+
+Purpose:
+
+- Validate local prerequisites before attempting live testnet governance drills.
+- Check `ckb-cli` binary presence, testnet RPC connectivity, and local signer account availability.
+
+Expected capabilities:
+
+- fail fast if `ckb-cli` is missing,
+- fail fast if RPC is unreachable,
+- fail fast if no local accounts are configured.
+
 ### `deploy.sh`
 
 Purpose:
