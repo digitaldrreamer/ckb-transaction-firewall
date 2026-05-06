@@ -43,12 +43,10 @@ cargo build --release --target=riscv64imac-unknown-none-elf
 cd /tmp
 cargo generate gh:cryptape/ckb-script-templates standalone-contract --name firewall-lock-build
 
-# Copy our implementation
-cp /home/digitaldrreamer/Documents/Projects/ckb-transaction-firewall/contracts/firewall-lock/src/main.rs \
-   firewall-lock-build/src/main.rs
-
-cp /home/digitaldrreamer/Documents/Projects/ckb-transaction-firewall/contracts/firewall-lock/Cargo.toml \
-   firewall-lock-build/Cargo.toml
+# Copy our implementation (run from repo root so git can resolve top-level path)
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cp "$REPO_ROOT/contracts/firewall-lock/src/main.rs" firewall-lock-build/src/main.rs
+cp "$REPO_ROOT/contracts/firewall-lock/Cargo.toml" firewall-lock-build/Cargo.toml
 
 # Build with Makefile
 cd firewall-lock-build
@@ -82,11 +80,8 @@ name = "firewall-lock"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
-ckb-std = { version = "0.16.2", default-features = false }
+ckb-std = { version = "0.16.4", default-features = false }
 molecule = { version = "0.8.0", default-features = false }
 cfg-if = "1.0"
 

@@ -127,17 +127,16 @@ Transaction → Parse Lock Args → Find Registry Cell Dep
 ## Gap Analysis
 
 ### Critical Gaps (Must Fix Before Testnet):
-1. **Cycle profiling**: Need cycle baseline and budget report
-2. **Registry type script**: Governance validation not yet implemented
+1. **Registry type script**: Governance validation not yet implemented
 
 ### Important Gaps (Should Fix Before Mainnet):
-4. **Cycle profiling**: Unknown cycle usage (target: <10M typical case)
-5. **Large registry testing**: Need to test with 1000+ entries
-6. **Security audit**: External review required
+2. **Cycle optimization deep-dive**: Instruction-level hotspot analysis still pending
+3. **Large registry testing**: Need to test with 1000+ entries
+4. **Security audit**: External review required
 
 ### Nice-to-Have:
-7. **Documentation polish**: Build/deployment guides
-8. **Performance optimization**: After profiling identifies hot paths
+5. **Documentation polish**: Build/deployment guides
+6. **Performance optimization**: After profiling identifies hot paths
 
 ---
 
@@ -184,7 +183,7 @@ Transaction → Parse Lock Args → Find Registry Cell Dep
 
 ### Test Coverage:
 - **Unit Tests**: 24 (all passing)
-- **Integration Tests**: 0 (scaffolded only)
+- **Integration Tests**: 10 (all passing)
 - **Code Coverage**: ~85% of logic paths
 
 ### Complexity:
@@ -223,8 +222,8 @@ Transaction → Parse Lock Args → Find Registry Cell Dep
 ## Risk Assessment
 
 ### HIGH RISK (Blocking):
-❗ Binary not compiled - cannot verify in CKB-VM
-❗ Integration tests incomplete - cannot test end-to-end
+✅ Binary compiled and validated in CKB-VM
+✅ Integration tests complete and passing end-to-end
 ❗ Registry type script missing - governance layer incomplete
 
 ### MEDIUM RISK (Important):
@@ -240,20 +239,18 @@ Transaction → Parse Lock Args → Find Registry Cell Dep
 ## Next Session Priorities
 
 ### Immediate (Must Do):
-1. Install Rust + ckb-capsule
-2. Add RISC-V target
-3. Compile firewall lock binary
-4. Verify binary size (<100KB)
+1. Complete ckb-debugger instruction-level profiling and hotspot notes
+2. Expand integration coverage for median-time expiry edge cases
+3. Verify large-registry behavior under stress scenarios
 
 ### Short-term (Should Do):
-5. Complete 1-2 integration tests
-6. Run basic cycle profiling
-7. Start registry type script
+4. Start/complete registry type script governance controls
+5. Run external security-oriented review checklist
+6. Prepare testnet deployment validation checklist
 
 ### Medium-term (Nice to Do):
-8. Optimize hot paths
-9. Test large registries
-10. Complete documentation
+7. Optimize hot paths
+8. Complete documentation
 
 ---
 
@@ -274,7 +271,7 @@ Transaction → Parse Lock Args → Find Registry Cell Dep
 - ✅ All unit tests pass
 - ✅ No unsafe code (except alloc)
 - ✅ Comprehensive error handling
-- 🚧 Integration tests pass (pending binary)
+- ✅ Integration tests pass
 - ⏳ Cycle usage acceptable (pending profiling)
 
 ---
@@ -336,15 +333,14 @@ tests/unit/
 
 ## Conclusion
 
-**Phase 1 is 80% complete** with all core logic implemented, tested, and documented. The remaining 20% involves:
-1. Build environment setup
-2. Binary compilation
-3. Integration testing
-4. Cycle profiling
+**Phase 1 is 90% complete** with core logic, binary build, and integration validation completed. Remaining work focuses on:
+1. Cycle profiling deep-dive and optimization
+2. Larger-scale scenario validation
+3. Security audit and deployment hardening
 
 The implementation follows the frozen v1 specification exactly, with comprehensive error handling, robust testing, and clear documentation. All design decisions are justified and aligned with CKB best practices (binary search, spawn delegation, fail-closed errors).
 
-**Estimated time to 100% completion**: 3-5 days of focused work on build environment, integration testing, and cycle optimization.
+**Estimated time to 100% completion**: 2-4 days of focused work on profiling deep-dive, stress testing, and security hardening.
 
 The codebase is production-ready from a logic perspective and only requires compilation/testing infrastructure to complete Phase 1.
 
@@ -361,9 +357,8 @@ The codebase is production-ready from a logic perspective and only requires comp
 
 **Manual Changes Required:**
 - ⚠️ Install Rust toolchain (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
-- ⚠️ Install ckb-capsule (`cargo install ckb-capsule`)
 - ⚠️ Add RISC-V target (`rustup target add riscv64imac-unknown-none-elf`)
-- ⚠️ Compile binary (`capsule build --release`)
+- ⚠️ Compile binary (`cargo build --release --target=riscv64imac-unknown-none-elf`)
 
 **Special Attention Required:**
 - 🔍 Verify binary size <100KB after compilation

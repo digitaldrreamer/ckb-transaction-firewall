@@ -4,7 +4,7 @@
 
 1. **Cargo.toml Issues**:
    - Changed `edition = "2026"` → `edition = "2021"` (2026 doesn't exist)
-   - Added `[lib] crate-type = ["cdylib"]` for CKB script output
+   - Kept standard binary target output (`firewall-lock`)
 
 2. **Created build.sh**: Automated build script that bypasses Cursor rustup issues
 
@@ -13,7 +13,7 @@
 ### Option 1: Use the Build Script (Easiest)
 
 ```bash
-cd ~/Documents/Projects/ckb-transaction-firewall/contracts/firewall-lock
+cd contracts/firewall-lock
 ./build.sh
 ```
 
@@ -27,25 +27,25 @@ The script will:
 ### Option 2: Manual Build
 
 ```bash
-cd ~/Documents/Projects/ckb-transaction-firewall/contracts/firewall-lock
+cd contracts/firewall-lock
 
 # Find your Rust toolchain
 RUST_TOOLCHAIN=$(find ~/.rustup/toolchains -type d -name "stable-*" | head -1)
 
 # Add RISC-V target (one-time)
-$RUST_TOOLCHAIN/bin/rustup target add riscv64imac-unknown-none-elf
+rustup target add riscv64imac-unknown-none-elf
 
 # Build
 $RUST_TOOLCHAIN/bin/cargo build --release --target=riscv64imac-unknown-none-elf
 
 # Check result
-ls -lh target/riscv64imac-unknown-none-elf/release/libfirewall_lock.so
+ls -lh target/riscv64imac-unknown-none-elf/release/firewall-lock
 ```
 
 ## 📦 Expected Output
 
-```
-target/riscv64imac-unknown-none-elf/release/libfirewall_lock.so
+```text
+target/riscv64imac-unknown-none-elf/release/firewall-lock
 ```
 
 **Target size**: <100KB
@@ -68,12 +68,12 @@ $RUST_TOOLCHAIN/bin/cargo test --features std
 
 ### "target not found: riscv64imac-unknown-none-elf"
 ```bash
-$RUST_TOOLCHAIN/bin/rustup target add riscv64imac-unknown-none-elf
+rustup target add riscv64imac-unknown-none-elf
 ```
 
 ### "linker `rust-lld` not found"
 ```bash
-$RUST_TOOLCHAIN/bin/rustup component add llvm-tools-preview
+rustup component add llvm-tools-preview
 ```
 
 ### Binary not at expected location
@@ -87,7 +87,7 @@ find target -name "*.so" -o -name "*firewall*"
 After running `./build.sh`, you should see:
 
 - [x] All 24 unit tests pass
-- [x] Binary created at `target/riscv64imac-unknown-none-elf/release/libfirewall_lock.so`
+- [x] Binary created at `target/riscv64imac-unknown-none-elf/release/firewall-lock`
 - [x] Size under 100KB (ideally ~20-50KB)
 
 ## 📝 Next Steps After Build
@@ -96,7 +96,7 @@ After running `./build.sh`, you should see:
    ```rust
    // tests/unit/tests/firewall_lock_tests.rs
    const FIREWALL_BINARY: &[u8] = include_bytes!(
-       "../../../contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/libfirewall_lock.so"
+       "../../../contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/firewall-lock"
    );
    ```
 
@@ -108,7 +108,7 @@ After running `./build.sh`, you should see:
 
 3. **Profile Cycles** (if ckb-debugger installed):
    ```bash
-   ckb-debugger --bin target/riscv64imac-unknown-none-elf/release/libfirewall_lock.so
+   ckb-debugger --bin target/riscv64imac-unknown-none-elf/release/firewall-lock
    ```
 
 ## 💡 Tips
@@ -131,7 +131,7 @@ After running `./build.sh`, you should see:
 **Run this now** (in a regular terminal, not Cursor):
 
 ```bash
-cd ~/Documents/Projects/ckb-transaction-firewall/contracts/firewall-lock
+cd contracts/firewall-lock
 ./build.sh
 ```
 

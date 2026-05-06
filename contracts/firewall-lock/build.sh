@@ -34,7 +34,7 @@ if ! $CARGO --version &>/dev/null; then
 fi
 
 # Check if target is installed. Force-clean RUSTUP_FORCE_ARG0 to avoid "unknown proxy name: cursor".
-if ! env -u RUSTUP_FORCE_ARG0 "$RUSTUP" target list --installed 2>/dev/null | rg -q "$TARGET"; then
+if ! env -u RUSTUP_FORCE_ARG0 "$RUSTUP" target list --installed 2>/dev/null | grep -q "$TARGET"; then
     echo "   Installing RISC-V target..."
     env -u RUSTUP_FORCE_ARG0 "$RUSTUP" target add "$TARGET" || {
         echo "   ⚠️  Could not check/install target via rustup (Cursor issue)"
@@ -77,16 +77,10 @@ echo ""
 echo "🏗️  Building release binary..."
 $CARGO build --release --target="$TARGET"
 
-# Check if binary was created (contract may output as executable or cdylib)
-BINARY_EXEC="target/$TARGET/release/firewall-lock"
-BINARY_LIB="target/$TARGET/release/libfirewall_lock.so"
-if [ -f "$BINARY_EXEC" ]; then
-    BINARY="$BINARY_EXEC"
-elif [ -f "$BINARY_LIB" ]; then
-    BINARY="$BINARY_LIB"
-fi
+# Check if binary was created
+BINARY="target/$TARGET/release/firewall-lock"
 
-if [ -n "${BINARY:-}" ] && [ -f "$BINARY" ]; then
+if [ -f "$BINARY" ]; then
     SIZE=$(ls -lh "$BINARY" | awk '{print $5}')
     echo ""
     echo "✅ Build successful!"
@@ -103,9 +97,8 @@ if [ -n "${BINARY:-}" ] && [ -f "$BINARY" ]; then
 else
     echo ""
     echo "❌ Binary not found at expected location"
-    echo "   Expected one of:"
-    echo "   - $BINARY_EXEC"
-    echo "   - $BINARY_LIB"
+    echo "   Expected:"
+    echo "   - $BINARY"
     echo "   Checking for alternatives..."
     find target -name "*.so" -o -name "firewall*"
     exit 1

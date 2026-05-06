@@ -65,6 +65,36 @@ Schema is tracked in `governance/proposal-schema.json`.
 - Execution transaction replaces registry cell atomically.
 - Witness payload references approved proposal id and vote result digest.
 
+### On-chain binding (registry type script)
+
+The registry replacement transaction is protected by the **Blacklist Registry type script** (`contracts/blacklist-registry`).
+
+At consensus, the type script enforces:
+
+- exactly one input + one output registry cell using the same registry type script identity,
+- both registry cells are locked by the configured governance lock script identity,
+- the registry data is well-formed (`BLKL` v1 format and sorted entries),
+- a governance witness payload is present in `WitnessArgs.lock` for the registry input cell and binds:
+  - `proposal_id_hash` + `vote_digest_hash`
+  - the exact `old_registry_root` → `new_registry_root` transition, where each root is `blake2b_256` over the full registry cell data (personalization `ckb-default-hash`).
+- strict signer authorization is verified in-script:
+  - witness includes `signer_count` plus repeated `{signer_index, signature[65]}` entries,
+  - signer indexes must be unique and in range `[0,4]`,
+  - at least 3 signatures must verify against the fixed 5-signer governance pubkey set,
+  - the verified message digest is `blake2b_256(proposal_id_hash || vote_digest_hash || old_root || new_root)`.
+- bootstrap support:
+  - first registry creation is allowed as `0 registry inputs -> 1 registry output`,
+  - bootstrap enforces `old_root = 0x00..00`,
+  - bootstrap requires full 5-of-5 signer verification.
+
+### Signer key rotation policy (v1)
+
+- Because signer pubkeys are compiled into the registry type script, key rotation requires deploying a new script binary (new code hash) and governance-led migration.
+- Emergency compromise handling must include:
+  - immediate governance notice and temporary execution freeze,
+  - audited replacement binary with rotated signer set,
+  - migration to the new type script identity and off-chain config update (SDK/indexers/operators).
+
 ## Validator Lifecycle Policy
 
 - Validator pool: 9 active validators plus up to 3 standby validators.

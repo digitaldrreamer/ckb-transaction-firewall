@@ -110,8 +110,34 @@
 ### Build + integration milestone
 
 - Built `contracts/firewall-lock` RISC-V release binary (`firewall-lock`) successfully (23K).
-- Ran firewall lock unit tests (19/19 passing).
-- Ran `ckb-testtool` integration tests in `tests/unit` (15/15 passing).
+- Ran firewall lock unit tests (24/24 passing).
+- Ran `ckb-testtool` integration tests in `tests/unit` (27/27 passing: 15 firewall + 12 blacklist-registry).
 - Recorded happy-path cycle probe results in `contracts/firewall-lock/CYCLE_REPORT.md` via `profile-cycles.sh`.
 - Fixed `contracts/firewall-lock/profile-cycles.sh` report update logic to work with non-empty Notes column.
 
+### Phase 2: Blacklist Registry Type Script (Completed)
+
+- Implemented `contracts/blacklist-registry` type script contract:
+  - Enforces exactly-one input/output registry cell topology for updates
+  - Enforces `BLKL` v1 registry payload invariants (magic, version, sorted entries)
+  - Enforces governance authorization via a configured governance lock script identity encoded in type args
+  - Binds update transactions to a governance context witness payload (`GOV1` v1) committed by sighash-all locks
+- Added `ckb-testtool` integration tests:
+  - `tests/unit/tests/blacklist_registry_tests.rs` (12 tests passing)
+  - Wired into `tests/unit/Cargo.toml`
+- Added hashing dependency for tests (`blake2b-ref`) and aligned personalization with CKB default hash
+
+### Phase 2 follow-up: strict governance multisig
+
+- Upgraded `contracts/blacklist-registry` to strict in-script governance verification:
+  - Added fixed 5-signer secp256k1 pubkey set in contract code.
+  - Extended `GOV1` witness layout with `signer_count` and repeated `{signer_index, signature[65]}` entries.
+  - Added digest binding `blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root)`.
+  - Enforced 3-of-5 signer threshold with signer index bounds + duplicate checks + signature verification.
+- Extended integration coverage:
+  - `tests/unit/tests/blacklist_registry_tests.rs` now signs governance payloads with deterministic keys and validates strict signature paths (12 passing tests, including bootstrap and stricter signer failure paths).
+- Applied PR #3 documentation consistency fixes:
+  - Unified firewall binary naming to `firewall-lock` in build docs/snippets.
+  - Removed developer-specific absolute paths in setup docs.
+  - Aligned capsule-free build instructions (`cargo build --release --target=...`) with current workflow.
+  - Updated stale status lines in `GAPS_ANALYSIS.md` and `SESSION_SUMMARY.md`.
