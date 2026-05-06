@@ -72,6 +72,33 @@ rotate_info_file_if_exists() {
   fi
 }
 
+resolve_governance_lock_data_hash_from_file() {
+  local path="$1"
+  if [[ -f "$path" ]]; then
+    jq -r '.new_recipe.cell_recipes[]? | select(.name=="governance_lock") | .data_hash' "$path" | head -1
+  fi
+}
+
+resolve_governance_lock_data_hash() {
+  local primary="$1"
+  local hash
+  hash="$(resolve_governance_lock_data_hash_from_file "$primary")"
+  if [[ -n "$hash" && "$hash" != "null" ]]; then
+    echo "$hash"
+    return 0
+  fi
+  local latest_backup
+  latest_backup="$(ls -1t "${primary}".*.bak 2>/dev/null | head -1 || true)"
+  if [[ -n "$latest_backup" ]]; then
+    hash="$(resolve_governance_lock_data_hash_from_file "$latest_backup")"
+    if [[ -n "$hash" && "$hash" != "null" ]]; then
+      echo "$hash"
+      return 0
+    fi
+  fi
+  return 1
+}
+
 if [[ -z "$FROM_ADDRESS" ]]; then
   FROM_ADDRESS="$("$CKB_CLI_BIN" --url "$RPC_URL" account list --output-format json | jq -r '.[0].address.testnet // empty')"
 fi
@@ -122,6 +149,7 @@ if [[ $STRICT_GOV_LOCK -eq 1 ]]; then
 name = "governance_lock"
 enable_type_id = true
 location = { file = "${GOV_BIN}" }
+force_redeploy = false
 
 [lock]
 code_hash = "${SECP_CODE_HASH}"
@@ -131,11 +159,20 @@ EOF
 
   echo "Generating governance-lock stage transactions..."
   rotate_info_file_if_exists "$GOV_INFO_FILE"
-  "$CKB_CLI_BIN" --url "$RPC_URL" deploy gen-txs \
+  set +e
+  GOV_GEN_OUTPUT="$("$CKB_CLI_BIN" --url "$RPC_URL" deploy gen-txs \
     --deployment-config "$GOV_DEPLOYMENT_CONFIG" \
     --migration-dir "$GOV_MIGRATIONS_DIR" \
     --from-address "$FROM_ADDRESS" \
-    --info-file "$GOV_INFO_FILE"
+    --info-file "$GOV_INFO_FILE" 2>&1)"
+  GOV_GEN_STATUS=$?
+  set -e
+  echo "$GOV_GEN_OUTPUT"
+
+  if [[ $GOV_GEN_STATUS -ne 0 && "$GOV_GEN_OUTPUT" != *"No cells/dep_groups need update"* ]]; then
+    echo "governance-lock stage generation failed" >&2
+    exit $GOV_GEN_STATUS
+  fi
 
   if [[ $DRY_RUN -eq 1 ]]; then
     cat <<EOF
@@ -148,22 +185,22 @@ EOF
     exit 0
   fi
 
-  echo "Signing governance-lock stage transactions..."
-  "$CKB_CLI_BIN" --url "$RPC_URL" deploy sign-txs \
-    --from-account "$FROM_ADDRESS" \
-    --add-signatures \
-    --info-file "$GOV_INFO_FILE"
+  if [[ $GOV_GEN_STATUS -eq 0 ]]; then
+    echo "Signing governance-lock stage transactions..."
+    "$CKB_CLI_BIN" --url "$RPC_URL" deploy sign-txs \
+      --from-account "$FROM_ADDRESS" \
+      --add-signatures \
+      --info-file "$GOV_INFO_FILE"
 
-  echo "Applying governance-lock stage transactions..."
-  "$CKB_CLI_BIN" --url "$RPC_URL" deploy apply-txs \
-    --migration-dir "$GOV_MIGRATIONS_DIR" \
-    --info-file "$GOV_INFO_FILE"
+    echo "Applying governance-lock stage transactions..."
+    "$CKB_CLI_BIN" --url "$RPC_URL" deploy apply-txs \
+      --migration-dir "$GOV_MIGRATIONS_DIR" \
+      --info-file "$GOV_INFO_FILE"
+  fi
 
-  GOV_LOCK_CODE_HASH="$(
-    jq -r '.new_recipe.cell_recipes[] | select(.name=="governance_lock") | .data_hash' "$GOV_INFO_FILE"
-  )"
+  GOV_LOCK_CODE_HASH="$(resolve_governance_lock_data_hash "$GOV_INFO_FILE" || true)"
   if [[ -z "$GOV_LOCK_CODE_HASH" || "$GOV_LOCK_CODE_HASH" == "null" ]]; then
-    echo "Could not resolve governance_lock data_hash from $GOV_INFO_FILE" >&2
+    echo "Could not resolve governance_lock data_hash from $GOV_INFO_FILE or backups" >&2
     exit 1
   fi
   GOV_LOCK_HASH_TYPE="data1"
@@ -181,11 +218,13 @@ cat >"$DEPLOYMENT_CONFIG" <<EOF
 name = "firewall_lock"
 enable_type_id = true
 location = { file = "${FW_BIN}" }
+force_redeploy = true
 
 [[cells]]
 name = "blacklist_registry"
 enable_type_id = true
 location = { file = "${REG_BIN}" }
+force_redeploy = true
 
 [lock]
 code_hash = "${GOV_LOCK_CODE_HASH}"
