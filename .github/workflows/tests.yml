@@ -47,6 +47,9 @@ jobs:
         working-directory: tests/unit
         run: cargo test --test blacklist_registry_tests
 
+      - name: Run phase 3 contract/spec compatibility check
+        run: ./scripts/phase3_compat_check.sh
+
       - name: Run phase 3 reproducible build manifest
         env:
           MAX_ARTIFACT_SETS: "3"

@@ -33,6 +33,20 @@ Expected capabilities:
 - configurable cycle thresholds via env vars,
 - bounded artifact retention via `MAX_ARTIFACT_SETS`.
 
+### `phase3_compat_check.sh`
+
+Purpose:
+
+- Enforce frozen v1 contract/spec compatibility invariants.
+- Detect drift between on-chain firewall error codes and `docs/lock-script-spec.md`.
+- Verify required version/magic markers (`0x01`, `BLKL`, `GOV1`) remain aligned across contracts/docs.
+
+Expected capabilities:
+
+- fail-fast on error-code mapping mismatch,
+- fail-fast on missing format/version markers in contract or docs,
+- CI-safe deterministic checks (no network dependency).
+
 ### `deploy.sh`
 
 Purpose:

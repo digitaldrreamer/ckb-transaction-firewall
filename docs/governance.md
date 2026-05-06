@@ -74,7 +74,7 @@ At consensus, the type script enforces:
 - exactly one input + one output registry cell using the same registry type script identity,
 - both registry cells are locked by the configured governance lock script identity,
 - the registry data is well-formed (`BLKL` v1 format and sorted entries),
-- a governance witness payload is present in `WitnessArgs.lock` for the registry input cell and binds:
+- a `GOV1` governance witness payload is present in `WitnessArgs.lock` for the registry input cell and binds:
   - `proposal_id_hash` + `vote_digest_hash`
   - the exact `old_registry_root` → `new_registry_root` transition, where each root is `blake2b_256` over the full registry cell data (personalization `ckb-default-hash`).
 - strict signer authorization is verified in-script:
