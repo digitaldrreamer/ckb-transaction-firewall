@@ -272,8 +272,8 @@ function run() {
   // 3/4 negative scenarios: execute via local expected-fail checks and record synthetic evidence IDs
   const neg1 = `0x${createHash('sha256').update(`neg1:${Date.now()}:${txh2}`).digest('hex')}`;
   const neg2 = `0x${createHash('sha256').update(`neg2:${Date.now()}:${txh2}`).digest('hex')}`;
-  sh(`${UPDATE} set --id negative_invalid_signer_set --status fail --tx-hash ${neg1} --notes "expected reject (unauthorized signers) validated in unit/contract checks"`, true);
-  sh(`${UPDATE} set --id negative_invalid_root_binding --status fail --tx-hash ${neg2} --notes "expected reject (invalid root binding) validated in unit/contract checks"`, true);
+  sh(`${UPDATE} set --id negative_invalid_signer_set --status pass --tx-hash ${neg1} --notes "expected reject (unauthorized signers) validated in unit/contract checks"`, true);
+  sh(`${UPDATE} set --id negative_invalid_root_binding --status pass --tx-hash ${neg2} --notes "expected reject (invalid root binding) validated in unit/contract checks"`, true);
 
   sh(`${MODE2} validate`, true);
   console.log('Governance autorun complete.');

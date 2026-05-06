@@ -77,11 +77,10 @@ At consensus, the type script enforces:
 - a `GOV1` governance witness payload is present in `WitnessArgs.input_type` (preferred; `lock` accepted for backward compatibility) for the registry input cell and binds:
   - `proposal_id_hash` + `vote_digest_hash`
   - the exact `old_registry_root` → `new_registry_root` transition, where each root is `blake2b_256` over the full registry cell data (personalization `ckb-default-hash`).
-- strict signer authorization is verified in-script:
+- strict signer structure/threshold authorization is verified in-script:
   - witness includes `signer_count` plus repeated `{signer_index, signature[65]}` entries,
   - signer indexes must be unique and in range `[0,4]`,
-  - at least 3 signatures must verify against the fixed 5-signer governance pubkey set,
-  - the verified message digest is `blake2b_256(proposal_id_hash || vote_digest_hash || old_root || new_root)`.
+  - at least 3 signer entries (or 5 for bootstrap) are required and validated structurally.
 - bootstrap support:
   - first registry creation is allowed as `0 registry inputs -> 1 registry output`,
   - bootstrap enforces `old_root = 0x00..00`,
