@@ -84,7 +84,7 @@ At consensus, the type script enforces:
 - bootstrap support:
   - first registry creation is allowed as `0 registry inputs -> 1 registry output`,
   - bootstrap enforces `old_root = 0x00..00`,
-  - bootstrap requires full 5-of-5 signer verification.
+  - bootstrap requires 5 signer entries with valid structural constraints.
 
 ### Signer key rotation policy (v1)
 

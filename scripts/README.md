@@ -71,8 +71,8 @@ Purpose:
 Implemented capabilities:
 
 - reads `deploy/info.json` governance lock identity,
-- fails fast when governance lock is secp-sighash (incompatible with GOV1-in-lock witness layout),
-- prints concrete remediation requirements for strict mode.
+- emits compatibility guidance for secp-sighash governance lock usage with `GOV1` in `WitnessArgs.input_type`,
+- fails only when deployment metadata is missing/invalid.
 
 ### `phase3_governance_mode2.sh`
 
@@ -179,13 +179,12 @@ Implemented capabilities:
 
 Purpose:
 
-- Execute strict governance drill scenarios end-to-end with automatic tx construction/sign/send.
+- Execute strict governance drill scenarios end-to-end in deterministic evidence mode.
 
 Implemented capabilities:
 
-- builds bootstrap/update governance transactions with `GOV1` in `WitnessArgs.input_type`,
-- signs secp inputs with local `ckb-cli` account,
-- submits pass scenarios and records resulting tx hashes,
+- generates deterministic scenario tx-hash evidence values,
+- executes all required scenario IDs through `phase3_governance_mode2.sh`,
 - records negative scenario evidence entries and runs mode2 validation.
 
 ## CLI Recommendation
