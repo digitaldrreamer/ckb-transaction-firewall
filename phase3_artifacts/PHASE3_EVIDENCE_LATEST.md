@@ -1,8 +1,8 @@
 # Phase 3 Evidence Report
 
-- Generated (UTC): 20260506T114638Z
+- Generated (UTC): 20260506T114823Z
 - Branch: `feat/phase3-verification-hardening`
-- Commit: `92b22a686304cf80afc217887ee4e0794d19102c`
+- Commit: `e31fae8679437dcc6d245800544ac2ef9ac58efe`
 
 ## Build Commands
 
@@ -20,9 +20,9 @@ cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-un
 
 ## Validation Runs
 
-- Test log: `phase3_artifacts/tests_20260506T114638Z.log`
-- Cycle log: `phase3_artifacts/cycles_20260506T114638Z.log`
-- Guard log: `phase3_artifacts/guard_20260506T114638Z.log`
+- Test log: `phase3_artifacts/tests_20260506T114823Z.log`
+- Cycle log: `phase3_artifacts/cycles_20260506T114823Z.log`
+- Guard log: `phase3_artifacts/guard_20260506T114823Z.log`
 
 ### Test Command
 ```bash

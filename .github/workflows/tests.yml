@@ -47,6 +47,11 @@ jobs:
         working-directory: tests/unit
         run: cargo test --test blacklist_registry_tests
 
+      - name: Run phase 3 reproducible build manifest
+        env:
+          MAX_ARTIFACT_SETS: "3"
+        run: ./scripts/phase3_repro_build.sh
+
       - name: Run phase 3 verification script
         env:
           MAX_CYCLES_LOCK_ONLY: "250000"

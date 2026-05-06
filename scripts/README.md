@@ -4,6 +4,35 @@ Operational automation for deployment and governance workflows.
 
 ## Script Inventory
 
+### `phase3_repro_build.sh`
+
+Purpose:
+
+- Execute two clean RISC-V release builds for both contracts.
+- Fail on hash/size drift between rounds (determinism gate).
+- Emit timestamped and latest artifact manifests under `phase3_artifacts/`.
+
+Expected capabilities:
+
+- reproducibility check across clean rounds,
+- markdown + JSON manifest generation,
+- bounded artifact retention via `MAX_ARTIFACT_SETS`.
+
+### `phase3_verify.sh`
+
+Purpose:
+
+- Run Phase 3 correctness/performance safety checks.
+- Enforce cycle budgets and registry size gate.
+- Emit timestamped and latest Phase 3 evidence reports under `phase3_artifacts/`.
+
+Expected capabilities:
+
+- production guard validation for blacklist-registry,
+- unit/integration + cycle probe execution,
+- configurable cycle thresholds via env vars,
+- bounded artifact retention via `MAX_ARTIFACT_SETS`.
+
 ### `deploy.sh`
 
 Purpose:
