@@ -1,0 +1,39 @@
+# Phase 3 Evidence Report
+
+- Generated (UTC): 20260506T112758Z
+- Branch: `feat/phase2-registry-hardening-and-doc-sync`
+- Commit: `a17e22bdce188e19905731fbdcfd3ef5b5b6d21d`
+
+## Build Commands
+
+```bash
+cd contracts/firewall-lock && cargo build --release --target=riscv64imac-unknown-none-elf
+cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+```
+
+## Artifact Manifest
+
+| Artifact | Path | Size (bytes) | Human size | SHA256 |
+|---|---|---:|---:|---|
+| firewall-lock | `contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/firewall-lock` | 23336 | 23K | `7c2f6dfb429ddba22be9bae6fd38ad9d7aa51636a07ce61209ca1eb8f10b46e2` |
+| blacklist-registry | `contracts/blacklist-registry/target/riscv64imac-unknown-none-elf/release/blacklist-registry` | 98256 | 96K | `fd704f21d808015a63c97dfd9db594d32deafc969acd0287c9be9db66581d21d` |
+
+## Validation Runs
+
+- Test log: `phase3_artifacts/tests_20260506T112758Z.log`
+- Cycle log: `phase3_artifacts/cycles_20260506T112758Z.log`
+
+### Test Command
+```bash
+cd tests/unit && cargo test -- --nocapture
+```
+
+### Cycle Probe Command
+```bash
+cd contracts/firewall-lock && ./profile-cycles.sh
+```
+
+## Notes
+
+- `blacklist-registry` currently requires `--features dev-signer-keys` for local builds while production signer set finalization is pending.
+- Use this report as evidence input for Phase 3 gates G2/G3/G5.
