@@ -46,6 +46,11 @@ check_file "docs/phase3/runbooks/deployment-runbook.md" "Deployment runbook"
 check_file "docs/phase3/runbooks/key-rotation-runbook.md" "Key rotation runbook"
 check_file "docs/phase3/runbooks/governance-incident-playbook.md" "Governance incident playbook"
 
+# Go/No-Go templates
+check_file "docs/phase3/go-no-go/decision-record-template.md" "Go/No-Go decision record template"
+check_file "docs/phase3/go-no-go/rollout-checklist-template.md" "Mainnet rollout checklist template"
+check_file "docs/phase3/go-no-go/post-deploy-verification-template.md" "Post-deploy verification template"
+
 echo ""
 if [[ $FAILED -eq 0 ]]; then
   echo "Phase 3 closeout checks passed."
