@@ -53,11 +53,11 @@ echo "Happy path very-large-registry (2000 entries) both-checks cycles: $CYCLES_
 
 echo ""
 echo "Updating CYCLE_REPORT.md..."
-sed -i "s/| happy path (lock-only) | pass |[[:space:]]*|[[:space:]]*|/| happy path (lock-only) | pass | $CYCLES_LOCK_ONLY | ckb-testtool verify_tx() cycle probe |/" "$REPORT_FILE"
-sed -i "s/| happy path (type-only) | pass |[[:space:]]*|[[:space:]]*|/| happy path (type-only) | pass | $CYCLES_TYPE_ONLY | ckb-testtool verify_tx() cycle probe |/" "$REPORT_FILE"
-sed -i "s/| happy path (both-checks) | pass |[[:space:]]*|[[:space:]]*|/| happy path (both-checks) | pass | $CYCLES_BOTH_CHECKS | ckb-testtool verify_tx() cycle probe |/" "$REPORT_FILE"
-sed -i "s/| happy path (large registry, 512 entries, both-checks) | pass |[[:space:]]*|[[:space:]]*|/| happy path (large registry, 512 entries, both-checks) | pass | $CYCLES_LARGE_REGISTRY_BOTH_CHECKS | ckb-testtool verify_tx() cycle probe |/" "$REPORT_FILE"
-sed -i "s/| happy path (very large registry, 2000 entries, both-checks) | pass |[[:space:]]*|[[:space:]]*|/| happy path (very large registry, 2000 entries, both-checks) | pass | $CYCLES_VERY_LARGE_REGISTRY_BOTH_CHECKS | ckb-testtool verify_tx() cycle probe |/" "$REPORT_FILE"
+sed -i "s/| happy path (lock-only) | pass |[^|]*|/| happy path (lock-only) | pass | $CYCLES_LOCK_ONLY |/" "$REPORT_FILE"
+sed -i "s/| happy path (type-only) | pass |[^|]*|/| happy path (type-only) | pass | $CYCLES_TYPE_ONLY |/" "$REPORT_FILE"
+sed -i "s/| happy path (both-checks) | pass |[^|]*|/| happy path (both-checks) | pass | $CYCLES_BOTH_CHECKS |/" "$REPORT_FILE"
+sed -i "s/| happy path (large registry, 512 entries, both-checks) | pass |[^|]*|/| happy path (large registry, 512 entries, both-checks) | pass | $CYCLES_LARGE_REGISTRY_BOTH_CHECKS |/" "$REPORT_FILE"
+sed -i "s/| happy path (very large registry, 2000 entries, both-checks) | pass |[^|]*|/| happy path (very large registry, 2000 entries, both-checks) | pass | $CYCLES_VERY_LARGE_REGISTRY_BOTH_CHECKS |/" "$REPORT_FILE"
 
 echo "Done. Report file: $REPORT_FILE"
 echo ""

@@ -4,3 +4,4 @@ dist/
 .env
 *.lock
 **/*.rs.bk
+.llm/
