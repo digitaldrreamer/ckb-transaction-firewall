@@ -61,6 +61,17 @@ fi
 
 mkdir -p "$(dirname "$DEPLOYMENT_CONFIG")" "$MIGRATIONS_DIR"
 
+rotate_info_file_if_exists() {
+  local path="$1"
+  if [[ -f "$path" ]]; then
+    local ts
+    ts="$(date -u +%Y%m%dT%H%M%SZ)"
+    local backup="${path}.${ts}.bak"
+    mv "$path" "$backup"
+    echo "Existing info file moved to: $backup"
+  fi
+}
+
 if [[ -z "$FROM_ADDRESS" ]]; then
   FROM_ADDRESS="$("$CKB_CLI_BIN" --url "$RPC_URL" account list --output-format json | jq -r '.[0].address.testnet // empty')"
 fi
@@ -119,6 +130,7 @@ hash_type = "type"
 EOF
 
   echo "Generating governance-lock stage transactions..."
+  rotate_info_file_if_exists "$GOV_INFO_FILE"
   "$CKB_CLI_BIN" --url "$RPC_URL" deploy gen-txs \
     --deployment-config "$GOV_DEPLOYMENT_CONFIG" \
     --migration-dir "$GOV_MIGRATIONS_DIR" \
@@ -182,6 +194,7 @@ hash_type = "${GOV_LOCK_HASH_TYPE}"
 EOF
 
 echo "Generating deployment transactions..."
+rotate_info_file_if_exists "$INFO_FILE"
 "$CKB_CLI_BIN" --url "$RPC_URL" deploy gen-txs \
   --deployment-config "$DEPLOYMENT_CONFIG" \
   --migration-dir "$MIGRATIONS_DIR" \
