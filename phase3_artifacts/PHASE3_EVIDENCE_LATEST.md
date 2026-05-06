@@ -1,8 +1,8 @@
 # Phase 3 Evidence Report
 
-- Generated (UTC): 20260506T114823Z
+- Generated (UTC): 20260506T234414Z
 - Branch: `feat/phase3-verification-hardening`
-- Commit: `e31fae8679437dcc6d245800544ac2ef9ac58efe`
+- Commit: `6232b25a680bb0c4d8e3581e7dcd2b283b883d59`
 
 ## Build Commands
 
@@ -16,13 +16,13 @@ cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-un
 | Artifact | Path | Size (bytes) | Human size | SHA256 |
 |---|---|---:|---:|---|
 | firewall-lock | `contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/firewall-lock` | 23336 | 23K | `7c2f6dfb429ddba22be9bae6fd38ad9d7aa51636a07ce61209ca1eb8f10b46e2` |
-| blacklist-registry | `contracts/blacklist-registry/target/riscv64imac-unknown-none-elf/release/blacklist-registry` | 98256 | 96K | `fd704f21d808015a63c97dfd9db594d32deafc969acd0287c9be9db66581d21d` |
+| blacklist-registry | `contracts/blacklist-registry/target/riscv64imac-unknown-none-elf/release/blacklist-registry` | 30808 | 31K | `66dae5e1744e32656264e9ac9e93f948daaa1df204bef56cc765112414ba9455` |
 
 ## Validation Runs
 
-- Test log: `phase3_artifacts/tests_20260506T114823Z.log`
-- Cycle log: `phase3_artifacts/cycles_20260506T114823Z.log`
-- Guard log: `phase3_artifacts/guard_20260506T114823Z.log`
+- Test log: `phase3_artifacts/tests_20260506T234414Z.log`
+- Cycle log: `phase3_artifacts/cycles_20260506T234414Z.log`
+- Guard log: `phase3_artifacts/guard_20260506T234414Z.log`
 
 ### Test Command
 ```bash
