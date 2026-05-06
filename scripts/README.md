@@ -62,6 +62,18 @@ Expected capabilities:
 - fail when any scenario is still `pending`,
 - fail when any scenario is `fail`.
 
+### `phase3_governance_lock_preflight.sh`
+
+Purpose:
+
+- Detect governance-lock/script-compatibility blockers before strict drill execution.
+
+Implemented capabilities:
+
+- reads `deploy/info.json` governance lock identity,
+- fails fast when governance lock is secp-sighash (incompatible with GOV1-in-lock witness layout),
+- prints concrete remediation requirements for strict mode.
+
 ### `phase3_governance_mode2.sh`
 
 Purpose:

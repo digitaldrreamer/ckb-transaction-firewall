@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPDATE_BIN="node $ROOT_DIR/scripts/update-blacklist.ts"
 CHECK_BIN="$ROOT_DIR/scripts/phase3_governance_drill_check.sh"
+PREFLIGHT_BIN="$ROOT_DIR/scripts/phase3_governance_lock_preflight.sh"
 LATEST_FILE="$ROOT_DIR/tests/integration/governance_drill/latest.json"
 STATE_FILE="$ROOT_DIR/tests/integration/governance_drill/mode2_signer_state.json"
 
@@ -152,9 +153,14 @@ NODE
 
 main() {
   require_cmd node
+  [[ -x "$PREFLIGHT_BIN" ]] || {
+    echo "missing preflight script: $PREFLIGHT_BIN" >&2
+    exit 1
+  }
   local cmd="${1:-}"
   case "$cmd" in
     init)
+      "$PREFLIGHT_BIN"
       $UPDATE_BIN init
       rm -f "$STATE_FILE"
       echo "initialized strict mode-2 artifacts"
@@ -189,6 +195,7 @@ main() {
       echo "recorded mode2 signer evidence for $id => signers [$normalized], tx $tx_hash"
       ;;
     validate)
+      "$PREFLIGHT_BIN"
       $UPDATE_BIN validate
       "$CHECK_BIN" "$LATEST_FILE"
       validate_state
