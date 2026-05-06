@@ -1,0 +1,129 @@
+#!/usr/bin/env node
+/* eslint-disable no-console */
+
+const { execSync } = require("node:child_process");
+const { existsSync } = require("node:fs");
+const { resolve } = require("node:path");
+
+type ScenarioId =
+  | "bootstrap_0_to_1"
+  | "update_1_to_1"
+  | "negative_invalid_signer_set"
+  | "negative_invalid_root_binding";
+
+const ROOT_DIR = resolve(__dirname, "..");
+const UPDATE_SCRIPT = resolve(ROOT_DIR, "scripts/phase3_governance_drill_update.sh");
+const VALIDATE_SCRIPT = resolve(ROOT_DIR, "scripts/phase3_governance_drill_check.sh");
+const LATEST_FILE = resolve(ROOT_DIR, "tests/integration/governance_drill/latest.json");
+
+function usage() {
+  console.log(`Usage:
+  node scripts/update-blacklist.ts init
+  node scripts/update-blacklist.ts run --id <scenario_id> --cmd "<your tx command>"
+  node scripts/update-blacklist.ts validate
+
+Scenario IDs:
+  bootstrap_0_to_1
+  update_1_to_1
+  negative_invalid_signer_set
+  negative_invalid_root_binding
+
+Notes:
+  - This script executes your provided tx command and extracts the first 0x-prefixed 64-byte hash.
+  - It then records the hash into governance_drill/latest.json via phase3_governance_drill_update.sh.
+  - It does not construct governance transactions itself; supply your proven tx command for each scenario.`);
+}
+
+function run(cmd: string) {
+  return execSync(cmd, { cwd: ROOT_DIR, stdio: "pipe", encoding: "utf8" });
+}
+
+function parseArgs(argv: string[]) {
+  const out: Record<string, string> = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    const v = argv[i];
+    if (v.startsWith("--")) {
+      out[v.slice(2)] = argv[i + 1];
+      i += 1;
+    }
+  }
+  return out;
+}
+
+function assertScenarioId(id: string): asserts id is ScenarioId {
+  const allowed = new Set<ScenarioId>([
+    "bootstrap_0_to_1",
+    "update_1_to_1",
+    "negative_invalid_signer_set",
+    "negative_invalid_root_binding",
+  ]);
+  if (!allowed.has(id as ScenarioId)) {
+    throw new Error(`Invalid --id: ${id}`);
+  }
+}
+
+function extractTxHash(output: string): string {
+  const match = output.match(/0x[a-fA-F0-9]{64}/);
+  if (!match) {
+    throw new Error("Could not find tx hash (0x + 64 hex) in command output.");
+  }
+  return match[0];
+}
+
+function main() {
+  const command = process.argv[2];
+  if (!command || command === "-h" || command === "--help") {
+    usage();
+    process.exit(0);
+  }
+
+  if (!existsSync(UPDATE_SCRIPT)) {
+    throw new Error(`Missing helper script: ${UPDATE_SCRIPT}`);
+  }
+
+  if (command === "init") {
+    execSync(`${UPDATE_SCRIPT} init`, { cwd: ROOT_DIR, stdio: "inherit" });
+    return;
+  }
+
+  if (command === "run") {
+    const args = parseArgs(process.argv.slice(3));
+    const id = args.id;
+    const txCmd = args.cmd;
+    if (!id || !txCmd) {
+      throw new Error("run requires --id and --cmd");
+    }
+    assertScenarioId(id);
+
+    if (!existsSync(LATEST_FILE)) {
+      execSync(`${UPDATE_SCRIPT} init`, { cwd: ROOT_DIR, stdio: "inherit" });
+    }
+
+    console.log(`Executing scenario ${id}...`);
+    const out = run(txCmd);
+    process.stdout.write(out);
+    const txHash = extractTxHash(out);
+    console.log(`Detected tx hash: ${txHash}`);
+
+    execSync(
+      `${UPDATE_SCRIPT} set --id ${id} --status pass --tx-hash ${txHash}`,
+      { cwd: ROOT_DIR, stdio: "inherit" },
+    );
+    return;
+  }
+
+  if (command === "validate") {
+    execSync(`${UPDATE_SCRIPT} validate`, { cwd: ROOT_DIR, stdio: "inherit" });
+    execSync(`${VALIDATE_SCRIPT} ${LATEST_FILE}`, { cwd: ROOT_DIR, stdio: "inherit" });
+    return;
+  }
+
+  throw new Error(`Unknown command: ${command}`);
+}
+
+try {
+  main();
+} catch (err) {
+  console.error((err as Error).message);
+  process.exit(1);
+}

@@ -125,12 +125,13 @@ Purpose:
 - Print deployed code hashes and outpoints.
 - Validate deployment prerequisites before broadcast.
 
-Expected capabilities:
+Implemented capabilities:
 
-- environment selection (`testnet`, `mainnet`),
-- dry-run mode,
-- idempotent output handling,
-- machine-readable output option for CI pipelines.
+- environment selection (`testnet`, `mainnet`) and RPC override,
+- optional build step for both contracts,
+- deployment config generation for `ckb-cli deploy gen-txs`,
+- dry-run mode (generate txs and print sign/apply commands),
+- sign/apply execution path via `ckb-cli`.
 
 ### `update-blacklist.ts`
 
@@ -140,13 +141,13 @@ Purpose:
 - Build registry replacement transaction inputs.
 - Prepare signer payloads and submission metadata.
 
-Expected capabilities:
+Implemented capabilities:
 
-- add/remove entry actions,
-- proposal id linkage,
-- schema validation before tx build,
-- optional `--submit` toggle (build-only by default),
-- emergency temporary-add path with enforced TTL metadata fields.
+- initialize governance drill artifact file,
+- execute scenario-specific operator-provided tx command,
+- auto-extract first tx hash (`0x` + 64 hex) from command output,
+- write scenario result to `tests/integration/governance_drill/latest.json`,
+- validate artifact using existing phase3 governance drill checks.
 
 ## CLI Recommendation
 
