@@ -173,5 +173,7 @@ Owner of this plan file: Protocol/Contracts
 
 ## Automation Notes
 
-- CI now runs `scripts/phase3_closeout_check.sh` as a non-blocking status report step to surface remaining Phase 3 gaps on every push/PR.
-- Once governance drill evidence and remaining gate artifacts are complete, this step can be promoted to blocking enforcement.
+- CI now runs `scripts/phase3_closeout_check.sh` in branch-aware mode:
+  - blocking on `main`
+  - non-blocking status report on non-`main` branches
+- This preserves developer velocity while enforcing Phase 3 closeout at mainline integration.
