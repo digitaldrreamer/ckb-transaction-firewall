@@ -226,4 +226,65 @@ mod tests {
         assert_eq!(err, FirewallError::BlacklistedLockArgs);
         assert_eq!(err.code(), 11);
     }
+
+    #[test]
+    fn reject_ambiguous_registry_dep() {
+        let cfg = FirewallConfig {
+            registry_script: test_script(1),
+        };
+        let dep = CellDepLike {
+            type_script: Some(test_script(1)),
+            data: build_registry(&[&[0xaa]]),
+        };
+        let tx = UnsignedTxLike {
+            cell_deps: vec![dep.clone(), dep],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0x00],
+                type_args: None,
+            }],
+        };
+        let err = check_transaction(&cfg, &tx).unwrap_err();
+        assert_eq!(err, FirewallError::AmbiguousRegistryCellDep);
+        assert_eq!(err.code(), 17);
+    }
+
+    #[test]
+    fn reject_registry_not_sorted() {
+        let cfg = FirewallConfig {
+            registry_script: test_script(1),
+        };
+        let tx = UnsignedTxLike {
+            cell_deps: vec![CellDepLike {
+                type_script: Some(test_script(1)),
+                data: build_registry(&[&[0xbb], &[0xaa]]),
+            }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0x00],
+                type_args: None,
+            }],
+        };
+        let err = check_transaction(&cfg, &tx).unwrap_err();
+        assert_eq!(err, FirewallError::RegistryNotSorted);
+        assert_eq!(err.code(), 10);
+    }
+
+    #[test]
+    fn reject_blacklisted_type_args() {
+        let cfg = FirewallConfig {
+            registry_script: test_script(1),
+        };
+        let tx = UnsignedTxLike {
+            cell_deps: vec![CellDepLike {
+                type_script: Some(test_script(1)),
+                data: build_registry(&[&[0x55, 0x66]]),
+            }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0x11, 0x22],
+                type_args: Some(vec![0x55, 0x66]),
+            }],
+        };
+        let err = check_transaction(&cfg, &tx).unwrap_err();
+        assert_eq!(err, FirewallError::BlacklistedTypeArgs);
+        assert_eq!(err.code(), 12);
+    }
 }

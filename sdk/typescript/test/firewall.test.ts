@@ -74,4 +74,35 @@ describe("transaction firewall", () => {
     });
     expect(res).toEqual({ ok: true });
   });
+
+  test("maps missing dep to code 8", () => {
+    const fw = new TransactionFirewall({ registryScript: script("1") });
+    const res = fw.checkTransaction({
+      cellDeps: [],
+      outputs: [{ lockArgs: "0x1122" }],
+    });
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe(8);
+  });
+
+  test("maps ambiguous deps to code 17", () => {
+    const dep: CellDepLike = { type: script("1"), data: registryHex([[0x01]]) };
+    const fw = new TransactionFirewall({ registryScript: script("1") });
+    const res = fw.checkTransaction({
+      cellDeps: [dep, dep],
+      outputs: [{ lockArgs: "0x1122" }],
+    });
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe(17);
+  });
+
+  test("rejects blacklisted output type args with code 12", () => {
+    const fw = new TransactionFirewall({ registryScript: script("1") });
+    const res = fw.checkTransaction({
+      cellDeps: [{ type: script("1"), data: registryHex([[0x55, 0x66]]) }],
+      outputs: [{ lockArgs: "0x1122", typeArgs: "0x5566" }],
+    });
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe(12);
+  });
 });
