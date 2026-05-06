@@ -62,6 +62,19 @@ Expected capabilities:
 - fail when any scenario is still `pending`,
 - fail when any scenario is `fail`.
 
+### `phase3_governance_mode2.sh`
+
+Purpose:
+
+- Execute governance drill evidence in strict separated-signer mode (option 2).
+
+Implemented capabilities:
+
+- validates signer-index policy per scenario (bootstrap 5/5; update >=3/5),
+- executes operator-provided tx commands and records tx hashes,
+- stores signer-separation evidence at `tests/integration/governance_drill/mode2_signer_state.json`,
+- validates both scenario completion and mode2 signer rules.
+
 ### `phase3_governance_drill_update.sh`
 
 Purpose:
