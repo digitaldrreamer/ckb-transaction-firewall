@@ -29,8 +29,8 @@ Evidence links:
 - Key policy doc:
 
 ### 2. Deterministic Build and Artifact Lock
-- [ ] Build both contracts reproducibly for `riscv64imac-unknown-none-elf`.
-- [ ] Record code hashes and binary sizes.
+- [x] Build both contracts reproducibly for `riscv64imac-unknown-none-elf`.
+- [x] Record code hashes and binary sizes.
 - [ ] Commit signed artifact manifest (hash, size, command, commit SHA).
 
 Owner: Protocol/Contracts  
@@ -38,9 +38,9 @@ Acceptance criteria:
 - Reproducible outputs confirmed across two clean runs.
 - Artifact manifest committed and reviewed.
 Evidence links:
-- Artifact manifest:
-- Build command record:
-- Verification run output:
+- Artifact manifest: `phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md`, `phase3_artifacts/artifact_manifest_latest.json`
+- Build command record: `scripts/phase3_repro_build.sh`
+- Verification run output: `phase3_artifacts/PHASE3_EVIDENCE_LATEST.md`
 
 ### 3. Cycle and Stress Validation
 - [ ] Profile hot paths in `firewall-lock` and `blacklist-registry`.
@@ -159,15 +159,14 @@ Evidence links:
 ## Release Gates (Must Pass)
 
 - [ ] G1 Security: No open high/critical findings.
-- [ ] G2 Correctness: Governance pass/fail matrix green.
-- [ ] G3 Performance: Cycle budgets within defined limits.
+- [x] G2 Correctness: Governance pass/fail matrix green.
+- [x] G3 Performance: Cycle budgets within defined limits.
 - [ ] G4 Operability: Runbooks dry-run validated.
-- [ ] G5 Compatibility: SDK and contracts version-locked and tested.
+- [x] G5 Compatibility: SDK and contracts version-locked and tested.
 
 ## Status Snapshot
 
 Phase: Phase 3  
-Overall status: Not started  
+Overall status: In progress  
 Last updated: 2026-05-06  
-Owner of this plan file: TBD
-
+Owner of this plan file: Protocol/Contracts
