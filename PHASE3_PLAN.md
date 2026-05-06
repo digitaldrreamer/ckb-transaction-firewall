@@ -174,6 +174,6 @@ Owner of this plan file: Protocol/Contracts
 ## Automation Notes
 
 - CI now runs `scripts/phase3_closeout_check.sh` in branch-aware mode:
-  - blocking on `main`
+  - blocking on `main` and PRs targeting `main`
   - non-blocking status report on non-`main` branches
 - This preserves developer velocity while enforcing Phase 3 closeout at mainline integration.

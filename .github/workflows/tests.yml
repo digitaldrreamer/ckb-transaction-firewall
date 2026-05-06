@@ -88,12 +88,12 @@ jobs:
           MAX_ARTIFACT_SETS: "3"
         run: ./scripts/phase3_verify.sh
 
-      - name: Enforce phase 3 closeout status (blocking on main)
-        if: ${{ always() && github.ref == 'refs/heads/main' }}
+      - name: Enforce phase 3 closeout status (blocking on main and PRs to main)
+        if: ${{ always() && (github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
         run: ./scripts/phase3_closeout_check.sh
 
-      - name: Report phase 3 closeout status (non-blocking on non-main)
-        if: ${{ always() && github.ref != 'refs/heads/main' }}
+      - name: Report phase 3 closeout status (non-blocking on non-main branches/PRs)
+        if: ${{ always() && !(github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
         continue-on-error: true
         run: ./scripts/phase3_closeout_check.sh
 
