@@ -168,6 +168,18 @@ function baseContext() {
   };
 }
 
+function requireDeployedOutpointLive(ctx) {
+  const check = shJson(
+    `${CKB} --url ${RPC} rpc get_live_cell --tx-hash ${ctx.regCodeOutPoint.tx_hash} --index ${ctx.regCodeOutPoint.index} --with-data false --output-format json`,
+  );
+  if (check.status !== 'live') {
+    throw new Error(
+      `deployment outpoint is not live yet: ${ctx.regCodeOutPoint.tx_hash}:${ctx.regCodeOutPoint.index}. ` +
+      `Re-run deployment apply/broadcast and wait for inclusion before autorun.`,
+    );
+  }
+}
+
 function registryTypeArgs(govLock) {
   const code = Buffer.from(govLock.code_hash.replace(/^0x/, ''), 'hex');
   const ht = Buffer.from([hashTypeByte(govLock.hash_type)]);
@@ -194,6 +206,7 @@ function txTemplate() {
 function run() {
   sh(`${MODE2} init`, true);
   const ctx = baseContext();
+  requireDeployedOutpointLive(ctx);
   const { funding, registry } = pickCells(ctx.fromAddr, ctx.regTypeId);
   const regArgs = registryTypeArgs(ctx.govLock);
 
