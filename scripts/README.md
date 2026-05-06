@@ -104,6 +104,19 @@ Expected capabilities:
 - validate G1 summary critical/high counts from findings tracker,
 - exit non-zero when closeout is incomplete.
 
+### `phase3_status_report.sh`
+
+Purpose:
+
+- Generate a timestamped markdown snapshot of current Phase 3 closeout status.
+- Persist latest status report in `phase3_artifacts/` for CI artifact review.
+
+Expected capabilities:
+
+- execute `phase3_closeout_check.sh`,
+- capture output + exit code in markdown report,
+- write both timestamped and `PHASE3_STATUS_LATEST.md` files.
+
 ### `deploy.sh`
 
 Purpose:

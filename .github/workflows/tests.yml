@@ -97,6 +97,10 @@ jobs:
         continue-on-error: true
         run: ./scripts/phase3_closeout_check.sh
 
+      - name: Generate phase 3 status snapshot
+        if: always()
+        run: ./scripts/phase3_status_report.sh
+
       - name: Upload phase 3 artifacts
         if: always()
         uses: actions/upload-artifact@v4
