@@ -97,7 +97,7 @@
 **Estimated Effort**: 1-2 days
 
 **Blockers**:
-- Requires compiled binary (needs Rust + capsule installation)
+- Requires compiled binary (needs Rust toolchain + RISC-V target)
 - Requires understanding of ckb-testtool transaction building
 - Requires test fixtures for various scenarios
 
@@ -120,32 +120,29 @@
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install capsule
-cargo install ckb-capsule
-
 # Add RISC-V target
 rustup target add riscv64imac-unknown-none-elf
 
 # Build
 cd contracts/firewall-lock
-capsule build --release
+cargo build --release --target=riscv64imac-unknown-none-elf
 ```
 
 ### 3. Cycle Optimization & Performance Profiling
 
-**Status**: Scaffolded (commands/scripts added), measurements pending
+**Status**: Baseline measurements recorded via `profile-cycles.sh` (5 happy-path scenarios, ~145K–2.26M cycles in `CYCLE_REPORT.md`)
 
 **What's Needed**:
-- Profile cycle usage with ckb-debugger
-- Identify hot paths in binary search and parsing
+- Add ckb-debugger deep-dive profiling for instruction-level hotspot analysis
+- Identify hot paths in binary search, parsing, and spawn delegation
 - Optimize memory allocations (use stack where possible)
 - Consider lookup table optimizations for common cases
 - Benchmark against cycle limits (e.g., 70M cycles for typical tx)
 - Implement cycle-aware error handling
 
-**Current scaffold available**:
-- `contracts/firewall-lock/CYCLE_REPORT.md` template
-- `contracts/firewall-lock/profile-cycles.sh` script for repeatable profiling runs
+**Current profiling evidence**:
+- `contracts/firewall-lock/profile-cycles.sh` (automated measurement runner)
+- `contracts/firewall-lock/CYCLE_REPORT.md` (populated baseline table)
 
 **Priority**: MEDIUM - Important for mainnet, not blocking for testnet
 
@@ -210,7 +207,7 @@ capsule build --release
 ### Immediate Next Steps (Must Complete):
 
 1. **Install Build Environment** (30 min)
-   - Rust + capsule installation
+   - Rust installation
    - RISC-V target configuration
 
 2. **Compile Binary** (15 min)
@@ -327,7 +324,7 @@ capsule build --release
 
 ### For Next Session:
 
-1. **Install development environment** (Rust + capsule)
+1. **Install development environment** (Rust toolchain + RISC-V target)
 2. **Compile firewall lock binary** and verify size
 3. **Run first integration test** with compiled binary
 4. **Start registry type script** implementation

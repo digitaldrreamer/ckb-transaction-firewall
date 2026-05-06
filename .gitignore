@@ -5,3 +5,4 @@ dist/
 *.lock
 **/*.rs.bk
 .llm/
+.codex
