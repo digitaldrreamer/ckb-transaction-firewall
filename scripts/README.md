@@ -62,6 +62,20 @@ Expected capabilities:
 - fail when any scenario is still `pending`,
 - fail when any scenario is `fail`.
 
+### `phase3_governance_drill_update.sh`
+
+Purpose:
+
+- Initialize and update `tests/integration/governance_drill/latest.json` during live testnet execution.
+- Record per-scenario tx hashes/outcomes in a normalized format.
+- Trigger gate validation after scenario updates.
+
+Expected capabilities:
+
+- `init` command to create `latest.json` from template,
+- `set` command for scenario status + tx hash + notes,
+- `validate` command delegating to `phase3_governance_drill_check.sh`.
+
 ### `deploy.sh`
 
 Purpose:
