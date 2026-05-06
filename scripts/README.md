@@ -175,6 +175,19 @@ Implemented capabilities:
 - write scenario result to `tests/integration/governance_drill/latest.json`,
 - validate artifact using existing phase3 governance drill checks.
 
+### `phase3_governance_autorun.js`
+
+Purpose:
+
+- Execute strict governance drill scenarios end-to-end with automatic tx construction/sign/send.
+
+Implemented capabilities:
+
+- builds bootstrap/update governance transactions with `GOV1` in `WitnessArgs.input_type`,
+- signs secp inputs with local `ckb-cli` account,
+- submits pass scenarios and records resulting tx hashes,
+- records negative scenario evidence entries and runs mode2 validation.
+
 ## CLI Recommendation
 
 Yes, a CLI is needed. Governance and deployment are operational workflows that should be reproducible, scriptable, and auditable across environments and operators.
