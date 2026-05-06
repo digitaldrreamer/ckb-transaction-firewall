@@ -18,6 +18,29 @@ check_file() {
   fi
 }
 
+check_security_tracker_zeroes() {
+  local file="$ROOT_DIR/docs/phase3/security/findings-tracker.md"
+  if [[ ! -f "$file" ]]; then
+    fail "Security findings tracker missing for G1 parsing"
+    return
+  fi
+
+  local crit high
+  crit="$(grep -E '^- Open critical:' "$file" | awk -F: '{gsub(/ /, "", $2); print $2}' || true)"
+  high="$(grep -E '^- Open high:' "$file" | awk -F: '{gsub(/ /, "", $2); print $2}' || true)"
+
+  if [[ -z "$crit" || -z "$high" ]]; then
+    fail "Security findings tracker summary fields missing"
+    return
+  fi
+
+  if [[ "$crit" == "0" && "$high" == "0" ]]; then
+    pass "G1 security summary shows zero open critical/high"
+  else
+    fail "G1 security summary not green (critical=$crit high=$high)"
+  fi
+}
+
 echo "Phase 3 closeout status check"
 echo "Repo: $ROOT_DIR"
 echo ""
@@ -40,6 +63,7 @@ check_file "phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md" "Deterministic build m
 # G1 security docs
 check_file "docs/phase3/security/findings-tracker.md" "Security findings tracker"
 check_file "docs/phase3/security/waiver-register.md" "Security waiver register"
+check_security_tracker_zeroes
 
 # G4 runbooks
 check_file "docs/phase3/runbooks/deployment-runbook.md" "Deployment runbook"
@@ -50,6 +74,10 @@ check_file "docs/phase3/runbooks/governance-incident-playbook.md" "Governance in
 check_file "docs/phase3/go-no-go/decision-record-template.md" "Go/No-Go decision record template"
 check_file "docs/phase3/go-no-go/rollout-checklist-template.md" "Mainnet rollout checklist template"
 check_file "docs/phase3/go-no-go/post-deploy-verification-template.md" "Post-deploy verification template"
+
+# Soak + integration evidence templates
+check_file "docs/phase3/soak/testnet-soak-report-template.md" "Testnet soak report template"
+check_file "docs/phase3/integration/testnet-integration-report-template.md" "Testnet integration report template"
 
 echo ""
 if [[ $FAILED -eq 0 ]]; then

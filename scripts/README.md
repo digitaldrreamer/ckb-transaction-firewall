@@ -99,7 +99,8 @@ Purpose:
 Expected capabilities:
 
 - validate governance drill artifact when present,
-- verify required evidence/runbook/security/go-no-go files exist,
+- verify required evidence/runbook/security/go-no-go/soak/integration files exist,
+- validate G1 summary critical/high counts from findings tracker,
 - exit non-zero when closeout is incomplete.
 
 ### `deploy.sh`
