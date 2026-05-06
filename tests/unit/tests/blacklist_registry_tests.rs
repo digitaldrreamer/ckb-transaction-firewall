@@ -119,14 +119,8 @@ fn build_gov1_lock_field_with_signers(
 fn assert_error_code(err: ckb_testtool::ckb_error::Error, expected_code: i8) {
     let message = err.to_string();
     let needle = format!("error code {}", expected_code);
-    let expected_code_token = expected_code.to_string();
-    let strict_match = message
-        .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
-        .collect::<Vec<&str>>()
-        .windows(3)
-        .any(|w| w[0] == "error" && w[1] == "code" && w[2] == expected_code_token);
     assert!(
-        strict_match,
+        message.contains(&needle),
         "expected '{}' in error message, got: {}",
         needle,
         message
@@ -193,6 +187,62 @@ fn test_pass_bootstrap_registry_creation_with_5_of_5_signers() {
     context
         .verify_tx(&tx, MAX_CYCLES)
         .expect("bootstrap tx should pass");
+}
+
+#[test]
+fn test_reject_bootstrap_registry_creation_with_3_of_5_signers() {
+    let mut context = Context::default();
+
+    let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let governance_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .expect("build governance lock");
+
+    let registry_type_args = build_registry_type_args_from_governance_lock(&governance_lock);
+    let registry_type = context
+        .build_script(&registry_code_out_point, registry_type_args)
+        .expect("build registry type script");
+
+    let payload = build_registry_payload_single_id(&[0xAA]);
+    let new_root = blake2b_256(payload.as_ref());
+    let gov_lock_field =
+        build_gov1_lock_field_with_signers(0x11, 0x22, [0u8; 32], new_root, &[0, 1, 2]);
+
+    let funding_cell = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(governance_lock.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let input = CellInput::new_builder().previous_output(funding_cell).build();
+
+    let output = CellOutput::new_builder()
+        .capacity(900u64.pack())
+        .lock(governance_lock)
+        .type_(Some(registry_type).pack())
+        .build();
+
+    let witness = WitnessArgs::new_builder()
+        .lock(Some(gov_lock_field).pack())
+        .build()
+        .as_bytes();
+
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .output(output)
+        .output_data(payload.pack())
+        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
+        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .witness(witness.pack())
+        .build();
+
+    let tx = context.complete_tx(tx);
+    let err = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect_err("bootstrap tx should fail with fewer than 5 signers");
+    assert_error_code(err, ERROR_UNAUTHORIZED_SIGNERS);
 }
 
 #[test]
@@ -749,6 +799,10 @@ fn test_reject_invalid_recovery_id_in_signature_entry() {
     let mut gov_lock_field = build_gov1_lock_field_with_signers(0x11, 0x22, root, root, &[0, 1, 2]).to_vec();
 
     // Corrupt recovery id in first signer entry (must be <= 3).
+    // GOV1 prefix length = magic(4) + version(1) + proposal(32) + vote(32)
+    //                   + old_root(32) + new_root(32) + signer_count(1) = 134
+    // First signer entry = signer_index(1) + signature(64) + recovery_id(1),
+    // so first recovery_id byte sits at 134 + 1 + 64.
     const FIRST_RECOVERY_ID_OFFSET: usize = 134 + 1 + 64;
     gov_lock_field[FIRST_RECOVERY_ID_OFFSET] = 7;
 

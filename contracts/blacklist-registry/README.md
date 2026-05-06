@@ -81,6 +81,10 @@ The type script rejects updates if:
 - Bootstrap topology is `0 input registry cells -> 1 output registry cell`.
 - Update topology is `1 input registry cell -> 1 output registry cell`.
 - Bootstrap uses `old_root = 0x00..00` and requires 5-of-5 governance signatures.
+- For bootstrap, the GOV1 witness payload MUST be in the `WitnessArgs.lock` field
+  of input index `0` (the first transaction input).
+- For updates, GOV1 witness MUST be in the `WitnessArgs.lock` field for the
+  registry input cell.
 
 ### Key rotation / emergency signer compromise
 

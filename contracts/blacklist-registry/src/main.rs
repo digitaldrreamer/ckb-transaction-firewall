@@ -521,6 +521,8 @@ fn program_entry() -> Result<(), SysError> {
     } else {
         // * Bootstrap creation has no previous state; bind to zero root and
         // * require full signer participation.
+        // * Governance witness placement rule for bootstrap:
+        // * `GOV1` must be present in `WitnessArgs.lock` for input index 0.
         ([0u8; 32], 0usize, SIGNER_SET_SIZE)
     };
     let new_root = blake2b_256(out_data.as_ref());

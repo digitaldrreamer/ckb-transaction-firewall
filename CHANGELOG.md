@@ -111,7 +111,7 @@
 
 - Built `contracts/firewall-lock` RISC-V release binary (`firewall-lock`) successfully (23K).
 - Ran firewall lock unit tests (24/24 passing).
-- Ran `ckb-testtool` integration tests in `tests/unit` (26/26 passing: 15 firewall + 11 blacklist-registry).
+- Ran `ckb-testtool` integration tests in `tests/unit` (27/27 passing: 15 firewall + 12 blacklist-registry).
 - Recorded happy-path cycle probe results in `contracts/firewall-lock/CYCLE_REPORT.md` via `profile-cycles.sh`.
 - Fixed `contracts/firewall-lock/profile-cycles.sh` report update logic to work with non-empty Notes column.
 
@@ -123,7 +123,7 @@
   - Enforces governance authorization via a configured governance lock script identity encoded in type args
   - Binds update transactions to a governance context witness payload (`GOV1` v1) committed by sighash-all locks
 - Added `ckb-testtool` integration tests:
-  - `tests/unit/tests/blacklist_registry_tests.rs` (11 tests passing)
+  - `tests/unit/tests/blacklist_registry_tests.rs` (12 tests passing)
   - Wired into `tests/unit/Cargo.toml`
 - Added hashing dependency for tests (`blake2b-ref`) and aligned personalization with CKB default hash
 
@@ -135,7 +135,7 @@
   - Added digest binding `blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root)`.
   - Enforced 3-of-5 signer threshold with signer index bounds + duplicate checks + signature verification.
 - Extended integration coverage:
-  - `tests/unit/tests/blacklist_registry_tests.rs` now signs governance payloads with deterministic keys and validates strict signature paths (11 passing tests, including bootstrap and stricter signer failure paths).
+  - `tests/unit/tests/blacklist_registry_tests.rs` now signs governance payloads with deterministic keys and validates strict signature paths (12 passing tests, including bootstrap and stricter signer failure paths).
 - Applied PR #3 documentation consistency fixes:
   - Unified firewall binary naming to `firewall-lock` in build docs/snippets.
   - Removed developer-specific absolute paths in setup docs.

@@ -34,7 +34,7 @@ if ! $CARGO --version &>/dev/null; then
 fi
 
 # Check if target is installed. Force-clean RUSTUP_FORCE_ARG0 to avoid "unknown proxy name: cursor".
-if ! env -u RUSTUP_FORCE_ARG0 "$RUSTUP" target list --installed 2>/dev/null | rg -q "$TARGET"; then
+if ! env -u RUSTUP_FORCE_ARG0 "$RUSTUP" target list --installed 2>/dev/null | grep -q "$TARGET"; then
     echo "   Installing RISC-V target..."
     env -u RUSTUP_FORCE_ARG0 "$RUSTUP" target add "$TARGET" || {
         echo "   ⚠️  Could not check/install target via rustup (Cursor issue)"
