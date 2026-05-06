@@ -161,7 +161,7 @@ function baseContext() {
     regTypeId: regRecipe.type_id,
     regCodeOutPoint: {
       tx_hash: regRecipe.tx_hash,
-      index: `0x${regRecipe.index.toString(16)}`,
+      index: String(regRecipe.index),
     },
     regCap: BigInt(regRecipe.occupied_capacity),
     secpDep: genesis.secp256k1_blake160_sighash_all.cell_dep,
