@@ -47,6 +47,21 @@ Expected capabilities:
 - fail-fast on missing format/version markers in contract or docs,
 - CI-safe deterministic checks (no network dependency).
 
+### `phase3_governance_drill_check.sh`
+
+Purpose:
+
+- Validate governance drill evidence format from testnet execution.
+- Ensure required scenarios and tx hash fields are present.
+- Enforce pass/fail/pending status constraints for Phase 3 governance gates.
+
+Expected capabilities:
+
+- schema-style checks using `jq`,
+- fail on missing required scenario IDs,
+- fail when any scenario is still `pending`,
+- fail when any scenario is `fail`.
+
 ### `deploy.sh`
 
 Purpose:

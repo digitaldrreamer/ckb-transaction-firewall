@@ -50,6 +50,10 @@ jobs:
       - name: Run phase 3 contract/spec compatibility check
         run: ./scripts/phase3_compat_check.sh
 
+      - name: Validate governance drill artifact (when present)
+        if: ${{ hashFiles('tests/integration/governance_drill/latest.json') != '' }}
+        run: ./scripts/phase3_governance_drill_check.sh
+
       - name: Run phase 3 reproducible build manifest
         env:
           MAX_ARTIFACT_SETS: "3"
