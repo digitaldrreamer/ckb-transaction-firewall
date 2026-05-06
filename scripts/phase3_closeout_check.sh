@@ -70,6 +70,9 @@ check_file "docs/phase3/runbooks/deployment-runbook.md" "Deployment runbook"
 check_file "docs/phase3/runbooks/key-rotation-runbook.md" "Key rotation runbook"
 check_file "docs/phase3/runbooks/governance-incident-playbook.md" "Governance incident playbook"
 
+# Signer cutover policy
+check_file "docs/phase3/keys/signer-custody-policy-template.md" "Signer custody policy template"
+
 # Go/No-Go templates
 check_file "docs/phase3/go-no-go/decision-record-template.md" "Go/No-Go decision record template"
 check_file "docs/phase3/go-no-go/rollout-checklist-template.md" "Mainnet rollout checklist template"
@@ -78,6 +81,7 @@ check_file "docs/phase3/go-no-go/post-deploy-verification-template.md" "Post-dep
 # Soak + integration evidence templates
 check_file "docs/phase3/soak/testnet-soak-report-template.md" "Testnet soak report template"
 check_file "docs/phase3/integration/testnet-integration-report-template.md" "Testnet integration report template"
+check_file "docs/phase3/integration/sdk-parity-matrix-template.md" "SDK parity matrix template"
 
 echo ""
 if [[ $FAILED -eq 0 ]]; then
