@@ -48,6 +48,13 @@ jobs:
         run: cargo test --test blacklist_registry_tests
 
       - name: Run phase 3 verification script
+        env:
+          MAX_CYCLES_LOCK_ONLY: "250000"
+          MAX_CYCLES_TYPE_ONLY: "250000"
+          MAX_CYCLES_BOTH_CHECKS: "300000"
+          MAX_CYCLES_LARGE_REGISTRY: "1200000"
+          MAX_CYCLES_VERY_LARGE_REGISTRY: "3000000"
+          MAX_ARTIFACT_SETS: "3"
         run: ./scripts/phase3_verify.sh
 
       - name: Upload phase 3 artifacts
@@ -56,3 +63,4 @@ jobs:
         with:
           name: phase3-artifacts
           path: phase3_artifacts/
+          retention-days: 14

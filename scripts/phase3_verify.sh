@@ -6,6 +6,13 @@ OUT_DIR="$ROOT_DIR/phase3_artifacts"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 REPORT="$OUT_DIR/PHASE3_EVIDENCE_${STAMP}.md"
 LATEST_LINK="$OUT_DIR/PHASE3_EVIDENCE_LATEST.md"
+MAX_ARTIFACT_SETS="${MAX_ARTIFACT_SETS:-5}"
+
+MAX_CYCLES_LOCK_ONLY="${MAX_CYCLES_LOCK_ONLY:-250000}"
+MAX_CYCLES_TYPE_ONLY="${MAX_CYCLES_TYPE_ONLY:-250000}"
+MAX_CYCLES_BOTH_CHECKS="${MAX_CYCLES_BOTH_CHECKS:-300000}"
+MAX_CYCLES_LARGE_REGISTRY="${MAX_CYCLES_LARGE_REGISTRY:-1200000}"
+MAX_CYCLES_VERY_LARGE_REGISTRY="${MAX_CYCLES_VERY_LARGE_REGISTRY:-3000000}"
 
 FIREWALL_DIR="$ROOT_DIR/contracts/firewall-lock"
 REGISTRY_DIR="$ROOT_DIR/contracts/blacklist-registry"
@@ -64,6 +71,39 @@ CYCLE_LOG="$OUT_DIR/cycles_${STAMP}.log"
   cd "$FIREWALL_DIR"
   ./profile-cycles.sh
 ) | tee "$CYCLE_LOG"
+
+extract_cycle() {
+  local name="$1"
+  local value
+  value="$(rg -o "${name}=[0-9]+" "$CYCLE_LOG" | tail -1 | cut -d= -f2 || true)"
+  if [[ -z "$value" ]]; then
+    echo "Could not find cycle probe marker: $name" >&2
+    exit 1
+  fi
+  echo "$value"
+}
+
+CYCLES_LOCK_ONLY="$(extract_cycle "CYCLE_PROBE_HAPPY_PATH_LOCK_ONLY")"
+CYCLES_TYPE_ONLY="$(extract_cycle "CYCLE_PROBE_HAPPY_PATH_TYPE_ONLY")"
+CYCLES_BOTH_CHECKS="$(extract_cycle "CYCLE_PROBE_HAPPY_PATH_BOTH_CHECKS")"
+CYCLES_LARGE_REGISTRY_BOTH_CHECKS="$(extract_cycle "CYCLE_PROBE_HAPPY_PATH_LARGE_REGISTRY_BOTH_CHECKS")"
+CYCLES_VERY_LARGE_REGISTRY_BOTH_CHECKS="$(extract_cycle "CYCLE_PROBE_HAPPY_PATH_VERY_LARGE_REGISTRY_BOTH_CHECKS")"
+
+check_cycle_budget() {
+  local label="$1"
+  local current="$2"
+  local limit="$3"
+  if (( current > limit )); then
+    echo "Cycle budget exceeded for $label: current=$current limit=$limit" >&2
+    exit 1
+  fi
+}
+
+check_cycle_budget "happy path lock-only" "$CYCLES_LOCK_ONLY" "$MAX_CYCLES_LOCK_ONLY"
+check_cycle_budget "happy path type-only" "$CYCLES_TYPE_ONLY" "$MAX_CYCLES_TYPE_ONLY"
+check_cycle_budget "happy path both-checks" "$CYCLES_BOTH_CHECKS" "$MAX_CYCLES_BOTH_CHECKS"
+check_cycle_budget "large registry both-checks" "$CYCLES_LARGE_REGISTRY_BOTH_CHECKS" "$MAX_CYCLES_LARGE_REGISTRY"
+check_cycle_budget "very large registry both-checks" "$CYCLES_VERY_LARGE_REGISTRY_BOTH_CHECKS" "$MAX_CYCLES_VERY_LARGE_REGISTRY"
 
 if [[ ! -f "$FIREWALL_BIN" ]]; then
   echo "Missing firewall binary: $FIREWALL_BIN" >&2
@@ -136,10 +176,34 @@ cd contracts/firewall-lock && ./profile-cycles.sh
 |---|---|---|
 | G2 Correctness | \`tests/unit cargo test\` | PASS |
 | G3 Performance (size proxy) | \`blacklist-registry < 100000 bytes\` | $SIZE_GATE |
+| G3 Performance (cycle budgets) | lock/type/both/large/very-large thresholds enforced | PASS |
 | G5 Compatibility/Safety | production guard blocks no-feature build | PASS |
+
+## Cycle Budget Snapshot
+
+| Scenario | Current cycles | Max cycles | Status |
+|---|---:|---:|---|
+| happy path (lock-only) | $CYCLES_LOCK_ONLY | $MAX_CYCLES_LOCK_ONLY | PASS |
+| happy path (type-only) | $CYCLES_TYPE_ONLY | $MAX_CYCLES_TYPE_ONLY | PASS |
+| happy path (both-checks) | $CYCLES_BOTH_CHECKS | $MAX_CYCLES_BOTH_CHECKS | PASS |
+| happy path (large registry, 512 entries, both-checks) | $CYCLES_LARGE_REGISTRY_BOTH_CHECKS | $MAX_CYCLES_LARGE_REGISTRY | PASS |
+| happy path (very large registry, 2000 entries, both-checks) | $CYCLES_VERY_LARGE_REGISTRY_BOTH_CHECKS | $MAX_CYCLES_VERY_LARGE_REGISTRY | PASS |
 EOF
 
 cp "$REPORT" "$LATEST_LINK"
+
+prune_artifacts_for_prefix() {
+  local prefix="$1"
+  mapfile -t old_files < <(ls -1t "$OUT_DIR"/"${prefix}"_* 2>/dev/null | tail -n +"$((MAX_ARTIFACT_SETS + 1))" || true)
+  if (( ${#old_files[@]} > 0 )); then
+    rm -f "${old_files[@]}"
+  fi
+}
+
+prune_artifacts_for_prefix "PHASE3_EVIDENCE"
+prune_artifacts_for_prefix "tests"
+prune_artifacts_for_prefix "cycles"
+prune_artifacts_for_prefix "guard"
 
 echo ""
 echo "Phase 3 evidence written:"
