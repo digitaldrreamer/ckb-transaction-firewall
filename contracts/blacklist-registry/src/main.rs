@@ -430,7 +430,7 @@ fn find_registry_cells(source: Source, self_script: &Script) -> Result<Vec<usize
     Ok(matches)
 }
 
-fn load_witness_lock_field(input_index: usize) -> Result<Bytes, SysError> {
+fn load_governance_witness_payload(input_index: usize) -> Result<Bytes, SysError> {
     // * Probe witness length, then load exact bytes.
     let mut probe: [u8; 0] = [];
     let actual_len = match load_witness(&mut probe, 0, input_index, Source::Input) {
@@ -447,11 +447,23 @@ fn load_witness_lock_field(input_index: usize) -> Result<Bytes, SysError> {
 
     let witness = WitnessArgs::from_slice(&buf)
         .map_err(|_| error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS))?;
-    let lock_opt = witness.lock().to_opt();
-    let lock_bytes = lock_opt
-        .ok_or_else(|| error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS))?;
+    // Prefer `input_type` to remain compatible with secp-sighash locks whose
+    // `lock` field must be 65-byte signatures. Fallback to `lock` for backwards
+    // compatibility with older drill payload placement.
+    if let Some(input_type_bytes) = witness.input_type().to_opt() {
+        let data = input_type_bytes.raw_data();
+        if !data.is_empty() {
+            return Ok(data);
+        }
+    }
+    if let Some(lock_bytes) = witness.lock().to_opt() {
+        let data = lock_bytes.raw_data();
+        if !data.is_empty() {
+            return Ok(data);
+        }
+    }
 
-    Ok(lock_bytes.raw_data())
+    Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS))
 }
 
 fn verify_governance_lock_identity(
@@ -522,14 +534,15 @@ fn program_entry() -> Result<(), SysError> {
         // * Bootstrap creation has no previous state; bind to zero root and
         // * require full signer participation.
         // * Governance witness placement rule for bootstrap:
-        // * `GOV1` must be present in `WitnessArgs.lock` for input index 0.
+        // * `GOV1` must be present in `WitnessArgs.input_type` (preferred) or
+        // * `WitnessArgs.lock` for input index 0.
         ([0u8; 32], 0usize, SIGNER_SET_SIZE)
     };
     let new_root = blake2b_256(out_data.as_ref());
 
     // * 5) Bind a governance decision context to this update via witness payload.
-    let gov_lock_field = load_witness_lock_field(witness_index)?;
-    let gov = GovernanceWitness::parse(gov_lock_field.as_ref())?;
+    let gov_payload = load_governance_witness_payload(witness_index)?;
+    let gov = GovernanceWitness::parse(gov_payload.as_ref())?;
 
     if gov.old_root != old_root || gov.new_root != new_root {
         return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));

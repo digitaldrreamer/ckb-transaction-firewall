@@ -62,8 +62,8 @@ fn build_registry_type_args_from_governance_lock(governance_lock: &Script) -> By
     Bytes::from(args)
 }
 
-fn build_gov1_lock_field(proposal_byte: u8, vote_byte: u8, old_root: [u8; 32], new_root: [u8; 32]) -> Bytes {
-    build_gov1_lock_field_with_signers(proposal_byte, vote_byte, old_root, new_root, &[0, 1, 2])
+fn build_gov1_payload(proposal_byte: u8, vote_byte: u8, old_root: [u8; 32], new_root: [u8; 32]) -> Bytes {
+    build_gov1_payload_with_signers(proposal_byte, vote_byte, old_root, new_root, &[0, 1, 2])
 }
 
 fn build_governance_message_digest(
@@ -86,7 +86,7 @@ fn signer_private_key(index: u8) -> SigningKey {
     SigningKey::from_bytes((&bytes).into()).expect("valid private key")
 }
 
-fn build_gov1_lock_field_with_signers(
+fn build_gov1_payload_with_signers(
     proposal_byte: u8,
     vote_byte: u8,
     old_root: [u8; 32],
@@ -145,7 +145,7 @@ fn test_pass_bootstrap_registry_creation_with_5_of_5_signers() {
     // Bootstrap has no input registry cell; old root must be zero.
     let payload = build_registry_payload_single_id(&[0xAA]);
     let new_root = blake2b_256(payload.as_ref());
-    let gov_lock_field = build_gov1_lock_field_with_signers(
+    let gov_payload = build_gov1_payload_with_signers(
         0x11,
         0x22,
         [0u8; 32],
@@ -170,7 +170,7 @@ fn test_pass_bootstrap_registry_creation_with_5_of_5_signers() {
         .build();
 
     let witness = WitnessArgs::new_builder()
-        .lock(Some(gov_lock_field).pack())
+        .input_type(Some(gov_payload).pack())
         .build()
         .as_bytes();
 
@@ -206,8 +206,8 @@ fn test_reject_bootstrap_registry_creation_with_3_of_5_signers() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let new_root = blake2b_256(payload.as_ref());
-    let gov_lock_field =
-        build_gov1_lock_field_with_signers(0x11, 0x22, [0u8; 32], new_root, &[0, 1, 2]);
+    let gov_payload =
+        build_gov1_payload_with_signers(0x11, 0x22, [0u8; 32], new_root, &[0, 1, 2]);
 
     let funding_cell = context.create_cell(
         CellOutput::new_builder()
@@ -225,7 +225,7 @@ fn test_reject_bootstrap_registry_creation_with_3_of_5_signers() {
         .build();
 
     let witness = WitnessArgs::new_builder()
-        .lock(Some(gov_lock_field).pack())
+        .input_type(Some(gov_payload).pack())
         .build()
         .as_bytes();
 
@@ -285,9 +285,9 @@ fn test_pass_valid_registry_update_with_gov1_witness() {
         .type_(Some(registry_type).pack())
         .build();
 
-    let gov_lock_field = build_gov1_lock_field(0x11, 0x22, old_root, new_root);
+    let gov_payload = build_gov1_payload(0x11, 0x22, old_root, new_root);
     let witness = WitnessArgs::new_builder()
-        .lock(Some(gov_lock_field).pack())
+        .input_type(Some(gov_payload).pack())
         .build()
         .as_bytes();
 
@@ -451,9 +451,9 @@ fn test_reject_invalid_governance_witness_root_mismatch() {
         .build();
 
     // * Deliberately wrong roots
-    let gov_lock_field = build_gov1_lock_field(0x11, 0x22, [9u8; 32], [8u8; 32]);
+    let gov_payload = build_gov1_payload(0x11, 0x22, [9u8; 32], [8u8; 32]);
     let witness = WitnessArgs::new_builder()
-        .lock(Some(gov_lock_field).pack())
+        .input_type(Some(gov_payload).pack())
         .build()
         .as_bytes();
 
@@ -495,9 +495,9 @@ fn test_reject_unauthorized_governance_lock_identity() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let root = blake2b_256(payload.as_ref());
-    let gov_lock_field = build_gov1_lock_field(0x11, 0x22, root, root);
+    let gov_payload = build_gov1_payload(0x11, 0x22, root, root);
     let witness = WitnessArgs::new_builder()
-        .lock(Some(gov_lock_field).pack())
+        .input_type(Some(gov_payload).pack())
         .build()
         .as_bytes();
 
@@ -587,9 +587,9 @@ fn test_reject_topology_multiple_registry_inputs() {
 
     let root_a = blake2b_256(payload_a.as_ref());
     let root_b = blake2b_256(payload_b.as_ref());
-    let gov_lock_field = build_gov1_lock_field(0x11, 0x22, root_a, root_b);
+    let gov_payload = build_gov1_payload(0x11, 0x22, root_a, root_b);
     let witness = WitnessArgs::new_builder()
-        .lock(Some(gov_lock_field).pack())
+        .input_type(Some(gov_payload).pack())
         .build()
         .as_bytes();
 
@@ -628,7 +628,7 @@ fn test_reject_insufficient_valid_signers() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let root = blake2b_256(payload.as_ref());
-    let gov_lock_field = build_gov1_lock_field_with_signers(0x11, 0x22, root, root, &[0, 1]);
+    let gov_payload = build_gov1_payload_with_signers(0x11, 0x22, root, root, &[0, 1]);
 
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -648,7 +648,7 @@ fn test_reject_insufficient_valid_signers() {
         .build();
 
     let witness = WitnessArgs::new_builder()
-        .lock(Some(gov_lock_field).pack())
+        .input_type(Some(gov_payload).pack())
         .build()
         .as_bytes();
     let tx = TransactionBuilder::default()
@@ -684,7 +684,7 @@ fn test_reject_duplicate_signer_index() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let root = blake2b_256(payload.as_ref());
-    let gov_lock_field = build_gov1_lock_field_with_signers(0x11, 0x22, root, root, &[0, 0, 1]);
+    let gov_payload = build_gov1_payload_with_signers(0x11, 0x22, root, root, &[0, 0, 1]);
 
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -704,7 +704,7 @@ fn test_reject_duplicate_signer_index() {
         .build();
 
     let witness = WitnessArgs::new_builder()
-        .lock(Some(gov_lock_field).pack())
+        .input_type(Some(gov_payload).pack())
         .build()
         .as_bytes();
     let tx = TransactionBuilder::default()
@@ -740,7 +740,7 @@ fn test_reject_signer_index_out_of_range() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let root = blake2b_256(payload.as_ref());
-    let gov_lock_field = build_gov1_lock_field_with_signers(0x11, 0x22, root, root, &[0, 1, 5]);
+    let gov_payload = build_gov1_payload_with_signers(0x11, 0x22, root, root, &[0, 1, 5]);
 
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -760,7 +760,7 @@ fn test_reject_signer_index_out_of_range() {
         .build();
 
     let witness = WitnessArgs::new_builder()
-        .lock(Some(gov_lock_field).pack())
+        .input_type(Some(gov_payload).pack())
         .build()
         .as_bytes();
     let tx = TransactionBuilder::default()
@@ -796,7 +796,7 @@ fn test_reject_invalid_recovery_id_in_signature_entry() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let root = blake2b_256(payload.as_ref());
-    let mut gov_lock_field = build_gov1_lock_field_with_signers(0x11, 0x22, root, root, &[0, 1, 2]).to_vec();
+    let mut gov_lock_field = build_gov1_payload_with_signers(0x11, 0x22, root, root, &[0, 1, 2]).to_vec();
 
     // Corrupt recovery id in first signer entry (must be <= 3).
     // GOV1 prefix length = magic(4) + version(1) + proposal(32) + vote(32)
