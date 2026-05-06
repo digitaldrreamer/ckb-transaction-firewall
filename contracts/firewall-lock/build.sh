@@ -80,7 +80,7 @@ $CARGO build --release --target="$TARGET"
 # Check if binary was created
 BINARY="target/$TARGET/release/firewall-lock"
 
-if [ -n "${BINARY:-}" ] && [ -f "$BINARY" ]; then
+if [ -f "$BINARY" ]; then
     SIZE=$(ls -lh "$BINARY" | awk '{print $5}')
     echo ""
     echo "✅ Build successful!"

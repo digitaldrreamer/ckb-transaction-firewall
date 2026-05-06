@@ -79,6 +79,12 @@ const SIGNER_SET_SIZE: usize = 5;
 const SIG_LEN_WITH_RECOVERY_ID: usize = 65;
 const SIGNER_ENTRY_LEN: usize = 1 + SIG_LEN_WITH_RECOVERY_ID;
 
+#[cfg(all(not(test), not(feature = "dev-signer-keys")))]
+compile_error!(
+    "Placeholder governance signer keys are blocked for non-test builds. \
+Enable `dev-signer-keys` only for local/dev builds, or replace with production signer pubkeys."
+);
+
 // * Fixed governance signer set (v1 placeholder keys for strict on-chain verification).
 const GOVERNANCE_SIGNER_PUBKEYS: [[u8; 33]; SIGNER_SET_SIZE] = [
     hex33("0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"),
@@ -96,7 +102,7 @@ const fn hex_nibble(c: u8) -> u8 {
     } else if c >= b'A' && c <= b'F' {
         10 + (c - b'A')
     } else {
-        0
+        panic!("invalid hex nibble")
     }
 }
 
@@ -231,7 +237,7 @@ impl RegistryPayload {
         }
 
         for i in 1..entries.len() {
-            if entries[i].identifier.as_ref() < entries[i - 1].identifier.as_ref() {
+            if entries[i].identifier.as_ref() <= entries[i - 1].identifier.as_ref() {
                 return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
             }
         }
@@ -342,8 +348,11 @@ fn build_governance_message_digest(gov: &GovernanceWitness) -> [u8; 32] {
     blake2b_256(&preimage)
 }
 
-fn verify_governance_multisig(gov: &GovernanceWitness) -> Result<(), SysError> {
-    if gov.signers.len() < 3 || gov.signers.len() > SIGNER_SET_SIZE {
+fn verify_governance_multisig(gov: &GovernanceWitness, required_signers: usize) -> Result<(), SysError> {
+    if required_signers < 3 || required_signers > SIGNER_SET_SIZE {
+        return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
+    }
+    if gov.signers.len() < required_signers || gov.signers.len() > SIGNER_SET_SIZE {
         return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
     }
 
@@ -376,7 +385,7 @@ fn verify_governance_multisig(gov: &GovernanceWitness) -> Result<(), SysError> {
         valid_count += 1;
     }
 
-    if valid_count < 3 {
+    if valid_count < required_signers {
         return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
     }
 
@@ -391,7 +400,7 @@ fn script_matches_identity(script: &Script, code_hash: &[u8; 32], hash_type: u8,
     s_code_hash == *code_hash && s_hash_type == hash_type && s_args.as_ref() == args
 }
 
-fn find_unique_registry_cell(source: Source, self_script: &Script) -> Result<usize, SysError> {
+fn find_registry_cells(source: Source, self_script: &Script) -> Result<Vec<usize>, SysError> {
     let self_code_hash: [u8; 32] = self_script.code_hash().unpack();
     let self_hash_type: u8 = u8::from(self_script.hash_type());
     let self_args: Bytes = self_script.args().unpack();
@@ -418,23 +427,26 @@ fn find_unique_registry_cell(source: Source, self_script: &Script) -> Result<usi
         }
     }
 
-    match matches.len() {
-        1 => Ok(matches[0]),
-        _ => Err(error::to_sys_error(error::INVALID_REGISTRY_CELL_TOPOLOGY)),
-    }
+    Ok(matches)
 }
 
 fn load_witness_lock_field(input_index: usize) -> Result<Bytes, SysError> {
-    // * First load the witness bytes
-    let mut buf = Vec::new();
-    buf.resize(32768, 0u8);
-    let len = match load_witness(&mut buf, 0, input_index, Source::Input) {
+    // * Probe witness length, then load exact bytes.
+    let mut probe: [u8; 0] = [];
+    let actual_len = match load_witness(&mut probe, 0, input_index, Source::Input) {
         Ok(len) => len,
+        Err(SysError::LengthNotEnough(len)) => len,
         Err(e) => return Err(e),
     };
-    buf.truncate(len);
+    let mut buf = Vec::new();
+    buf.resize(actual_len, 0u8);
+    let read_len = load_witness(&mut buf, 0, input_index, Source::Input)?;
+    if read_len != actual_len {
+        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
+    }
 
-    let witness = WitnessArgs::new_unchecked(Bytes::from(buf));
+    let witness = WitnessArgs::from_slice(&buf)
+        .map_err(|_| error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS))?;
     let lock_opt = witness.lock().to_opt();
     let lock_bytes = lock_opt
         .ok_or_else(|| error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS))?;
@@ -443,21 +455,24 @@ fn load_witness_lock_field(input_index: usize) -> Result<Bytes, SysError> {
 }
 
 fn verify_governance_lock_identity(
-    input_index: usize,
+    input_index_opt: Option<usize>,
     output_index: usize,
     registry_type_args: &RegistryTypeArgs,
 ) -> Result<(), SysError> {
-    let in_lock = load_cell_lock(input_index, Source::Input)?;
-    let out_lock = load_cell_lock(output_index, Source::Output)?;
+    if let Some(input_index) = input_index_opt {
+        let in_lock = load_cell_lock(input_index, Source::Input)?;
 
-    if !script_matches_identity(
-        &in_lock,
-        &registry_type_args.governance_code_hash,
-        registry_type_args.governance_hash_type,
-        registry_type_args.governance_args.as_ref(),
-    ) {
-        return Err(error::to_sys_error(error::UNAUTHORIZED_GOVERNANCE_LOCK));
+        if !script_matches_identity(
+            &in_lock,
+            &registry_type_args.governance_code_hash,
+            registry_type_args.governance_hash_type,
+            registry_type_args.governance_args.as_ref(),
+        ) {
+            return Err(error::to_sys_error(error::UNAUTHORIZED_GOVERNANCE_LOCK));
+        }
     }
+
+    let out_lock = load_cell_lock(output_index, Source::Output)?;
 
     if !script_matches_identity(
         &out_lock,
@@ -480,25 +495,38 @@ fn program_entry() -> Result<(), SysError> {
         return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT));
     }
 
-    // * 2) Enforce exactly-one input and exactly-one output registry cell.
-    let reg_in = find_unique_registry_cell(Source::Input, &self_script)?;
-    let reg_out = find_unique_registry_cell(Source::Output, &self_script)?;
+    // * 2) Allow two topologies:
+    // *    - update flow: exactly 1 input + 1 output registry cell
+    // *    - bootstrap flow: exactly 0 input + 1 output registry cell
+    let reg_inputs = find_registry_cells(Source::Input, &self_script)?;
+    let reg_outputs = find_registry_cells(Source::Output, &self_script)?;
+    if reg_outputs.len() != 1 || reg_inputs.len() > 1 {
+        return Err(error::to_sys_error(error::INVALID_REGISTRY_CELL_TOPOLOGY));
+    }
+    let reg_out = reg_outputs[0];
+    let is_bootstrap = reg_inputs.is_empty();
+    let reg_in_opt = if is_bootstrap { None } else { Some(reg_inputs[0]) };
 
-    // * 3) Enforce governance lock identity on registry input+output.
-    verify_governance_lock_identity(reg_in, reg_out, &registry_type_args)?;
+    // * 3) Enforce governance lock identity on applicable registry cells.
+    verify_governance_lock_identity(reg_in_opt, reg_out, &registry_type_args)?;
 
     // * 4) Load registry payloads and enforce BLKL v1 invariants.
-    let in_data = load_cell_data(reg_in, Source::Input)?;
     let out_data = load_cell_data(reg_out, Source::Output)?;
-
-    let _old_registry = RegistryPayload::parse(in_data.as_ref())?;
     let _new_registry = RegistryPayload::parse(out_data.as_ref())?;
 
-    // * 5) Bind a governance decision context to this update via witness payload.
-    let old_root = blake2b_256(in_data.as_ref());
+    let (old_root, witness_index, required_signers) = if let Some(reg_in) = reg_in_opt {
+        let in_data = load_cell_data(reg_in, Source::Input)?;
+        let _old_registry = RegistryPayload::parse(in_data.as_ref())?;
+        (blake2b_256(in_data.as_ref()), reg_in, 3usize)
+    } else {
+        // * Bootstrap creation has no previous state; bind to zero root and
+        // * require full signer participation.
+        ([0u8; 32], 0usize, SIGNER_SET_SIZE)
+    };
     let new_root = blake2b_256(out_data.as_ref());
 
-    let gov_lock_field = load_witness_lock_field(reg_in)?;
+    // * 5) Bind a governance decision context to this update via witness payload.
+    let gov_lock_field = load_witness_lock_field(witness_index)?;
     let gov = GovernanceWitness::parse(gov_lock_field.as_ref())?;
 
     if gov.old_root != old_root || gov.new_root != new_root {
@@ -510,8 +538,10 @@ fn program_entry() -> Result<(), SysError> {
         return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
     }
 
-    // * Strict plan compliance: in-script 3-of-5 signer verification.
-    verify_governance_multisig(&gov)?;
+    // * Strict plan compliance:
+    // * - updates: 3-of-5
+    // * - bootstrap: 5-of-5
+    verify_governance_multisig(&gov, required_signers)?;
 
     Ok(())
 }

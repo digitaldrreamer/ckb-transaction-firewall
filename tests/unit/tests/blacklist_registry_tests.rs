@@ -22,6 +22,8 @@ const ERROR_INVALID_GOVERNANCE_WITNESS: i8 = 24;
 const ERROR_UNAUTHORIZED_GOVERNANCE_LOCK: i8 = 25;
 const ERROR_UNAUTHORIZED_SIGNERS: i8 = 26;
 
+// Prerequisite: build registry binary before running tests:
+// cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path contracts/blacklist-registry/Cargo.toml --features dev-signer-keys
 const REGISTRY_BINARY: &[u8] = include_bytes!(
     "../../../contracts/blacklist-registry/target/riscv64imac-unknown-none-elf/release/blacklist-registry"
 );
@@ -117,12 +119,80 @@ fn build_gov1_lock_field_with_signers(
 fn assert_error_code(err: ckb_testtool::ckb_error::Error, expected_code: i8) {
     let message = err.to_string();
     let needle = format!("error code {}", expected_code);
+    let expected_code_token = expected_code.to_string();
+    let strict_match = message
+        .split(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+        .collect::<Vec<&str>>()
+        .windows(3)
+        .any(|w| w[0] == "error" && w[1] == "code" && w[2] == expected_code_token);
     assert!(
-        message.contains(&needle),
+        strict_match,
         "expected '{}' in error message, got: {}",
         needle,
         message
     );
+}
+
+#[test]
+fn test_pass_bootstrap_registry_creation_with_5_of_5_signers() {
+    let mut context = Context::default();
+
+    let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let governance_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .expect("build governance lock");
+
+    let registry_type_args = build_registry_type_args_from_governance_lock(&governance_lock);
+    let registry_type = context
+        .build_script(&registry_code_out_point, registry_type_args)
+        .expect("build registry type script");
+
+    // Bootstrap has no input registry cell; old root must be zero.
+    let payload = build_registry_payload_single_id(&[0xAA]);
+    let new_root = blake2b_256(payload.as_ref());
+    let gov_lock_field = build_gov1_lock_field_with_signers(
+        0x11,
+        0x22,
+        [0u8; 32],
+        new_root,
+        &[0, 1, 2, 3, 4],
+    );
+
+    // At least one input is still required at tx level for capacity/signing.
+    let funding_cell = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(governance_lock.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let input = CellInput::new_builder().previous_output(funding_cell).build();
+
+    let output = CellOutput::new_builder()
+        .capacity(900u64.pack())
+        .lock(governance_lock)
+        .type_(Some(registry_type).pack())
+        .build();
+
+    let witness = WitnessArgs::new_builder()
+        .lock(Some(gov_lock_field).pack())
+        .build()
+        .as_bytes();
+
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .output(output)
+        .output_data(payload.pack())
+        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
+        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .witness(witness.pack())
+        .build();
+
+    let tx = context.complete_tx(tx);
+    context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect("bootstrap tx should pass");
 }
 
 #[test]

@@ -36,3 +36,4 @@ std = [
 ]
 # * Declared to satisfy cfg checks used by ckb-std macros in some toolchains
 native-simulator = []
+dev-signer-keys = []

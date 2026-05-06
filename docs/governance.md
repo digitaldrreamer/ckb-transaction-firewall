@@ -82,6 +82,18 @@ At consensus, the type script enforces:
   - signer indexes must be unique and in range `[0,4]`,
   - at least 3 signatures must verify against the fixed 5-signer governance pubkey set,
   - the verified message digest is `blake2b_256(proposal_id_hash || vote_digest_hash || old_root || new_root)`.
+- bootstrap support:
+  - first registry creation is allowed as `0 registry inputs -> 1 registry output`,
+  - bootstrap enforces `old_root = 0x00..00`,
+  - bootstrap requires full 5-of-5 signer verification.
+
+### Signer key rotation policy (v1)
+
+- Because signer pubkeys are compiled into the registry type script, key rotation requires deploying a new script binary (new code hash) and governance-led migration.
+- Emergency compromise handling must include:
+  - immediate governance notice and temporary execution freeze,
+  - audited replacement binary with rotated signer set,
+  - migration to the new type script identity and off-chain config update (SDK/indexers/operators).
 
 ## Validator Lifecycle Policy
 

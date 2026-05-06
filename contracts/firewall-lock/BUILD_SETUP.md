@@ -81,7 +81,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ckb-std = { version = "0.16.2", default-features = false }
+ckb-std = { version = "0.16.4", default-features = false }
 molecule = { version = "0.8.0", default-features = false }
 cfg-if = "1.0"
 

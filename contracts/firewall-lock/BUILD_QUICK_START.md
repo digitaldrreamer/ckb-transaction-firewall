@@ -44,7 +44,7 @@ ls -lh target/riscv64imac-unknown-none-elf/release/firewall-lock
 
 ## 📦 Expected Output
 
-```
+```text
 target/riscv64imac-unknown-none-elf/release/firewall-lock
 ```
 

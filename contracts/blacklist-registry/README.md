@@ -64,6 +64,7 @@ The message signed by governance signers is:
 - `blake2b_256(proposal_id_hash || vote_digest_hash || registry_old_root || registry_new_root)`
 
 The type script verifies signatures against a fixed, compiled 5-signer pubkey set and enforces a strict 3-of-5 threshold.
+For bootstrap creation of the very first registry cell (no registry input), the type script requires strict 5-of-5 signatures and binds `old_root` to all-zero bytes.
 
 The type script rejects updates if:
 
@@ -74,6 +75,27 @@ The type script rejects updates if:
 - duplicate signer indexes are present,
 - fewer than 3 valid signatures are provided,
 - any signature fails secp256k1 verification for its declared signer index.
+
+## Bootstrap and Rotation
+
+- Bootstrap topology is `0 input registry cells -> 1 output registry cell`.
+- Update topology is `1 input registry cell -> 1 output registry cell`.
+- Bootstrap uses `old_root = 0x00..00` and requires 5-of-5 governance signatures.
+
+### Key rotation / emergency signer compromise
+
+- In v1, signer pubkeys are compiled into the contract binary; rotating keys requires a contract upgrade (new code hash) plus governance migration to the new type script identity.
+- Minimum operational process:
+  1. Declare compromise and freeze normal update execution.
+  2. Prepare and audit new contract binary with rotated signer pubkeys.
+  3. Approve upgrade through governance process and execute migration transaction(s).
+  4. Publish and verify the new code hash across SDK/indexer/operator configs before resuming updates.
+
+### Dev safety guard
+
+- Placeholder signer keys are blocked in non-test builds unless `dev-signer-keys` feature is explicitly enabled.
+- For local/dev builds only:
+  - `cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys`
 
 ## Expected layout
 
