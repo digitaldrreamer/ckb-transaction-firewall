@@ -161,8 +161,9 @@ function baseContext() {
     regTypeId: regRecipe.type_id,
     regCodeOutPoint: {
       tx_hash: regRecipe.tx_hash,
-      index: String(regRecipe.index),
+      index: `0x${regRecipe.index.toString(16)}`,
     },
+    regCodeOutPointRpcIndex: String(regRecipe.index),
     regCap: BigInt(regRecipe.occupied_capacity),
     secpDep: genesis.secp256k1_blake160_sighash_all.cell_dep,
   };
@@ -170,7 +171,7 @@ function baseContext() {
 
 function requireDeployedOutpointLive(ctx) {
   const check = shJson(
-    `${CKB} --url ${RPC} rpc get_live_cell --tx-hash ${ctx.regCodeOutPoint.tx_hash} --index ${ctx.regCodeOutPoint.index} --output-format json`,
+    `${CKB} --url ${RPC} rpc get_live_cell --tx-hash ${ctx.regCodeOutPoint.tx_hash} --index ${ctx.regCodeOutPointRpcIndex} --output-format json`,
   );
   if (check.status !== 'live') {
     throw new Error(
