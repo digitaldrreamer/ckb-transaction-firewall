@@ -1,3 +1,3 @@
-export * from "./types";
-export * from "./blacklist";
-export * from "./firewall";
+export * from "./types.js";
+export * from "./blacklist.js";
+export * from "./firewall.js";

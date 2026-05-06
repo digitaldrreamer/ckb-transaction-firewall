@@ -1,4 +1,4 @@
-import type { CellDepLike, RegistryPayload, ScriptLike } from "./types";
+import type { CellDepLike, RegistryPayload, ScriptLike } from "./types.js";
 
 function strip0x(hex: string): string {
   return hex.startsWith("0x") ? hex.slice(2) : hex;

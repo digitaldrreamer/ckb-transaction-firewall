@@ -1,5 +1,5 @@
-import { parseRegistryPayload, resolveRegistryDep } from "./blacklist";
-import type { FirewallConfig, FirewallDecision, UnsignedTxLike } from "./types";
+import { parseRegistryPayload, resolveRegistryDep } from "./blacklist.js";
+import type { FirewallConfig, FirewallDecision, UnsignedTxLike, RegistryEntry } from "./types.js";
 
 function normalize(hex: string): string {
   return hex.startsWith("0x") ? hex.toLowerCase() : `0x${hex.toLowerCase()}`;
@@ -28,7 +28,7 @@ export class TransactionFirewall {
     try {
       const dep = resolveRegistryDep(tx.cellDeps, this.config.registryScript);
       const payload = parseRegistryPayload(dep.data);
-      registryIds = new Set(payload.entries.map((e) => normalize(e.identifier)));
+      registryIds = new Set(payload.entries.map((e: RegistryEntry) => normalize(e.identifier)));
     } catch (err) {
       return mapErrorToDecision(err as Error);
     }

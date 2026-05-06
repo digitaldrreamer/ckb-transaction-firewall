@@ -22,6 +22,15 @@ TypeScript implementation of Layer 1 pre-flight checks for CKB agent transaction
 - `src/firewall.ts`: deterministic allow/deny preflight evaluation.
 - `src/index.ts`: public exports.
 
+## Local Validation
+
+```bash
+cd sdk/typescript
+npm install
+npm run typecheck
+npm test
+```
+
 ## Registry Resolution Contract
 
 - Registry lookup uses the registry cell’s **type script** triple: `codeHash`, `hashType`, `args` (same bytes as in firewall lock args).
