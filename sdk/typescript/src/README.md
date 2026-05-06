@@ -1,7 +1,8 @@
 # TypeScript SDK Source
 
-This folder will include:
+Implemented:
 
-- transaction inspection utilities,
-- blacklist decoding helpers,
-- typed result/error structures for agent integrations.
+- `types.ts`: transaction/config/result types.
+- `blacklist.ts`: registry dep selection and BLKL v1 parsing.
+- `firewall.ts`: transaction preflight checker.
+- `index.ts`: public module exports.

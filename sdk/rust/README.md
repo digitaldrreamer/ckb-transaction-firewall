@@ -23,3 +23,15 @@ Rust SDK for pre-flight transaction checks in native runtimes.
 ## Expected layout
 
 - `src/lib.rs`: public SDK interface and reusable checking logic.
+- `Cargo.toml`: Rust crate metadata for SDK build/test.
+
+## Implemented API (current)
+
+- `check_transaction(config, tx) -> Result<(), FirewallError>`
+- `FirewallError::code()` mapping aligned to on-chain public error codes:
+  - `8`: missing registry dep
+  - `9`: invalid registry data
+  - `10`: registry not sorted
+  - `11`: blacklisted lock args
+  - `12`: blacklisted type args
+  - `17`: ambiguous registry dep
