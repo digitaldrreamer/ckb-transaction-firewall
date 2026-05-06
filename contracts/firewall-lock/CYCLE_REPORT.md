@@ -8,10 +8,10 @@
 
 ## Environment
 
-- Rust toolchain:
+- Rust toolchain: rustc 1.95.0 (59807616e 2026-04-14), cargo 1.95.0 (f2d3ce0bd 2026-03-21)
 - CKB debugger version:
 - Machine:
-- Date:
+- Date: 2026-05-06
 
 ## Commands
 
@@ -45,11 +45,11 @@ The script records happy-path cycle variants using `ckb-testtool` `verify_tx()` 
 | blacklisted lock args | reject (11) |  |  |
 | blacklisted type args | reject (12) |  |  |
 | ambiguous registry dep | reject (17) |  |  |
-| happy path (lock-only) | pass |  | ckb-testtool verify_tx() cycle probe |
-| happy path (type-only) | pass |  | ckb-testtool verify_tx() cycle probe |
-| happy path (both-checks) | pass |  | ckb-testtool verify_tx() cycle probe |
-| happy path (large registry, 512 entries, both-checks) | pass |  | ckb-testtool verify_tx() cycle probe |
-| happy path (very large registry, 2000 entries, both-checks) | pass |  | ckb-testtool verify_tx() cycle probe |
+| happy path (lock-only) | pass | 145053 | ckb-testtool verify_tx() cycle probe |
+| happy path (type-only) | pass | 149922 | ckb-testtool verify_tx() cycle probe |
+| happy path (both-checks) | pass | 150685 | ckb-testtool verify_tx() cycle probe |
+| happy path (large registry, 512 entries, both-checks) | pass | 673417 | ckb-testtool verify_tx() cycle probe |
+| happy path (very large registry, 2000 entries, both-checks) | pass | 2261167 | ckb-testtool verify_tx() cycle probe |
 
 ## Targets
 

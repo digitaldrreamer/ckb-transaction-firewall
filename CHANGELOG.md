@@ -105,3 +105,13 @@
 
 - Added defensive registry entry-count bound check before `Vec::with_capacity` allocation in registry parser.
 - Optimized registry dep scanning to avoid loading full dep cell data when only type-script identity matching is needed.
+## 2026-05-06
+
+### Build + integration milestone
+
+- Built `contracts/firewall-lock` RISC-V release binary (`firewall-lock`) successfully (23K).
+- Ran firewall lock unit tests (19/19 passing).
+- Ran `ckb-testtool` integration tests in `tests/unit` (15/15 passing).
+- Recorded happy-path cycle probe results in `contracts/firewall-lock/CYCLE_REPORT.md` via `profile-cycles.sh`.
+- Fixed `contracts/firewall-lock/profile-cycles.sh` report update logic to work with non-empty Notes column.
+
