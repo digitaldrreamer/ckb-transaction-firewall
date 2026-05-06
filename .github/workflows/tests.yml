@@ -10,7 +10,7 @@ on:
 jobs:
   firewall-lock:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -24,6 +24,9 @@ jobs:
       - name: Cache cargo registry and build output
         uses: Swatinem/rust-cache@v2
 
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
       - name: Run firewall lock unit tests
         working-directory: contracts/firewall-lock
         run: cargo test --features std
@@ -35,3 +38,21 @@ jobs:
       - name: Run firewall lock integration tests
         working-directory: tests/unit
         run: cargo test --test firewall_lock_tests
+
+      - name: Build blacklist registry RISC-V release binary
+        working-directory: contracts/blacklist-registry
+        run: cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+
+      - name: Run blacklist registry integration tests
+        working-directory: tests/unit
+        run: cargo test --test blacklist_registry_tests
+
+      - name: Run phase 3 verification script
+        run: ./scripts/phase3_verify.sh
+
+      - name: Upload phase 3 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-artifacts
+          path: phase3_artifacts/
