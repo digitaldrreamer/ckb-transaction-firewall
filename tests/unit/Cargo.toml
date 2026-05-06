@@ -14,7 +14,13 @@ molecule = "0.8"
 [dev-dependencies]
 # * Testing utilities
 proptest = "1.0"
+blake2b-ref = "0.3.1"
+k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
 
 [[test]]
 name = "firewall_lock_tests"
 path = "tests/firewall_lock_tests.rs"
+
+[[test]]
+name = "blacklist_registry_tests"
+path = "tests/blacklist_registry_tests.rs"
