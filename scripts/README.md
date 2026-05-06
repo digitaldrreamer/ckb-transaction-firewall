@@ -89,6 +89,19 @@ Expected capabilities:
 - fail fast if RPC is unreachable,
 - fail fast if no local accounts are configured.
 
+### `phase3_closeout_check.sh`
+
+Purpose:
+
+- Report Phase 3 closeout readiness across governance evidence, artifacts, security docs, and runbooks.
+- Provide a single pass/fail summary for remaining release gates.
+
+Expected capabilities:
+
+- validate governance drill artifact when present,
+- verify required evidence/runbook/security files exist,
+- exit non-zero when closeout is incomplete.
+
 ### `deploy.sh`
 
 Purpose:
