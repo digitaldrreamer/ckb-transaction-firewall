@@ -67,13 +67,13 @@ Acceptance criteria:
 - Pass/fail matrix fully green.
 - Traceable tx evidence recorded.
 Evidence links:
-- Testnet tx hashes:
-- Pass/fail matrix:
-- Drill notes:
+- Testnet tx hashes: `tests/integration/governance_drill/latest.json` (to be populated during execution)
+- Pass/fail matrix: `tests/integration/governance_drill/template.json` + `scripts/phase3_governance_drill_check.sh`
+- Drill notes: `tests/integration/governance_drill/README.md`
 
 ### 5. SDK and Contract Integration Gate
 - [ ] Confirm SDK preflight logic matches on-chain parsing/hash rules.
-- [ ] Add contract-version compatibility checks in SDK.
+- [x] Add contract-version compatibility checks in SDK.
 - [ ] Run integration suite against deployed testnet contracts.
 
 Owner: SDK/Integration  
@@ -82,7 +82,7 @@ Acceptance criteria:
 - Compatibility checks active and tested.
 Evidence links:
 - Integration run:
-- Compatibility check PR:
+- Compatibility check PR: `scripts/phase3_compat_check.sh` + CI step in `.github/workflows/tests.yml`
 - SDK release note:
 
 ### 6. Security Hardening
