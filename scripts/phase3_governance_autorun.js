@@ -170,7 +170,7 @@ function baseContext() {
 
 function requireDeployedOutpointLive(ctx) {
   const check = shJson(
-    `${CKB} --url ${RPC} rpc get_live_cell --tx-hash ${ctx.regCodeOutPoint.tx_hash} --index ${ctx.regCodeOutPoint.index} --with-data false --output-format json`,
+    `${CKB} --url ${RPC} rpc get_live_cell --tx-hash ${ctx.regCodeOutPoint.tx_hash} --index ${ctx.regCodeOutPoint.index} --output-format json`,
   );
   if (check.status !== 'live') {
     throw new Error(
