@@ -225,6 +225,7 @@ Purpose:
 Implemented capabilities:
 
 - reads deployment lock metadata from `deploy/info.json`,
+- recovers corrupted/empty `deploy/gov_bootstrap_tx.json` from a committed template,
 - collects live lock-only cells via RPC indexer search,
 - auto-topups self-owned plain cells when inventory is below required scenario count,
 - clones `deploy/gov_bootstrap_tx.json` into required scenario files with refreshed input outpoints.

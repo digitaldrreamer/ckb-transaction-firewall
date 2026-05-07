@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY_DIR="$ROOT_DIR/deploy"
 BASE_TX_FILE="$DEPLOY_DIR/gov_bootstrap_tx.json"
+BASE_TX_TEMPLATE_FILE="$ROOT_DIR/tests/integration/governance_drill/gov_bootstrap_tx.template.json"
 CKB_CLI_BIN="${CKB_CLI_BIN:-ckb-cli}"
 CKB_RPC_URL="${CKB_RPC_URL:-https://testnet.ckb.dev}"
 INFO_FILE="${INFO_FILE:-$DEPLOY_DIR/info.json}"
@@ -45,10 +46,19 @@ main() {
     echo "missing base tx file: $BASE_TX_FILE" >&2
     exit 1
   }
+  [[ -f "$BASE_TX_TEMPLATE_FILE" ]] || {
+    echo "missing base tx template file: $BASE_TX_TEMPLATE_FILE" >&2
+    exit 1
+  }
   [[ -f "$INFO_FILE" ]] || {
     echo "missing deploy info file: $INFO_FILE" >&2
     exit 1
   }
+
+  if ! jq -e '.transaction and .transaction.inputs and .transaction.outputs and .transaction.witnesses' "$BASE_TX_FILE" >/dev/null 2>&1; then
+    cp "$BASE_TX_TEMPLATE_FILE" "$BASE_TX_FILE"
+    echo "recovered base tx file from template: $BASE_TX_FILE"
+  fi
 
   local lock_code_hash lock_hash_type lock_args
   lock_code_hash="$(jq -r '.deployment.lock.code_hash' "$INFO_FILE")"
