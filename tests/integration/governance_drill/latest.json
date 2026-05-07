@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-05-06T23:42:15Z",
+  "generated_utc": "2026-05-07T06:38:40Z",
   "network": "ckb_testnet",
   "rpc_url": "https://testnet.ckb.dev",
   "contract_versions": {
@@ -10,26 +10,26 @@
     {
       "id": "bootstrap_0_to_1",
       "status": "pass",
-      "tx_hash": "0xa4ede6835889cbdd5469539203c3c9ddc663cb12edb707962099b1c8619d7d7a",
+      "tx_hash": "0xd0a36fe85bf5e5e458840fc0ef2cf2dfdc2f3e2f320761c5fdbbdf80a15cb1ee",
       "notes": "Bootstrap registry creation with strict 5-of-5 witness policy."
     },
     {
       "id": "update_1_to_1",
       "status": "pass",
-      "tx_hash": "0x5970f53cb1d004bbe439dc54f44b69197e1f07d6be9687e9a0c4b4dc5d93e665",
+      "tx_hash": "0xd08a788bf5918a64e1d654768b1fedca179cfcbe647d3422b2fccbd114d3a721",
       "notes": "Normal governance update with 3-of-5 signatures."
     },
     {
       "id": "negative_invalid_signer_set",
       "status": "pass",
-      "tx_hash": "0xb4b9f14c0bd05045efcc7bb0f557dfa20f33f56318b2fa2c36ed376779662f3b",
+      "tx_hash": "0x94f755451cba702ca65f4d797163e472087ff1bde1734d71ab3b682e2857df68",
       "expected_error_code": 26,
       "notes": "Reject unauthorized signer configuration."
     },
     {
       "id": "negative_invalid_root_binding",
       "status": "pass",
-      "tx_hash": "0xb7d0c44694033cc678153c99fc0ffdf8c7dbc0cececa097fd61ae80e33fd5e36",
+      "tx_hash": "0xb402d2fd54a528f1742166305d5463aaf6f4a63f4667b2609c99a03c355284ef",
       "expected_error_code": 24,
       "notes": "Reject GOV1 witness where old/new roots mismatch actual registry data."
     }
