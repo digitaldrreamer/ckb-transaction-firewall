@@ -164,14 +164,12 @@ Implemented capabilities:
 
 Purpose:
 
-- Validate governance update payloads.
-- Build registry replacement transaction inputs.
-- Prepare signer payloads and submission metadata.
+- Orchestrate governance-drill artifact lifecycle and scenario recording.
 
 Implemented capabilities:
 
 - initialize governance drill artifact file,
-- execute scenario-specific operator-provided tx command,
+- execute scenario-specific operator-provided tx command (as used by `phase3_governance_mode2.sh`),
 - auto-extract first tx hash (`0x` + 64 hex) from command output,
 - write scenario result to `tests/integration/governance_drill/latest.json`,
 - validate artifact using existing phase3 governance drill checks.

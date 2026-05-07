@@ -29,11 +29,18 @@ export type FirewallReasonCode =
   | 12
   | 17;
 
-export interface FirewallDecision {
-  ok: boolean;
-  code?: FirewallReasonCode;
-  reason?: string;
-}
+export const FIREWALL_ERROR_CODES = {
+  MissingRegistryCellDep: 8,
+  InvalidRegistryData: 9,
+  RegistryNotSorted: 10,
+  BlacklistedLockArgs: 11,
+  BlacklistedTypeArgs: 12,
+  AmbiguousRegistryCellDep: 17,
+} as const;
+
+export type FirewallDecision =
+  | { ok: true }
+  | { ok: false; code: FirewallReasonCode; reason?: string };
 
 export interface RegistryEntry {
   identifier: string;

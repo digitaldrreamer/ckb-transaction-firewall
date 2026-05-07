@@ -17,7 +17,8 @@ function sh(file, args = [], inherit = false) {
 }
 
 function h(label) {
-  return `0x${createHash('sha256').update(`${label}:${Date.now()}`).digest('hex')}`;
+  // Deterministic per-scenario evidence hash for reproducible local drill mode.
+  return `0x${createHash('sha256').update(`${label}:mode2-deterministic-v1`).digest('hex')}`;
 }
 
 function runScenario(id, signers) {

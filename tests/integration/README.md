@@ -36,4 +36,6 @@ Each run should emit:
 For governance-specific testnet drills, use the artifact format in:
 
 - `tests/integration/governance_drill/template.json`
+- `tests/integration/governance_drill/latest.json`
+- `tests/integration/governance_drill/mode2_signer_state.json`
 - validated by `scripts/phase3_governance_drill_check.sh`

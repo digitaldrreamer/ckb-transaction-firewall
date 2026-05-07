@@ -131,7 +131,9 @@ cp "$MANIFEST_JSON" "$LATEST_JSON"
 
 prune_artifacts_for_prefix() {
   local prefix="$1"
-  mapfile -t old_files < <(ls -1t "$OUT_DIR"/"${prefix}"_* 2>/dev/null | tail -n +"$((MAX_ARTIFACT_SETS + 1))" || true)
+  mapfile -t old_files < <(ls -1t "$OUT_DIR"/"${prefix}"_* 2>/dev/null \
+    | grep -Eiv '(_latest|_LATEST)(\.[a-z0-9]+)?$' \
+    | tail -n +"$((MAX_ARTIFACT_SETS + 1))" || true)
   if (( ${#old_files[@]} > 0 )); then
     rm -f "${old_files[@]}"
   fi

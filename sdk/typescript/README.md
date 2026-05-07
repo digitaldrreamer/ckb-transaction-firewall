@@ -26,7 +26,7 @@ TypeScript implementation of Layer 1 pre-flight checks for CKB agent transaction
 
 ```bash
 cd sdk/typescript
-npm install
+npm ci
 npm run typecheck
 npm test
 ```

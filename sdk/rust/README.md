@@ -34,4 +34,8 @@ Rust SDK for pre-flight transaction checks in native runtimes.
   - `10`: registry not sorted
   - `11`: blacklisted lock args
   - `12`: blacklisted type args
-  - `17`: ambiguous registry dep
+- `17`: ambiguous registry dep
+
+Notes:
+- The SDK intentionally exposes only public on-chain firewall codes `8-12` and `17`.
+- Contract-internal inner-lock validation codes (`13-16`) are not surfaced by this SDK API.
