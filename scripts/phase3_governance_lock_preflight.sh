@@ -26,6 +26,10 @@ echo "  hash_type: $hash_type"
 echo "  args:      $args"
 
 if [[ "$code_hash" == "$SECP_CODE_HASH" && "$hash_type" == "type" ]]; then
+  if [[ ! "$args" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+    echo "invalid secp governance lock args format: expected 20-byte blake160 hex args" >&2
+    exit 1
+  fi
   cat <<'MSG'
 
 NOTICE

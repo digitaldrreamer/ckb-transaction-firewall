@@ -15,7 +15,7 @@ CHECK_RC=$?
 set -e
 CHECK_OUTPUT="${CHECK_OUTPUT//$ROOT_DIR/<repo_root>}"
 
-cat >"$REPORT" <<EOF
+cat >"$REPORT" <<PHASE3_STATUS_REPORT_END
 # Phase 3 Status Snapshot
 
 - Generated (UTC): $STAMP
@@ -28,7 +28,7 @@ cat >"$REPORT" <<EOF
 \`\`\`text
 $CHECK_OUTPUT
 \`\`\`
-EOF
+PHASE3_STATUS_REPORT_END
 
 cp "$REPORT" "$LATEST"
 
@@ -36,4 +36,5 @@ echo "Phase 3 status report written:"
 echo " - $REPORT"
 echo " - $LATEST"
 
+# Intentionally always succeeds: CHECK_RC is recorded in the report instead of propagating failure here.
 exit 0

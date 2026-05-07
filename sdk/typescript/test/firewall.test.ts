@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { parseRegistryPayload, resolveRegistryDep } from "../src/blacklist.js";
 import { TransactionFirewall } from "../src/firewall.js";
+import { FIREWALL_ERROR_CODES } from "../src/types.js";
 import type { CellDepLike, ScriptLike } from "../src/types.js";
 
 function registryHex(ids: number[][]): string {
@@ -10,6 +11,9 @@ function registryHex(ids: number[][]): string {
   const count = ids.length;
   bytes.push(count & 0xff, (count >> 8) & 0xff, (count >> 16) & 0xff, (count >> 24) & 0xff);
   for (const id of ids) {
+    if (id.length >= 256) {
+      throw new Error("test helper supports id length < 256");
+    }
     bytes.push(id.length);
     bytes.push(...id);
     bytes.push(0, 0, 0, 0, 0, 0, 0, 0); // expires_at
@@ -63,7 +67,7 @@ describe("transaction firewall", () => {
       outputs: [{ lockArgs: "0xaabb" }],
     });
     expect(res.ok).toBe(false);
-    expect(res.code).toBe(11);
+    expect(res.code).toBe(FIREWALL_ERROR_CODES.BlacklistedLockArgs);
   });
 
   test("passes non-blacklisted outputs", () => {
@@ -82,7 +86,7 @@ describe("transaction firewall", () => {
       outputs: [{ lockArgs: "0x1122" }],
     });
     expect(res.ok).toBe(false);
-    expect(res.code).toBe(8);
+    expect(res.code).toBe(FIREWALL_ERROR_CODES.MissingRegistryCellDep);
   });
 
   test("maps ambiguous deps to code 17", () => {
@@ -93,7 +97,7 @@ describe("transaction firewall", () => {
       outputs: [{ lockArgs: "0x1122" }],
     });
     expect(res.ok).toBe(false);
-    expect(res.code).toBe(17);
+    expect(res.code).toBe(FIREWALL_ERROR_CODES.AmbiguousRegistryCellDep);
   });
 
   test("rejects blacklisted output type args with code 12", () => {
@@ -103,6 +107,6 @@ describe("transaction firewall", () => {
       outputs: [{ lockArgs: "0x1122", typeArgs: "0x5566" }],
     });
     expect(res.ok).toBe(false);
-    expect(res.code).toBe(12);
+    expect(res.code).toBe(FIREWALL_ERROR_CODES.BlacklistedTypeArgs);
   });
 });

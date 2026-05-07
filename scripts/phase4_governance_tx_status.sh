@@ -34,8 +34,14 @@ require_cmd() {
 main() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --input) INPUT_FILE="$2"; shift 2 ;;
-      --out) OUT_FILE="$2"; shift 2 ;;
+      --input)
+        [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != -* ]] || { echo "missing value for --input" >&2; usage; exit 1; }
+        INPUT_FILE="$2"; shift 2
+        ;;
+      --out)
+        [[ $# -ge 2 && -n "${2:-}" && "${2:-}" != -* ]] || { echo "missing value for --out" >&2; usage; exit 1; }
+        OUT_FILE="$2"; shift 2
+        ;;
       -h|--help) usage; exit 0 ;;
       *) echo "unknown arg: $1" >&2; usage; exit 1 ;;
     esac

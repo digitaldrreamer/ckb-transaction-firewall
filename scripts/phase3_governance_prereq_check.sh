@@ -5,6 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CKB_CLI_BIN="${CKB_CLI_BIN:-/tmp/ckbcli-bin/ckb-cli_v1.15.0_x86_64-unknown-linux-gnu/ckb-cli}"
 CKB_RPC_URL="${CKB_RPC_URL:-https://testnet.ckb.dev}"
 
+if ! command -v jq >/dev/null 2>&1; then
+  echo "jq is required but not found in PATH" >&2
+  exit 1
+fi
+
 if [[ ! -x "$CKB_CLI_BIN" ]]; then
   echo "ckb-cli binary not found or not executable: $CKB_CLI_BIN" >&2
   exit 1

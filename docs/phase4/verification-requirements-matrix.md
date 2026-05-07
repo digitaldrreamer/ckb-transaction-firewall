@@ -39,3 +39,8 @@ The following requirements are mandatory to declare Phase 4 production-ready:
 - P4-DOC-001
 
 All items above must be in passing state with current evidence artifacts attached in-repo and verifiable in CI/testnet context.
+
+Rationale for high-severity items not listed in the minimum gate:
+
+- `P4-BWC-001`, `P4-BWC-002`, `P4-WITNESS-003`, and `P4-DRILL-002` remain required for full Phase 4 completion tracking, but are not part of the minimum release gate because they are controlled through staged rollout constraints and explicit go/no-go review records.
+- If any of these four items is not green at release decision time, the go/no-go record must document compensating controls and approval scope.

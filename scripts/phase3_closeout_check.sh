@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STRICT_GOV_MODE2="${STRICT_GOV_MODE2:-1}"
 REAL_GOV_EVIDENCE_REQUIRED="${REAL_GOV_EVIDENCE_REQUIRED:-0}"
+ALLOW_DEV_SIGNER_KEYS="${ALLOW_DEV_SIGNER_KEYS:-1}"
 
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; FAILED=1; }
@@ -40,6 +41,24 @@ check_security_tracker_zeroes() {
     pass "G1 security summary shows zero open critical/high"
   else
     fail "G1 security summary not green (critical=$crit high=$high)"
+  fi
+}
+
+check_manifest_dev_signer_keys_policy() {
+  local manifest_json="$ROOT_DIR/phase3_artifacts/artifact_manifest_latest.json"
+  if [[ ! -f "$manifest_json" ]]; then
+    fail "Deterministic manifest JSON missing for feature-policy check ($manifest_json)"
+    return
+  fi
+
+  if jq -e '.artifacts[]? | (.features // []) | index("dev-signer-keys") != null' "$manifest_json" >/dev/null 2>&1; then
+    if [[ "$ALLOW_DEV_SIGNER_KEYS" == "1" ]]; then
+      pass "Manifest contains dev-signer-keys (allowed by ALLOW_DEV_SIGNER_KEYS=1)"
+    else
+      fail "Manifest contains dev-signer-keys but ALLOW_DEV_SIGNER_KEYS!=1"
+    fi
+  else
+    pass "Manifest has no dev-signer-keys feature usage"
   fi
 }
 
@@ -91,6 +110,7 @@ fi
 # G3/G5 evidence artifacts
 check_file "phase3_artifacts/PHASE3_EVIDENCE_LATEST.md" "Phase 3 evidence report"
 check_file "phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md" "Deterministic build manifest"
+check_manifest_dev_signer_keys_policy
 
 # G1 security docs
 check_file "docs/phase3/security/findings-tracker.md" "Security findings tracker"
