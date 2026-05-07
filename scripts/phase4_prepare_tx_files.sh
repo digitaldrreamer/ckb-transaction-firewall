@@ -139,6 +139,8 @@ JSON
     txh="$(awk '{print $1}' <<<"${outpoints[$i]}")"
     idx="$(awk '{print $2}' <<<"${outpoints[$i]}")"
 
+    local out_tmp
+    out_tmp="$(mktemp)"
     jq \
       --arg txh "$txh" \
       --arg idx "$idx" \
@@ -146,7 +148,8 @@ JSON
       .transaction.inputs[0].previous_output.tx_hash = $txh
       | .transaction.inputs[0].previous_output.index = $idx
       | .signatures = {}
-      ' "$BASE_TX_FILE" > "$f"
+      ' "$BASE_TX_FILE" > "$out_tmp"
+    mv "$out_tmp" "$f"
     i=$((i + 1))
   done
 
