@@ -7,7 +7,7 @@ license = "MIT"
 description = "CKB lock script for governance drills (non-secp, witness-lock compatible)"
 
 [dependencies]
-ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator"] }
+ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator", "dummy-atomic"] }
 
 [profile.release]
 overflow-checks = true

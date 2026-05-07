@@ -8,13 +8,10 @@ description = "CKB type script that governs blacklist registry cell updates"
 
 [dependencies]
 # * Core CKB script development library
-ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator"] }
+ckb-std = { version = "0.16.4", default-features = false, features = ["allocator", "dummy-atomic"] }
 
 # * Hashing (pure Rust; avoids C toolchain for RISC-V builds)
 blake2b-ref = { version = "0.3.1", default-features = false }
-# Ensure transitive `bytes` in no_std mode uses portable fallback on targets
-# without native CAS support in deployed VM environments.
-bytes = { version = "1", default-features = false, features = ["extra-platforms"] }
 
 [profile.release]
 overflow-checks = true
