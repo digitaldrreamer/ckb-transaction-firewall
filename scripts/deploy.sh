@@ -13,6 +13,8 @@ INFO_FILE="$ROOT_DIR/deploy/info.json"
 DRY_RUN=0
 BUILD_FIRST=1
 STRICT_GOV_LOCK=0
+REGISTRY_RUSTFLAGS_DEFAULT="--cfg portable_atomic_no_cfg_target_has_atomic --cfg portable_atomic_no_atomic_cas --cfg portable_atomic_unsafe_assume_single_core"
+REGISTRY_RUSTFLAGS="${REGISTRY_RUSTFLAGS:-$REGISTRY_RUSTFLAGS_DEFAULT}"
 
 usage() {
   cat <<'EOF'
@@ -120,7 +122,10 @@ if [[ $BUILD_FIRST -eq 1 ]]; then
     cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/governance-lock/Cargo.toml"
   fi
   cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/firewall-lock/Cargo.toml"
-  cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/blacklist-registry/Cargo.toml" --features dev-signer-keys
+  (
+    export RUSTFLAGS="$REGISTRY_RUSTFLAGS"
+    cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/blacklist-registry/Cargo.toml" --features dev-signer-keys
+  )
 fi
 
 FW_BIN="$ROOT_DIR/contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/firewall-lock"

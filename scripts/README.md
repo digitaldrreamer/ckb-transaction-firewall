@@ -155,6 +155,7 @@ Implemented capabilities:
 - environment selection (`testnet`, `mainnet`) and RPC override,
 - optional build step for both contracts,
 - optional strict two-stage deployment (`--strict-governance-lock`) that deploys a non-secp governance lock first,
+- builds `blacklist-registry` with VM-compatible portable-atomic fallback flags by default (override via `REGISTRY_RUSTFLAGS`),
 - deployment config generation for `ckb-cli deploy gen-txs`,
 - dry-run mode (generate txs and print sign/apply commands),
 - sign/apply execution path via `ckb-cli`.
@@ -229,6 +230,18 @@ Implemented capabilities:
 - collects live lock-only cells via RPC indexer search,
 - auto-topups self-owned plain cells when inventory is below required scenario count,
 - clones `deploy/gov_bootstrap_tx.json` into required scenario files with refreshed input outpoints.
+
+### `phase4_submit_tx.sh`
+
+Purpose:
+
+- Submit a governance tx file with resilient network retry behavior.
+
+Implemented capabilities:
+
+- signs transaction once (single password prompt),
+- retries `tx send` on transient RPC HTTP errors,
+- treats duplicated-pool send responses as success and returns tx hash when available.
 
 ### `phase4_governance_tx_status.sh`
 

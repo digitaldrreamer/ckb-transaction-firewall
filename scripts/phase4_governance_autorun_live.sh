@@ -6,6 +6,7 @@ MODE2_BIN="$ROOT_DIR/scripts/phase3_governance_mode2.sh"
 PHASE4_CHECK_BIN="$ROOT_DIR/scripts/phase4_governance_evidence_check.sh"
 TX_STATUS_BIN="$ROOT_DIR/scripts/phase4_governance_tx_status.sh"
 PREPARE_TX_FILES_BIN="$ROOT_DIR/scripts/phase4_prepare_tx_files.sh"
+SUBMIT_TX_BIN="$ROOT_DIR/scripts/phase4_submit_tx.sh"
 ARTIFACT_FILE="$ROOT_DIR/tests/integration/governance_drill/latest.json"
 
 usage() {
@@ -107,10 +108,10 @@ main() {
     [[ -f "$neg_signer_tx_file" ]] || { echo "missing tx file after preparation: $neg_signer_tx_file" >&2; exit 1; }
     [[ -f "$neg_root_tx_file" ]] || { echo "missing tx file after preparation: $neg_root_tx_file" >&2; exit 1; }
 
-    BOOTSTRAP_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$bootstrap_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$bootstrap_tx_file\""
-    UPDATE_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$update_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$update_tx_file\""
-    NEG_INVALID_SIGNER_SET_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$neg_signer_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$neg_signer_tx_file\""
-    NEG_INVALID_ROOT_BINDING_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$neg_root_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$neg_root_tx_file\""
+    BOOTSTRAP_TX_CMD="CKB_CLI_BIN=\"$cli\" CKB_RPC_URL=\"$rpc\" \"$SUBMIT_TX_BIN\" --tx-file \"$bootstrap_tx_file\" --from-account \"$from_account\""
+    UPDATE_TX_CMD="CKB_CLI_BIN=\"$cli\" CKB_RPC_URL=\"$rpc\" \"$SUBMIT_TX_BIN\" --tx-file \"$update_tx_file\" --from-account \"$from_account\""
+    NEG_INVALID_SIGNER_SET_TX_CMD="CKB_CLI_BIN=\"$cli\" CKB_RPC_URL=\"$rpc\" \"$SUBMIT_TX_BIN\" --tx-file \"$neg_signer_tx_file\" --from-account \"$from_account\""
+    NEG_INVALID_ROOT_BINDING_TX_CMD="CKB_CLI_BIN=\"$cli\" CKB_RPC_URL=\"$rpc\" \"$SUBMIT_TX_BIN\" --tx-file \"$neg_root_tx_file\" --from-account \"$from_account\""
   else
     [[ -n "$cmd_file" ]] || {
       echo "either --cmd-file or --auto-from-tx-files is required" >&2
