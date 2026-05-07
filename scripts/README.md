@@ -200,6 +200,19 @@ Implemented capabilities:
 - verifies each scenario `tx_hash` is resolvable via `ckb-cli rpc get_transaction`,
 - can be enabled in closeout gate via `REAL_GOV_EVIDENCE_REQUIRED=1`.
 
+### `phase4_governance_autorun_live.sh`
+
+Purpose:
+
+- Execute all required governance scenarios with real tx commands and produce chain-backed evidence.
+
+Implemented capabilities:
+
+- consumes operator-provided scenario tx commands from `--cmd-file`,
+- runs strict mode2 signer-separation policy checks while recording tx hashes,
+- validates drill outputs via `phase3_governance_mode2.sh validate`,
+- enforces chain-backed evidence by running `phase4_governance_evidence_check.sh`.
+
 ## CLI Recommendation
 
 Yes, a CLI is needed. Governance and deployment are operational workflows that should be reproducible, scriptable, and auditable across environments and operators.
