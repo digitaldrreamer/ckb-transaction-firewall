@@ -51,7 +51,7 @@ check_manifest_dev_signer_keys_policy() {
     return
   fi
 
-  if jq -e '.artifacts[]? | (.features // []) | index("dev-signer-keys") != null' "$manifest_json" >/dev/null 2>&1; then
+  if jq -e 'any(.artifacts[]?; (.features // []) | index("dev-signer-keys") != null)' "$manifest_json" >/dev/null 2>&1; then
     if [[ "$ALLOW_DEV_SIGNER_KEYS" == "1" ]]; then
       pass "Manifest contains dev-signer-keys (allowed by ALLOW_DEV_SIGNER_KEYS=1)"
     else
