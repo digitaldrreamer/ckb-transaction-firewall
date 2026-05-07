@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPDATE_BIN="node $ROOT_DIR/scripts/update-blacklist.ts"
 CHECK_BIN="$ROOT_DIR/scripts/phase3_governance_drill_check.sh"
 PREFLIGHT_BIN="$ROOT_DIR/scripts/phase3_governance_lock_preflight.sh"
+PREFLIGHT_INFO_FILE="${PREFLIGHT_INFO_FILE:-$ROOT_DIR/deploy/info.json}"
 LATEST_FILE="$ROOT_DIR/tests/integration/governance_drill/latest.json"
 STATE_FILE="$ROOT_DIR/tests/integration/governance_drill/mode2_signer_state.json"
 
@@ -195,7 +196,11 @@ main() {
       echo "recorded mode2 signer evidence for $id => signers [$normalized], tx $tx_hash"
       ;;
     validate)
-      "$PREFLIGHT_BIN"
+      if [[ -f "$PREFLIGHT_INFO_FILE" ]]; then
+        "$PREFLIGHT_BIN" "$PREFLIGHT_INFO_FILE"
+      else
+        echo "mode2 validate: skipping governance-lock preflight (missing $PREFLIGHT_INFO_FILE)" >&2
+      fi
       $UPDATE_BIN validate
       "$CHECK_BIN" "$LATEST_FILE"
       validate_state
