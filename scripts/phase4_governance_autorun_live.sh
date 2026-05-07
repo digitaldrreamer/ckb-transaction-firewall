@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE2_BIN="$ROOT_DIR/scripts/phase3_governance_mode2.sh"
 PHASE4_CHECK_BIN="$ROOT_DIR/scripts/phase4_governance_evidence_check.sh"
 TX_STATUS_BIN="$ROOT_DIR/scripts/phase4_governance_tx_status.sh"
+PREPARE_TX_FILES_BIN="$ROOT_DIR/scripts/phase4_prepare_tx_files.sh"
 ARTIFACT_FILE="$ROOT_DIR/tests/integration/governance_drill/latest.json"
 
 usage() {
@@ -32,6 +33,7 @@ Notes:
   - This script executes the provided commands and records live evidence.
   - It finishes by running phase4_governance_evidence_check.sh (chain verification).
   - In --auto-from-tx-files mode, tx JSON files are signed/sent automatically.
+  - Missing tx JSON files are auto-prepared from deploy baseline + live cells.
 USAGE
 }
 
@@ -98,10 +100,13 @@ main() {
     local neg_signer_tx_file="${NEG_INVALID_SIGNER_SET_TX_FILE:-$ROOT_DIR/deploy/gov_negative_invalid_signer_set_tx.json}"
     local neg_root_tx_file="${NEG_INVALID_ROOT_BINDING_TX_FILE:-$ROOT_DIR/deploy/gov_negative_invalid_root_binding_tx.json}"
 
-    [[ -f "$bootstrap_tx_file" ]] || { echo "missing tx file: $bootstrap_tx_file" >&2; exit 1; }
-    [[ -f "$update_tx_file" ]] || { echo "missing tx file: $update_tx_file" >&2; exit 1; }
-    [[ -f "$neg_signer_tx_file" ]] || { echo "missing tx file: $neg_signer_tx_file" >&2; exit 1; }
-    [[ -f "$neg_root_tx_file" ]] || { echo "missing tx file: $neg_root_tx_file" >&2; exit 1; }
+    [[ -f "$bootstrap_tx_file" ]] || { echo "missing base tx file: $bootstrap_tx_file" >&2; exit 1; }
+    if [[ ! -f "$update_tx_file" || ! -f "$neg_signer_tx_file" || ! -f "$neg_root_tx_file" ]]; then
+      "$PREPARE_TX_FILES_BIN"
+    fi
+    [[ -f "$update_tx_file" ]] || { echo "missing tx file after preparation: $update_tx_file" >&2; exit 1; }
+    [[ -f "$neg_signer_tx_file" ]] || { echo "missing tx file after preparation: $neg_signer_tx_file" >&2; exit 1; }
+    [[ -f "$neg_root_tx_file" ]] || { echo "missing tx file after preparation: $neg_root_tx_file" >&2; exit 1; }
 
     BOOTSTRAP_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$bootstrap_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$bootstrap_tx_file\""
     UPDATE_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$update_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$update_tx_file\""

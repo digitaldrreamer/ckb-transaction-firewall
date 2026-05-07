@@ -210,10 +210,23 @@ Implemented capabilities:
 
 - consumes operator-provided scenario tx commands from `--cmd-file`,
 - supports `--auto-from-tx-files` to sign/send standard tx JSON files without manual command authoring,
+- auto-prepares missing scenario tx files using `phase4_prepare_tx_files.sh`,
 - runs strict mode2 signer-separation policy checks while recording tx hashes,
 - writes chain tx-status evidence to `tests/integration/governance_drill/chain_status_latest.json`,
 - validates drill outputs via `phase3_governance_mode2.sh validate`,
 - enforces chain-backed evidence by running `phase4_governance_evidence_check.sh`.
+
+### `phase4_prepare_tx_files.sh`
+
+Purpose:
+
+- Prepare missing scenario tx JSON files for auto execution mode from deploy baseline.
+
+Implemented capabilities:
+
+- reads deployment lock metadata from `deploy/info.json`,
+- collects live lock-only cells via RPC indexer search,
+- clones `deploy/gov_bootstrap_tx.json` into required scenario files with refreshed input outpoints.
 
 ### `phase4_governance_tx_status.sh`
 
