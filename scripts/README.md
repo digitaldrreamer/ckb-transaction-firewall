@@ -187,6 +187,19 @@ Implemented capabilities:
 - executes all required scenario IDs through `phase3_governance_mode2.sh`,
 - records negative scenario evidence entries and runs mode2 validation.
 
+### `phase4_governance_evidence_check.sh`
+
+Purpose:
+
+- Enforce Phase 4 requirement that governance drill evidence is chain-backed, not synthetic.
+
+Implemented capabilities:
+
+- reuses phase3 drill schema/status validation as baseline,
+- rejects known synthetic/deterministic evidence markers in scenario notes,
+- verifies each scenario `tx_hash` is resolvable via `ckb-cli rpc get_transaction`,
+- can be enabled in closeout gate via `REAL_GOV_EVIDENCE_REQUIRED=1`.
+
 ## CLI Recommendation
 
 Yes, a CLI is needed. Governance and deployment are operational workflows that should be reproducible, scriptable, and auditable across environments and operators.

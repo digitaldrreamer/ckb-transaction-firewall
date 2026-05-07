@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STRICT_GOV_MODE2="${STRICT_GOV_MODE2:-1}"
+REAL_GOV_EVIDENCE_REQUIRED="${REAL_GOV_EVIDENCE_REQUIRED:-0}"
 
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1"; FAILED=1; }
@@ -66,6 +67,14 @@ if [[ "$STRICT_GOV_MODE2" == "1" ]]; then
     fi
   else
     fail "G2 mode2 signer-separation evidence missing (tests/integration/governance_drill/mode2_signer_state.json)"
+  fi
+fi
+
+if [[ "$REAL_GOV_EVIDENCE_REQUIRED" == "1" ]]; then
+  if "$ROOT_DIR/scripts/phase4_governance_evidence_check.sh" "$ROOT_DIR/tests/integration/governance_drill/latest.json" >/dev/null 2>&1; then
+    pass "G2 real chain-backed governance evidence valid (phase4 gate)"
+  else
+    fail "G2 real chain-backed governance evidence invalid/missing (phase4 gate)"
   fi
 fi
 
