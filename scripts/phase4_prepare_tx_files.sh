@@ -36,6 +36,65 @@ require_cmd() {
   }
 }
 
+rewrite_gov1_roots() {
+  local tx_file="$1"
+  local old_root_hex="$2"
+
+  python3 - "$tx_file" "$old_root_hex" <<'PY'
+import json
+import hashlib
+import sys
+
+tx_file = sys.argv[1]
+old_root = sys.argv[2].lower()
+if not old_root.startswith("0x") or len(old_root) != 66:
+    raise SystemExit(f"invalid old_root hex: {old_root}")
+
+with open(tx_file, "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+tx = data["transaction"]
+if not tx.get("witnesses"):
+    raise SystemExit("missing transaction.witnesses")
+w0 = bytes.fromhex(tx["witnesses"][0][2:])
+if len(w0) < 16:
+    raise SystemExit("invalid witness layout")
+
+off_lock = int.from_bytes(w0[4:8], "little")
+off_input_type = int.from_bytes(w0[8:12], "little")
+off_output_type = int.from_bytes(w0[12:16], "little")
+if not (off_lock <= off_input_type <= off_output_type <= len(w0)):
+    raise SystemExit("invalid witness offsets")
+
+input_type_field = w0[off_input_type:off_output_type]
+if len(input_type_field) < 4:
+    raise SystemExit("input_type field missing")
+gov_len = int.from_bytes(input_type_field[:4], "little")
+if len(input_type_field) != 4 + gov_len:
+    raise SystemExit("malformed input_type bytes payload")
+gov = bytearray(input_type_field[4:])
+if len(gov) < 133:
+    raise SystemExit("gov payload too short")
+if gov[0:4] != b"GOV1":
+    raise SystemExit("gov payload magic mismatch")
+
+out0 = bytes.fromhex(tx["outputs_data"][0][2:])
+new_root = hashlib.blake2b(out0, digest_size=32, person=b"ckb-default-hash").digest()
+old_root_bytes = bytes.fromhex(old_root[2:])
+gov[69:101] = old_root_bytes
+gov[101:133] = new_root
+
+new_input_type = len(gov).to_bytes(4, "little") + bytes(gov)
+patched = bytearray(w0)
+patched[off_input_type:off_output_type] = new_input_type
+tx["witnesses"][0] = "0x" + patched.hex()
+
+with open(tx_file, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+}
+
 main() {
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     usage
@@ -254,6 +313,7 @@ JSON
       ' "$BASE_TX_TEMPLATE_FILE" > "$out_tmp"
     jq -e '.transaction and .transaction.inputs and .transaction.outputs and .transaction.witnesses' "$out_tmp" >/dev/null
     mv "$out_tmp" "$f"
+    rewrite_gov1_roots "$f" "0x0000000000000000000000000000000000000000000000000000000000000000"
     i=$((i + 1))
   done
 
