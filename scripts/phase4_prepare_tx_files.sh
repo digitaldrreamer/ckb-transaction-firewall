@@ -7,6 +7,9 @@ BASE_TX_FILE="$DEPLOY_DIR/gov_bootstrap_tx.json"
 CKB_CLI_BIN="${CKB_CLI_BIN:-ckb-cli}"
 CKB_RPC_URL="${CKB_RPC_URL:-https://testnet.ckb.dev}"
 INFO_FILE="${INFO_FILE:-$DEPLOY_DIR/info.json}"
+MIN_REQUIRED_CELLS="${MIN_REQUIRED_CELLS:-4}"
+AUTO_TOPUP_CAPACITY_CKB="${AUTO_TOPUP_CAPACITY_CKB:-200}"
+AUTO_TOPUP_MAX_WAIT_SEC="${AUTO_TOPUP_MAX_WAIT_SEC:-180}"
 
 usage() {
   cat <<'USAGE'
@@ -74,19 +77,53 @@ main() {
 }
 JSON
 
-  "$CKB_CLI_BIN" --url "$CKB_RPC_URL" rpc get_cells \
-    --json-path "$tmp_search" \
-    --order asc \
-    --limit 32 \
-    --output-format json > "$tmp_cells"
+  refresh_cells() {
+    "$CKB_CLI_BIN" --url "$CKB_RPC_URL" rpc get_cells \
+      --json-path "$tmp_search" \
+      --order asc \
+      --limit 64 \
+      --output-format json > "$tmp_cells"
+  }
+  refresh_cells
 
   mapfile -t outpoints < <(
     jq -r '(.objects // .result.objects // [])[] | [.out_point.tx_hash, .out_point.index] | @tsv' "$tmp_cells"
   )
 
-  if [[ "${#outpoints[@]}" -lt 4 ]]; then
-    echo "not enough live lock-only cells found for auto tx generation (need >=4, got ${#outpoints[@]})." >&2
-    exit 1
+  if [[ "${#outpoints[@]}" -lt "$MIN_REQUIRED_CELLS" ]]; then
+    local from_account to_address need
+    from_account="$(jq -r '.deployment.lock.args' "$INFO_FILE")"
+    to_address="$($CKB_CLI_BIN account list | awk '/testnet:/ {print $2; exit}')"
+    [[ -n "$to_address" ]] || {
+      echo "could not resolve local testnet address for auto-topup." >&2
+      exit 1
+    }
+
+    need=$(( MIN_REQUIRED_CELLS - ${#outpoints[@]} ))
+    echo "insufficient lock-only cells (${#outpoints[@]}/$MIN_REQUIRED_CELLS); auto-topup creating $need plain cells..."
+    for ((n=0; n<need; n++)); do
+      "$CKB_CLI_BIN" --url "$CKB_RPC_URL" wallet transfer \
+        --from-account "$from_account" \
+        --to-address "$to_address" \
+        --capacity "$AUTO_TOPUP_CAPACITY_CKB"
+    done
+
+    local deadline
+    deadline=$(( $(date +%s) + AUTO_TOPUP_MAX_WAIT_SEC ))
+    while true; do
+      refresh_cells
+      mapfile -t outpoints < <(
+        jq -r '(.objects // .result.objects // [])[] | [.out_point.tx_hash, .out_point.index] | @tsv' "$tmp_cells"
+      )
+      if [[ "${#outpoints[@]}" -ge "$MIN_REQUIRED_CELLS" ]]; then
+        break
+      fi
+      if (( $(date +%s) >= deadline )); then
+        echo "not enough live lock-only cells after auto-topup (need >=$MIN_REQUIRED_CELLS, got ${#outpoints[@]})." >&2
+        exit 1
+      fi
+      sleep 5
+    done
   fi
 
   local files=(

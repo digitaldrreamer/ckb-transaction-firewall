@@ -226,6 +226,7 @@ Implemented capabilities:
 
 - reads deployment lock metadata from `deploy/info.json`,
 - collects live lock-only cells via RPC indexer search,
+- auto-topups self-owned plain cells when inventory is below required scenario count,
 - clones `deploy/gov_bootstrap_tx.json` into required scenario files with refreshed input outpoints.
 
 ### `phase4_governance_tx_status.sh`
