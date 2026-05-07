@@ -209,6 +209,7 @@ Purpose:
 Implemented capabilities:
 
 - consumes operator-provided scenario tx commands from `--cmd-file`,
+- supports `--auto-from-tx-files` to sign/send standard tx JSON files without manual command authoring,
 - runs strict mode2 signer-separation policy checks while recording tx hashes,
 - writes chain tx-status evidence to `tests/integration/governance_drill/chain_status_latest.json`,
 - validates drill outputs via `phase3_governance_mode2.sh validate`,

@@ -13,6 +13,7 @@ Phase 4 live governance autorun (chain-backed evidence mode).
 
 Usage:
   scripts/phase4_governance_autorun_live.sh --cmd-file <file>
+  scripts/phase4_governance_autorun_live.sh --auto-from-tx-files
 
 Required command variables (in --cmd-file):
   BOOTSTRAP_TX_CMD
@@ -30,6 +31,7 @@ Notes:
   - Each *_TX_CMD must print a tx hash (0x + 64 hex) on success.
   - This script executes the provided commands and records live evidence.
   - It finishes by running phase4_governance_evidence_check.sh (chain verification).
+  - In --auto-from-tx-files mode, tx JSON files are signed/sent automatically.
 USAGE
 }
 
@@ -55,11 +57,16 @@ main() {
   require_cmd jq
 
   local cmd_file=""
+  local auto_from_tx_files=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --cmd-file)
         cmd_file="${2:-}"
         shift 2
+        ;;
+      --auto-from-tx-files)
+        auto_from_tx_files=1
+        shift
         ;;
       -h|--help)
         usage
@@ -73,23 +80,50 @@ main() {
     esac
   done
 
-  [[ -n "$cmd_file" ]] || {
-    echo "--cmd-file is required" >&2
-    usage
-    exit 1
-  }
-  [[ -f "$cmd_file" ]] || {
-    echo "command file not found: $cmd_file" >&2
-    exit 1
-  }
+  if [[ "$auto_from_tx_files" == "1" ]]; then
+    require_cmd "${CKB_CLI_BIN:-ckb-cli}"
+    local cli="${CKB_CLI_BIN:-ckb-cli}"
+    local rpc="${CKB_RPC_URL:-https://testnet.ckb.dev}"
+    local from_account="${FROM_ACCOUNT:-}"
+    if [[ -z "$from_account" ]]; then
+      from_account="$($cli account list | awk '/testnet:/ {print $2; exit}')"
+    fi
+    [[ -n "$from_account" ]] || {
+      echo "could not determine FROM_ACCOUNT; set FROM_ACCOUNT env var." >&2
+      exit 1
+    }
 
-  # shellcheck source=/dev/null
-  source "$cmd_file"
+    local bootstrap_tx_file="${BOOTSTRAP_TX_FILE:-$ROOT_DIR/deploy/gov_bootstrap_tx.json}"
+    local update_tx_file="${UPDATE_TX_FILE:-$ROOT_DIR/deploy/gov_update_tx.json}"
+    local neg_signer_tx_file="${NEG_INVALID_SIGNER_SET_TX_FILE:-$ROOT_DIR/deploy/gov_negative_invalid_signer_set_tx.json}"
+    local neg_root_tx_file="${NEG_INVALID_ROOT_BINDING_TX_FILE:-$ROOT_DIR/deploy/gov_negative_invalid_root_binding_tx.json}"
 
-  require_nonempty BOOTSTRAP_TX_CMD
-  require_nonempty UPDATE_TX_CMD
-  require_nonempty NEG_INVALID_SIGNER_SET_TX_CMD
-  require_nonempty NEG_INVALID_ROOT_BINDING_TX_CMD
+    [[ -f "$bootstrap_tx_file" ]] || { echo "missing tx file: $bootstrap_tx_file" >&2; exit 1; }
+    [[ -f "$update_tx_file" ]] || { echo "missing tx file: $update_tx_file" >&2; exit 1; }
+    [[ -f "$neg_signer_tx_file" ]] || { echo "missing tx file: $neg_signer_tx_file" >&2; exit 1; }
+    [[ -f "$neg_root_tx_file" ]] || { echo "missing tx file: $neg_root_tx_file" >&2; exit 1; }
+
+    BOOTSTRAP_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$bootstrap_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$bootstrap_tx_file\""
+    UPDATE_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$update_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$update_tx_file\""
+    NEG_INVALID_SIGNER_SET_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$neg_signer_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$neg_signer_tx_file\""
+    NEG_INVALID_ROOT_BINDING_TX_CMD="$cli --url \"$rpc\" tx sign-inputs --from-account \"$from_account\" --add-signatures --tx-file \"$neg_root_tx_file\" >/dev/null && $cli --url \"$rpc\" tx send --tx-file \"$neg_root_tx_file\""
+  else
+    [[ -n "$cmd_file" ]] || {
+      echo "either --cmd-file or --auto-from-tx-files is required" >&2
+      usage
+      exit 1
+    }
+    [[ -f "$cmd_file" ]] || {
+      echo "command file not found: $cmd_file" >&2
+      exit 1
+    }
+    # shellcheck source=/dev/null
+    source "$cmd_file"
+    require_nonempty BOOTSTRAP_TX_CMD
+    require_nonempty UPDATE_TX_CMD
+    require_nonempty NEG_INVALID_SIGNER_SET_TX_CMD
+    require_nonempty NEG_INVALID_ROOT_BINDING_TX_CMD
+  fi
 
   local bootstrap_signers="${BOOTSTRAP_SIGNERS:-0,1,2,3,4}"
   local update_signers="${UPDATE_SIGNERS:-0,1,2}"
