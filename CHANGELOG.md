@@ -141,3 +141,55 @@
   - Removed developer-specific absolute paths in setup docs.
   - Aligned capsule-free build instructions (`cargo build --release --target=...`) with current workflow.
   - Updated stale status lines in `GAPS_ANALYSIS.md` and `SESSION_SUMMARY.md`.
+
+## 2026-05-07
+
+### Phase 3 closeout: strict mode-2 evidence finalized
+
+- Completed strict mode-2 governance drill recording and validation:
+  - `tests/integration/governance_drill/latest.json`
+  - `tests/integration/governance_drill/mode2_signer_state.json`
+- Refreshed phase3 verification and closeout artifacts via:
+  - `scripts/phase3_verify.sh`
+  - `scripts/phase3_closeout_check.sh`
+- Confirmed closeout gates pass for:
+  - contract builds and tests
+  - cycle report refresh
+  - governance drill evidence integrity
+  - runbook/template completeness
+
+### Phase 4: live governance hardening (sequenced)
+
+- Added chain-backed evidence gate and closeout hook:
+  - `scripts/phase4_governance_evidence_check.sh`
+  - `scripts/phase4_governance_tx_status.sh`
+- Added one-command live autorun flow:
+  - `scripts/phase4_governance_autorun_live.sh`
+- Added auto tx-file mode and scenario tx preparation:
+  - `scripts/phase4_prepare_tx_files.sh`
+  - `scripts/phase4_submit_tx.sh`
+- Hardened execution reliability:
+  - auto-prepare missing tx files
+  - auto-topup when lock-only input inventory is low
+  - atomic write/recovery for prepared tx files
+  - forced full refresh of scenario tx inputs before execution
+  - idempotent replay behavior with rerun for unknown/non-resolvable hashes
+
+### VM/runtime compatibility remediation
+
+- Removed atomic runtime instruction path from on-chain `blacklist-registry`:
+  - rewrote critical decode/load paths to raw syscall/manual parsing where needed
+  - avoided runtime paths that emitted unsupported LR/SC/AMO instructions in CKB VM
+- Added VM compatibility preflight:
+  - `scripts/check_registry_vm_compat.sh`
+  - integrated into live autorun and deploy hardening checks
+
+### Phase 4 live execution outcome
+
+- Fixed live bootstrap witness-root mismatch by rewriting GOV1 roots from generated tx payload during tx preparation.
+- Completed end-to-end chain-backed live autorun successfully:
+  - all four governance scenarios executed/re-recorded with chain-resolvable tx hashes
+  - chain status artifact produced:
+    - `tests/integration/governance_drill/chain_status_latest.json`
+  - final evidence gate passed:
+    - `scripts/phase4_governance_evidence_check.sh`

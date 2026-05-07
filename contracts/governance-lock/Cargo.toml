@@ -1,0 +1,23 @@
+[package]
+name = "governance-lock"
+version = "0.1.0"
+authors = ["digitaldrreamer", "others"]
+edition = "2021"
+license = "MIT"
+description = "CKB lock script for governance drills (non-secp, witness-lock compatible)"
+
+[dependencies]
+ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator", "dummy-atomic"] }
+
+[profile.release]
+overflow-checks = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[features]
+default = []
+std = []
+native-simulator = []

@@ -1,0 +1,37 @@
+{
+  "generated_utc": "2026-05-06T00:00:00Z",
+  "network": "ckb_testnet",
+  "rpc_url": "https://testnet.ckb.dev",
+  "contract_versions": {
+    "firewall_lock": "v1",
+    "blacklist_registry": "v1"
+  },
+  "scenarios": [
+    {
+      "id": "bootstrap_0_to_1",
+      "status": "pending",
+      "tx_hash": "",
+      "notes": "Bootstrap registry creation with strict 5-of-5 witness policy."
+    },
+    {
+      "id": "update_1_to_1",
+      "status": "pending",
+      "tx_hash": "",
+      "notes": "Normal governance update with 3-of-5 signatures."
+    },
+    {
+      "id": "negative_invalid_signer_set",
+      "status": "pending",
+      "tx_hash": "",
+      "expected_error_code": 26,
+      "notes": "Reject unauthorized signer configuration."
+    },
+    {
+      "id": "negative_invalid_root_binding",
+      "status": "pending",
+      "tx_hash": "",
+      "expected_error_code": 24,
+      "notes": "Reject GOV1 witness where old/new roots mismatch actual registry data."
+    }
+  ]
+}

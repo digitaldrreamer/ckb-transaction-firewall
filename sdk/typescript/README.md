@@ -15,6 +15,22 @@ TypeScript implementation of Layer 1 pre-flight checks for CKB agent transaction
 - `checkTransaction(unsignedTx)`: pre-flight decision API.
 - `buildFirewallLock(config)`: helper for firewall lock composition.
 
+## Implemented Modules (current)
+
+- `src/types.ts`: typed transaction/dependency/config/result models.
+- `src/blacklist.ts`: exact registry dep resolution + BLKL v1 payload parsing.
+- `src/firewall.ts`: deterministic allow/deny preflight evaluation.
+- `src/index.ts`: public exports.
+
+## Local Validation
+
+```bash
+cd sdk/typescript
+npm install
+npm run typecheck
+npm test
+```
+
 ## Registry Resolution Contract
 
 - Registry lookup uses the registry cell’s **type script** triple: `codeHash`, `hashType`, `args` (same bytes as in firewall lock args).

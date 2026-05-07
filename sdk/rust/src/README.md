@@ -1,7 +1,8 @@
 # Rust SDK Source
 
-Core logic for:
+Implemented in `lib.rs`:
 
 - loading registry dependencies,
 - parsing blacklist entries,
-- validating recipient fields prior to signing.
+- validating recipient fields prior to signing,
+- stable error code mapping aligned with on-chain contract constants.

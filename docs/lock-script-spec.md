@@ -89,6 +89,7 @@ Governance SHOULD still publish a registry replacement that drops expired tempor
 ## Registry Payload Expectations
 
 - Deterministic binary format with explicit version byte.
+- Magic MUST be `BLKL` (4 bytes) for v1 payload parsing.
 - Sorted entries for stable lookup behavior (when the schema uses a sorted list).
 - Integrity guaranteed by registry type script, not by lock script signatures.
 

@@ -1,0 +1,43 @@
+{
+  "generated_utc": "2026-05-07T06:38:40Z",
+  "model": "mode2-separated-signers",
+  "scenarios": {
+    "bootstrap_0_to_1": {
+      "signers": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "tx_hash": "0xd0a36fe85bf5e5e458840fc0ef2cf2dfdc2f3e2f320761c5fdbbdf80a15cb1ee",
+      "updated_utc": "2026-05-07T06:38:07Z"
+    },
+    "update_1_to_1": {
+      "signers": [
+        0,
+        1,
+        2
+      ],
+      "tx_hash": "0xd08a788bf5918a64e1d654768b1fedca179cfcbe647d3422b2fccbd114d3a721",
+      "updated_utc": "2026-05-07T06:38:17Z"
+    },
+    "negative_invalid_signer_set": {
+      "signers": [
+        0,
+        1
+      ],
+      "tx_hash": "0x94f755451cba702ca65f4d797163e472087ff1bde1734d71ab3b682e2857df68",
+      "updated_utc": "2026-05-07T06:38:29Z"
+    },
+    "negative_invalid_root_binding": {
+      "signers": [
+        0,
+        1,
+        2
+      ],
+      "tx_hash": "0xb402d2fd54a528f1742166305d5463aaf6f4a63f4667b2609c99a03c355284ef",
+      "updated_utc": "2026-05-07T06:38:40Z"
+    }
+  }
+}

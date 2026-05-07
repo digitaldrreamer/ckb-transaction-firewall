@@ -1,0 +1,68 @@
+{
+  "transaction": {
+    "version": "0x0",
+    "cell_deps": [
+      {
+        "out_point": {
+          "tx_hash": "0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37",
+          "index": "0x0"
+        },
+        "dep_type": "dep_group"
+      },
+      {
+        "out_point": {
+          "tx_hash": "0xac106db15bacb3b85204a96057b7829309f2bf938f96c04421b947e9119bc465",
+          "index": "0x1"
+        },
+        "dep_type": "code"
+      }
+    ],
+    "header_deps": [],
+    "inputs": [
+      {
+        "since": "0x0",
+        "previous_output": {
+          "tx_hash": "0x2340b4316fc9cf921b0e67fa3f2848871b4e132fa1083c17330a0dfd4034d4cd",
+          "index": "0x1"
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "capacity": "0x2d03d021600",
+        "lock": {
+          "code_hash": "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8",
+          "hash_type": "type",
+          "args": "0x3f54dea35bcc7a0efef541d361799f77bd1b8581"
+        },
+        "type": {
+          "code_hash": "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+          "hash_type": "type",
+          "args": "0x019bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce80114003f54dea35bcc7a0efef541d361799f77bd1b8581"
+        }
+      },
+      {
+        "capacity": "0x62b3e5e9cf3",
+        "lock": {
+          "code_hash": "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8",
+          "hash_type": "type",
+          "args": "0x3f54dea35bcc7a0efef541d361799f77bd1b8581"
+        },
+        "type": null
+      }
+    ],
+    "outputs_data": [
+      "0x424c4b4c010100000020ec2cd50681d6b1b71fd762734c6b212c074ffa52fc6aed9aa6bf3566f58a9c150000000000000000",
+      "0x"
+    ],
+    "witnesses": [
+      "0x29020000100000005500000029020000410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d0010000474f563101111111111111111111111111111111111111111111111111111111111111111122222222222222222222222222222222222222222222222222222222222222220000000000000000000000000000000000000000000000000000000000000000dad64ee23430f0c176ba209e1d41fd923927624732930d1d5459bd163d943a320500e544f5cbd22cac3b423b69ef6d91c0b124468fb861ac2089a072fbe7f6b411f93cd9121ebbba5a565a4719238f7b259505829af113147d34ac94b2dfb703d50801010f6e6f00499ce6fa2e0ada66eb83451e75de33b407df10245a1b85fffbb5764e619e0c6798942efe3b141a9df02475829c59c8f6e316b29e8a4254aed94390d000026a4befcb6d9117c3b4268c3a564418716d28b12d1576a9e74c24f2c947ed67a5266ebaaae73e5748716f30dc79bbd9aff39ff72417099c1320b00daea024420f01038c92d254a99c34748d01065064fd318dec7396dd939c674c59676c2d88df11ab4d57bd19adfcc6cc883d8d5b6d4b9468bfc827cccf88f1c1ec50d870f304174e0104d3c5eed4f619dbf7ce485212fb0071a803d4ff24d823a9bb9023576919758520338c5c83d58122b9971b460bc2c1680eb60145ec0a7284fa6a2e7985c4503e1200"
+    ]
+  },
+  "multisig_configs": {},
+  "signatures": {
+    "0x3f54dea35bcc7a0efef541d361799f77bd1b8581": [
+      "0xca03da2d50cb22faa102941409e3df8309e745fd264dcd46f3652692ad32612f4636ede86830c7fb7d05a2cc592997856087fc6d70b097a25c3e6fc8dd935e4200"
+    ]
+  }
+}

@@ -8,21 +8,14 @@ description = "CKB type script that governs blacklist registry cell updates"
 
 [dependencies]
 # * Core CKB script development library
-ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator"] }
+ckb-std = { version = "0.16.4", default-features = false, features = ["allocator", "dummy-atomic"] }
 
 # * Hashing (pure Rust; avoids C toolchain for RISC-V builds)
 blake2b-ref = { version = "0.3.1", default-features = false }
-k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
-
-# * Molecule serialization (reserved for future use)
-molecule = { version = "0.8.0", default-features = false }
-
-# * Lightweight error handling
-cfg-if = "1.0"
 
 [profile.release]
 overflow-checks = true
-opt-level = "s"        # * Optimize for size
+opt-level = "z"        # * Optimize aggressively for binary size
 lto = true             # * Link-time optimization
 codegen-units = 1      # * Better optimization at cost of compile time
 panic = "abort"        # * Smaller binary size
@@ -30,10 +23,8 @@ strip = true           # * Remove debug symbols
 
 [features]
 default = []
-# * Enable std for testing
-std = [
-    "molecule/std"
-]
+# * Placeholder std feature kept for compatibility with workspace tooling
+std = []
 # * Declared to satisfy cfg checks used by ckb-std macros in some toolchains
 native-simulator = []
 dev-signer-keys = []

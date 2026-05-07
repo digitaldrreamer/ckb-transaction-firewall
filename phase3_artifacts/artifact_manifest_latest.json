@@ -1,0 +1,22 @@
+{
+  "generated_utc": "20260506T114735Z",
+  "branch": "feat/phase3-verification-hardening",
+  "commit": "e31fae8679437dcc6d245800544ac2ef9ac58efe",
+  "target": "riscv64imac-unknown-none-elf",
+  "rounds": 2,
+  "artifacts": [
+    {
+      "name": "firewall-lock",
+      "path": "contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/firewall-lock",
+      "sha256": "7c2f6dfb429ddba22be9bae6fd38ad9d7aa51636a07ce61209ca1eb8f10b46e2",
+      "size_bytes": 23336
+    },
+    {
+      "name": "blacklist-registry",
+      "path": "contracts/blacklist-registry/target/riscv64imac-unknown-none-elf/release/blacklist-registry",
+      "sha256": "fd704f21d808015a63c97dfd9db594d32deafc969acd0287c9be9db66581d21d",
+      "size_bytes": 98256,
+      "features": ["dev-signer-keys"]
+    }
+  ]
+}

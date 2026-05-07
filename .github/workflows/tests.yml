@@ -10,11 +10,18 @@ on:
 jobs:
   firewall-lock:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -23,6 +30,9 @@ jobs:
 
       - name: Cache cargo registry and build output
         uses: Swatinem/rust-cache@v2
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
 
       - name: Run firewall lock unit tests
         working-directory: contracts/firewall-lock
@@ -35,3 +45,74 @@ jobs:
       - name: Run firewall lock integration tests
         working-directory: tests/unit
         run: cargo test --test firewall_lock_tests
+
+      - name: Build blacklist registry RISC-V release binary
+        working-directory: contracts/blacklist-registry
+        run: cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+
+      - name: Run blacklist registry integration tests
+        working-directory: tests/unit
+        run: cargo test --test blacklist_registry_tests
+
+      - name: Install TypeScript SDK deps
+        working-directory: sdk/typescript
+        run: npm ci
+
+      - name: Typecheck TypeScript SDK
+        working-directory: sdk/typescript
+        run: npm run typecheck
+
+      - name: Run TypeScript SDK tests
+        working-directory: sdk/typescript
+        run: npm test
+
+      - name: Build Rust SDK
+        working-directory: sdk/rust
+        run: cargo build
+
+      - name: Run Rust SDK tests
+        working-directory: sdk/rust
+        run: cargo test
+
+      - name: Run phase 3 contract/spec compatibility check
+        run: ./scripts/phase3_compat_check.sh
+
+      - name: Validate governance drill artifact (when present)
+        if: ${{ hashFiles('tests/integration/governance_drill/latest.json') != '' }}
+        run: ./scripts/phase3_governance_drill_check.sh
+
+      - name: Run phase 3 reproducible build manifest
+        env:
+          MAX_ARTIFACT_SETS: "3"
+        run: ./scripts/phase3_repro_build.sh
+
+      - name: Run phase 3 verification script
+        env:
+          MAX_CYCLES_LOCK_ONLY: "250000"
+          MAX_CYCLES_TYPE_ONLY: "250000"
+          MAX_CYCLES_BOTH_CHECKS: "300000"
+          MAX_CYCLES_LARGE_REGISTRY: "1200000"
+          MAX_CYCLES_VERY_LARGE_REGISTRY: "3000000"
+          MAX_ARTIFACT_SETS: "3"
+        run: ./scripts/phase3_verify.sh
+
+      - name: Enforce phase 3 closeout status (blocking on main and PRs to main)
+        if: ${{ always() && (github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
+        run: ./scripts/phase3_closeout_check.sh
+
+      - name: Report phase 3 closeout status (non-blocking on non-main branches/PRs)
+        if: ${{ always() && !(github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
+        continue-on-error: true
+        run: ./scripts/phase3_closeout_check.sh
+
+      - name: Generate phase 3 status snapshot
+        if: always()
+        run: ./scripts/phase3_status_report.sh
+
+      - name: Upload phase 3 artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-artifacts
+          path: phase3_artifacts/
+          retention-days: 14

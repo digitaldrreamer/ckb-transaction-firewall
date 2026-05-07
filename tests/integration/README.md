@@ -32,3 +32,8 @@ Each run should emit:
 - rejection reasons or error codes,
 - registry version before/after,
 - environment metadata for reproducibility.
+
+For governance-specific testnet drills, use the artifact format in:
+
+- `tests/integration/governance_drill/template.json`
+- validated by `scripts/phase3_governance_drill_check.sh`

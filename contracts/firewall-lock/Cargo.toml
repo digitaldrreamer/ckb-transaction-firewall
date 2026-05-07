@@ -8,7 +8,7 @@ description = "CKB lock script that enforces blacklist checks at consensus layer
 
 [dependencies]
 # * Core CKB script development library
-ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator"] }
+ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator", "dummy-atomic"] }
 
 # * Molecule serialization for data parsing
 molecule = { version = "0.8.0", default-features = false }
