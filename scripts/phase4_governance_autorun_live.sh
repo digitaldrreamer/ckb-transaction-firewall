@@ -7,7 +7,9 @@ PHASE4_CHECK_BIN="$ROOT_DIR/scripts/phase4_governance_evidence_check.sh"
 TX_STATUS_BIN="$ROOT_DIR/scripts/phase4_governance_tx_status.sh"
 PREPARE_TX_FILES_BIN="$ROOT_DIR/scripts/phase4_prepare_tx_files.sh"
 SUBMIT_TX_BIN="$ROOT_DIR/scripts/phase4_submit_tx.sh"
+VM_COMPAT_CHECK_BIN="$ROOT_DIR/scripts/check_registry_vm_compat.sh"
 ARTIFACT_FILE="$ROOT_DIR/tests/integration/governance_drill/latest.json"
+STATE_FILE="$ROOT_DIR/tests/integration/governance_drill/mode2_signer_state.json"
 
 usage() {
   cat <<'USAGE'
@@ -54,10 +56,115 @@ require_nonempty() {
   fi
 }
 
+scenario_already_recorded() {
+  local scenario_id="$1"
+  [[ -f "$ARTIFACT_FILE" ]] || return 1
+  jq -e --arg id "$scenario_id" '
+    .scenarios[]
+    | select(.id == $id)
+    | (.tx_hash | type == "string" and length > 0)
+      and (.status == "pass" or .status == "passed" or .status == "expected_failure")
+  ' "$ARTIFACT_FILE" >/dev/null 2>&1
+}
+
+run_or_skip_scenario() {
+  local scenario_id="$1"
+  local signers="$2"
+  local cmd="$3"
+
+  if scenario_already_recorded "$scenario_id"; then
+    echo "Skipping scenario $scenario_id (already recorded in artifact)."
+    return 0
+  fi
+
+  "$MODE2_BIN" run \
+    --id "$scenario_id" \
+    --signers "$signers" \
+    --cmd "$cmd"
+}
+
+tx_hash_chain_status() {
+  local tx_hash="$1"
+  "${CKB_CLI_BIN:-ckb-cli}" --url "${CKB_RPC_URL:-https://testnet.ckb.dev}" rpc get_transaction --hash "$tx_hash" --output-format json \
+    | jq -r '.tx_status.status // "unknown"'
+}
+
+rerun_unknown_scenarios_if_any() {
+  local reran=0
+  local ids=(
+    "bootstrap_0_to_1"
+    "update_1_to_1"
+    "negative_invalid_signer_set"
+    "negative_invalid_root_binding"
+  )
+
+  for id in "${ids[@]}"; do
+    local tx_hash
+    tx_hash="$(jq -r --arg id "$id" '.scenarios[] | select(.id == $id) | .tx_hash // ""' "$ARTIFACT_FILE")"
+    [[ "$tx_hash" =~ ^0x[0-9a-fA-F]{64}$ ]] || continue
+    local status
+    status="$(tx_hash_chain_status "$tx_hash" || echo "unknown")"
+    if [[ "$status" != "unknown" && "$status" != "~" ]]; then
+      continue
+    fi
+
+    echo "Scenario $id has non-resolvable tx hash ($tx_hash, status=$status); rerunning to refresh evidence..."
+    case "$id" in
+      bootstrap_0_to_1)
+        "$MODE2_BIN" run --id "$id" --signers "${BOOTSTRAP_SIGNERS:-0,1,2,3,4}" --cmd "$BOOTSTRAP_TX_CMD"
+        ;;
+      update_1_to_1)
+        "$MODE2_BIN" run --id "$id" --signers "${UPDATE_SIGNERS:-0,1,2}" --cmd "$UPDATE_TX_CMD"
+        ;;
+      negative_invalid_signer_set)
+        "$MODE2_BIN" run --id "$id" --signers "${NEG_INVALID_SIGNER_SET_SIGNERS:-0,1}" --cmd "$NEG_INVALID_SIGNER_SET_TX_CMD"
+        ;;
+      negative_invalid_root_binding)
+        "$MODE2_BIN" run --id "$id" --signers "${NEG_INVALID_ROOT_BINDING_SIGNERS:-0,1,2}" --cmd "$NEG_INVALID_ROOT_BINDING_TX_CMD"
+        ;;
+    esac
+    reran=1
+  done
+
+  return $reran
+}
+
+rebuild_mode2_state_if_needed() {
+  [[ -f "$STATE_FILE" ]] && return 0
+  [[ -f "$ARTIFACT_FILE" ]] || return 0
+  ARTIFACT_PATH="$ARTIFACT_FILE" STATE_PATH="$STATE_FILE" node <<'NODE'
+const fs = require('node:fs');
+const artifactPath = process.env.ARTIFACT_PATH;
+const statePath = process.env.STATE_PATH;
+const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+const drill = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
+const defaults = {
+  bootstrap_0_to_1: [0,1,2,3,4],
+  update_1_to_1: [0,1,2],
+  negative_invalid_signer_set: [0,1],
+  negative_invalid_root_binding: [0,1,2],
+};
+const scenarios = {};
+for (const [id, signers] of Object.entries(defaults)) {
+  const row = (drill.scenarios || []).find((s) => s.id === id);
+  if (!row || !/^0x[0-9a-fA-F]{64}$/.test(row.tx_hash || '')) continue;
+  scenarios[id] = { signers, tx_hash: row.tx_hash, updated_utc: now };
+}
+if (Object.keys(scenarios).length > 0) {
+  const state = { generated_utc: now, model: 'mode2-separated-signers', scenarios };
+  fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n');
+  console.log(`Rebuilt mode2 signer state: ${statePath}`);
+}
+NODE
+}
+
 main() {
   require_cmd bash
   require_cmd node
   require_cmd jq
+  if [[ -x "$VM_COMPAT_CHECK_BIN" ]]; then
+    "$VM_COMPAT_CHECK_BIN"
+  fi
 
   local cmd_file=""
   local auto_from_tx_files=0
@@ -138,25 +245,21 @@ main() {
   echo "Starting phase4 live governance autorun (chain-backed evidence mode)..."
   "$MODE2_BIN" init
 
-  "$MODE2_BIN" run \
-    --id bootstrap_0_to_1 \
-    --signers "$bootstrap_signers" \
-    --cmd "$BOOTSTRAP_TX_CMD"
+  run_or_skip_scenario "bootstrap_0_to_1" "$bootstrap_signers" "$BOOTSTRAP_TX_CMD"
+  run_or_skip_scenario "update_1_to_1" "$update_signers" "$UPDATE_TX_CMD"
+  run_or_skip_scenario "negative_invalid_signer_set" "$neg_invalid_signer_set_signers" "$NEG_INVALID_SIGNER_SET_TX_CMD"
+  run_or_skip_scenario "negative_invalid_root_binding" "$neg_invalid_root_binding_signers" "$NEG_INVALID_ROOT_BINDING_TX_CMD"
 
-  "$MODE2_BIN" run \
-    --id update_1_to_1 \
-    --signers "$update_signers" \
-    --cmd "$UPDATE_TX_CMD"
+  rebuild_mode2_state_if_needed "$ARTIFACT_FILE" "$STATE_FILE"
 
-  "$MODE2_BIN" run \
-    --id negative_invalid_signer_set \
-    --signers "$neg_invalid_signer_set_signers" \
-    --cmd "$NEG_INVALID_SIGNER_SET_TX_CMD"
-
-  "$MODE2_BIN" run \
-    --id negative_invalid_root_binding \
-    --signers "$neg_invalid_root_binding_signers" \
-    --cmd "$NEG_INVALID_ROOT_BINDING_TX_CMD"
+  set +e
+  rerun_unknown_scenarios_if_any
+  local rerun_rc=$?
+  set -e
+  if [[ "$rerun_rc" -eq 1 ]]; then
+    echo "Refreshed unknown scenario tx hashes."
+    rebuild_mode2_state_if_needed "$ARTIFACT_FILE" "$STATE_FILE"
+  fi
 
   "$MODE2_BIN" validate
   "$TX_STATUS_BIN" --input "$ARTIFACT_FILE"

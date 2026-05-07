@@ -155,7 +155,7 @@ Implemented capabilities:
 - environment selection (`testnet`, `mainnet`) and RPC override,
 - optional build step for both contracts,
 - optional strict two-stage deployment (`--strict-governance-lock`) that deploys a non-secp governance lock first,
-- builds `blacklist-registry` with VM-compatible portable-atomic fallback flags by default (override via `REGISTRY_RUSTFLAGS`),
+- supports optional `REGISTRY_RUSTFLAGS` override for `blacklist-registry` build tuning,
 - deployment config generation for `ckb-cli deploy gen-txs`,
 - dry-run mode (generate txs and print sign/apply commands),
 - sign/apply execution path via `ckb-cli`.

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VM_COMPAT_CHECK="$ROOT_DIR/scripts/check_registry_vm_compat.sh"
 NETWORK="testnet"
 RPC_URL="https://testnet.ckb.dev"
 CKB_CLI_BIN="${CKB_CLI_BIN:-ckb-cli}"
@@ -13,8 +14,7 @@ INFO_FILE="$ROOT_DIR/deploy/info.json"
 DRY_RUN=0
 BUILD_FIRST=1
 STRICT_GOV_LOCK=0
-REGISTRY_RUSTFLAGS_DEFAULT="--cfg portable_atomic_no_cfg_target_has_atomic --cfg portable_atomic_no_atomic_cas --cfg portable_atomic_unsafe_assume_single_core"
-REGISTRY_RUSTFLAGS="${REGISTRY_RUSTFLAGS:-$REGISTRY_RUSTFLAGS_DEFAULT}"
+REGISTRY_RUSTFLAGS="${REGISTRY_RUSTFLAGS:-}"
 
 usage() {
   cat <<'EOF'
@@ -122,10 +122,14 @@ if [[ $BUILD_FIRST -eq 1 ]]; then
     cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/governance-lock/Cargo.toml"
   fi
   cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/firewall-lock/Cargo.toml"
-  (
-    export RUSTFLAGS="$REGISTRY_RUSTFLAGS"
+  if [[ -n "$REGISTRY_RUSTFLAGS" ]]; then
+    (
+      export RUSTFLAGS="$REGISTRY_RUSTFLAGS"
+      cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/blacklist-registry/Cargo.toml" --features dev-signer-keys
+    )
+  else
     cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/blacklist-registry/Cargo.toml" --features dev-signer-keys
-  )
+  fi
 fi
 
 FW_BIN="$ROOT_DIR/contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/firewall-lock"
@@ -134,6 +138,9 @@ GOV_BIN="$ROOT_DIR/contracts/governance-lock/target/riscv64imac-unknown-none-elf
 if [[ ! -f "$FW_BIN" || ! -f "$REG_BIN" ]]; then
   echo "Missing built binaries. firewall-lock or blacklist-registry not found." >&2
   exit 1
+fi
+if [[ -x "$VM_COMPAT_CHECK" ]]; then
+  "$VM_COMPAT_CHECK" --bin "$REG_BIN"
 fi
 if [[ $STRICT_GOV_LOCK -eq 1 && ! -f "$GOV_BIN" ]]; then
   echo "Missing governance-lock binary: $GOV_BIN" >&2
