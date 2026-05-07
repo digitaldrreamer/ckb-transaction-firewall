@@ -19,7 +19,7 @@ Usage:
   scripts/phase4_prepare_tx_files.sh
 
 Outputs:
-  deploy/gov_bootstrap_tx.json (existing base file is preserved)
+  deploy/gov_bootstrap_tx.json (input refreshed to live outpoint)
   deploy/gov_update_tx.json
   deploy/gov_negative_invalid_signer_set_tx.json
   deploy/gov_negative_invalid_root_binding_tx.json
@@ -127,6 +127,7 @@ JSON
   fi
 
   local files=(
+    "$DEPLOY_DIR/gov_bootstrap_tx.json"
     "$DEPLOY_DIR/gov_update_tx.json"
     "$DEPLOY_DIR/gov_negative_invalid_signer_set_tx.json"
     "$DEPLOY_DIR/gov_negative_invalid_root_binding_tx.json"
@@ -134,7 +135,6 @@ JSON
 
   local i=0
   for f in "${files[@]}"; do
-    i=$((i + 1))
     local txh idx
     txh="$(awk '{print $1}' <<<"${outpoints[$i]}")"
     idx="$(awk '{print $2}' <<<"${outpoints[$i]}")"
@@ -147,11 +147,12 @@ JSON
       | .transaction.inputs[0].previous_output.index = $idx
       | .signatures = {}
       ' "$BASE_TX_FILE" > "$f"
+    i=$((i + 1))
   done
 
   rm -f "$tmp_search" "$tmp_cells"
   echo "Prepared tx files:"
-  printf ' - %s\n' "$BASE_TX_FILE" "${files[@]}"
+  printf ' - %s\n' "${files[@]}"
 }
 
 main "$@"

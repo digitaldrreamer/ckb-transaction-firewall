@@ -101,9 +101,8 @@ main() {
     local neg_root_tx_file="${NEG_INVALID_ROOT_BINDING_TX_FILE:-$ROOT_DIR/deploy/gov_negative_invalid_root_binding_tx.json}"
 
     [[ -f "$bootstrap_tx_file" ]] || { echo "missing base tx file: $bootstrap_tx_file" >&2; exit 1; }
-    if [[ ! -f "$update_tx_file" || ! -f "$neg_signer_tx_file" || ! -f "$neg_root_tx_file" ]]; then
-      "$PREPARE_TX_FILES_BIN"
-    fi
+    # Always refresh scenario tx files to avoid stale/dead input outpoints.
+    "$PREPARE_TX_FILES_BIN"
     [[ -f "$update_tx_file" ]] || { echo "missing tx file after preparation: $update_tx_file" >&2; exit 1; }
     [[ -f "$neg_signer_tx_file" ]] || { echo "missing tx file after preparation: $neg_signer_tx_file" >&2; exit 1; }
     [[ -f "$neg_root_tx_file" ]] || { echo "missing tx file after preparation: $neg_root_tx_file" >&2; exit 1; }
