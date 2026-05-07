@@ -210,8 +210,21 @@ Implemented capabilities:
 
 - consumes operator-provided scenario tx commands from `--cmd-file`,
 - runs strict mode2 signer-separation policy checks while recording tx hashes,
+- writes chain tx-status evidence to `tests/integration/governance_drill/chain_status_latest.json`,
 - validates drill outputs via `phase3_governance_mode2.sh validate`,
 - enforces chain-backed evidence by running `phase4_governance_evidence_check.sh`.
+
+### `phase4_governance_tx_status.sh`
+
+Purpose:
+
+- Query and persist on-chain status for each scenario tx hash in governance drill evidence.
+
+Implemented capabilities:
+
+- polls `ckb-cli rpc get_transaction` for each scenario tx hash,
+- records status and block metadata into `tests/integration/governance_drill/chain_status_latest.json`,
+- supports timeout/interval tuning via `TIMEOUT_SEC` and `POLL_SEC`.
 
 ## CLI Recommendation
 

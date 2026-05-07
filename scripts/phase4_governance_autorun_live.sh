@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE2_BIN="$ROOT_DIR/scripts/phase3_governance_mode2.sh"
 PHASE4_CHECK_BIN="$ROOT_DIR/scripts/phase4_governance_evidence_check.sh"
+TX_STATUS_BIN="$ROOT_DIR/scripts/phase4_governance_tx_status.sh"
 ARTIFACT_FILE="$ROOT_DIR/tests/integration/governance_drill/latest.json"
 
 usage() {
@@ -119,6 +120,7 @@ main() {
     --cmd "$NEG_INVALID_ROOT_BINDING_TX_CMD"
 
   "$MODE2_BIN" validate
+  "$TX_STATUS_BIN" --input "$ARTIFACT_FILE"
   "$PHASE4_CHECK_BIN" "$ARTIFACT_FILE"
   echo "Phase4 live governance autorun complete."
 }
