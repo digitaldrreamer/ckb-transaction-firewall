@@ -42,10 +42,6 @@ main() {
 
   require_cmd jq
   require_cmd "$CKB_CLI_BIN"
-  [[ -f "$BASE_TX_FILE" ]] || {
-    echo "missing base tx file: $BASE_TX_FILE" >&2
-    exit 1
-  }
   [[ -f "$BASE_TX_TEMPLATE_FILE" ]] || {
     echo "missing base tx template file: $BASE_TX_TEMPLATE_FILE" >&2
     exit 1
@@ -55,7 +51,7 @@ main() {
     exit 1
   }
 
-  if ! jq -e '.transaction and .transaction.inputs and .transaction.outputs and .transaction.witnesses' "$BASE_TX_FILE" >/dev/null 2>&1; then
+  if [[ ! -f "$BASE_TX_FILE" ]] || ! jq -e '.transaction and .transaction.inputs and .transaction.outputs and .transaction.witnesses' "$BASE_TX_FILE" >/dev/null 2>&1; then
     cp "$BASE_TX_TEMPLATE_FILE" "$BASE_TX_FILE"
     echo "recovered base tx file from template: $BASE_TX_FILE"
   fi
@@ -158,7 +154,8 @@ JSON
       .transaction.inputs[0].previous_output.tx_hash = $txh
       | .transaction.inputs[0].previous_output.index = $idx
       | .signatures = {}
-      ' "$BASE_TX_FILE" > "$out_tmp"
+      ' "$BASE_TX_TEMPLATE_FILE" > "$out_tmp"
+    jq -e '.transaction and .transaction.inputs and .transaction.outputs and .transaction.witnesses' "$out_tmp" >/dev/null
     mv "$out_tmp" "$f"
     i=$((i + 1))
   done
