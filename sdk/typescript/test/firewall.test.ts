@@ -67,7 +67,9 @@ describe("transaction firewall", () => {
       outputs: [{ lockArgs: "0xaabb" }],
     });
     expect(res.ok).toBe(false);
-    expect(res.code).toBe(FIREWALL_ERROR_CODES.BlacklistedLockArgs);
+    if (!res.ok) {
+      expect(res.code).toBe(FIREWALL_ERROR_CODES.BlacklistedLockArgs);
+    }
   });
 
   test("passes non-blacklisted outputs", () => {
@@ -86,7 +88,9 @@ describe("transaction firewall", () => {
       outputs: [{ lockArgs: "0x1122" }],
     });
     expect(res.ok).toBe(false);
-    expect(res.code).toBe(FIREWALL_ERROR_CODES.MissingRegistryCellDep);
+    if (!res.ok) {
+      expect(res.code).toBe(FIREWALL_ERROR_CODES.MissingRegistryCellDep);
+    }
   });
 
   test("maps ambiguous deps to code 17", () => {
@@ -97,7 +101,9 @@ describe("transaction firewall", () => {
       outputs: [{ lockArgs: "0x1122" }],
     });
     expect(res.ok).toBe(false);
-    expect(res.code).toBe(FIREWALL_ERROR_CODES.AmbiguousRegistryCellDep);
+    if (!res.ok) {
+      expect(res.code).toBe(FIREWALL_ERROR_CODES.AmbiguousRegistryCellDep);
+    }
   });
 
   test("rejects blacklisted output type args with code 12", () => {
@@ -107,6 +113,8 @@ describe("transaction firewall", () => {
       outputs: [{ lockArgs: "0x1122", typeArgs: "0x5566" }],
     });
     expect(res.ok).toBe(false);
-    expect(res.code).toBe(FIREWALL_ERROR_CODES.BlacklistedTypeArgs);
+    if (!res.ok) {
+      expect(res.code).toBe(FIREWALL_ERROR_CODES.BlacklistedTypeArgs);
+    }
   });
 });
