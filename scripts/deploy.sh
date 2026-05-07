@@ -15,6 +15,7 @@ DRY_RUN=0
 BUILD_FIRST=1
 STRICT_GOV_LOCK=0
 REGISTRY_RUSTFLAGS="${REGISTRY_RUSTFLAGS:-}"
+STRICT_GOV_LOCK_ARGS_HEX="0x5354524943545f474f565f4452494c4c5f5631"
 
 usage() {
   cat <<'EOF'
@@ -102,7 +103,7 @@ resolve_governance_lock_data_hash() {
 }
 
 if [[ -z "$FROM_ADDRESS" ]]; then
-  FROM_ADDRESS="$("$CKB_CLI_BIN" --url "$RPC_URL" account list --output-format json | jq -r '.[0].address.testnet // empty')"
+  FROM_ADDRESS="$("$CKB_CLI_BIN" --url "$RPC_URL" account list --output-format json | jq -r --arg network "$NETWORK" '.[0].address[$network] // empty')"
 fi
 
 if [[ -z "$FROM_ADDRESS" ]]; then
@@ -119,16 +120,16 @@ fi
 if [[ $BUILD_FIRST -eq 1 ]]; then
   echo "Building contracts for deployment..."
   if [[ $STRICT_GOV_LOCK -eq 1 ]]; then
-    cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/governance-lock/Cargo.toml"
+    cargo build --locked --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/governance-lock/Cargo.toml"
   fi
-  cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/firewall-lock/Cargo.toml"
+  cargo build --locked --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/firewall-lock/Cargo.toml"
   if [[ -n "$REGISTRY_RUSTFLAGS" ]]; then
     (
       export RUSTFLAGS="$REGISTRY_RUSTFLAGS"
-      cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/blacklist-registry/Cargo.toml" --features dev-signer-keys
+      cargo build --locked --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/blacklist-registry/Cargo.toml" --features dev-signer-keys
     )
   else
-    cargo build --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/blacklist-registry/Cargo.toml" --features dev-signer-keys
+    cargo build --locked --release --target=riscv64imac-unknown-none-elf --manifest-path "$ROOT_DIR/contracts/blacklist-registry/Cargo.toml" --features dev-signer-keys
   fi
 fi
 
@@ -216,7 +217,7 @@ EOF
     exit 1
   fi
   GOV_LOCK_HASH_TYPE="data1"
-  GOV_LOCK_ARGS="0x"
+  GOV_LOCK_ARGS="$STRICT_GOV_LOCK_ARGS_HEX"
   echo "Stage 1 complete. governance_lock code_hash=$GOV_LOCK_CODE_HASH hash_type=$GOV_LOCK_HASH_TYPE args=$GOV_LOCK_ARGS"
 else
   GOV_LOCK_CODE_HASH="$SECP_CODE_HASH"

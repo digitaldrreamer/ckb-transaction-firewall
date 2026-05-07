@@ -141,6 +141,10 @@ fn parse_registry_payload(data: &[u8]) -> Result<RegistryPayload, FirewallError>
         }
     }
 
+    if offset != data.len() {
+        return Err(FirewallError::InvalidRegistryData);
+    }
+
     Ok(RegistryPayload {
         version: 1,
         entries,

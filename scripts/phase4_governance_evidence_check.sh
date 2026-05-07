@@ -27,7 +27,7 @@ echo "RPC: $CKB_RPC_URL"
 "$ROOT_DIR/scripts/phase3_governance_drill_check.sh" "$INPUT_FILE" >/dev/null
 
 # Reject known deterministic/synthetic evidence markers.
-if jq -e '.scenarios[] | (.notes // "") | test("deterministic|unit/contract checks|synthetic"; "i")' "$INPUT_FILE" >/dev/null; then
+if jq -e 'any(.scenarios[]; (.notes // "") | test("deterministic|unit/contract checks|synthetic"; "i"))' "$INPUT_FILE" >/dev/null; then
   echo "Synthetic evidence marker found in scenario notes." >&2
   exit 1
 fi
@@ -39,15 +39,15 @@ for h in "${hashes[@]}"; do
     exit 1
   fi
 
-  tx_json="$($CKB_CLI_BIN --url "$CKB_RPC_URL" rpc get_transaction --hash "$h" --output-format json || true)"
+  tx_json="$($CKB_CLI_BIN --url "$CKB_RPC_URL" rpc get_transaction --hash "$h" --output-format json)"
   if [[ -z "$tx_json" ]]; then
     echo "Failed to query tx hash: $h" >&2
     exit 1
   fi
 
   status="$(jq -r '.tx_status.status // "unknown"' <<<"$tx_json")"
-  if [[ "$status" == "unknown" || "$status" == "~" ]]; then
-    echo "Tx hash is not chain-resolvable: $h (status=$status)" >&2
+  if [[ "$status" != "committed" ]]; then
+    echo "Tx hash is not chain-committed: $h (status=$status)" >&2
     exit 1
   fi
 

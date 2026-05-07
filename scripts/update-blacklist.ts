@@ -5,12 +5,6 @@ const { execSync } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const { resolve } = require("node:path");
 
-type ScenarioId =
-  | "bootstrap_0_to_1"
-  | "update_1_to_1"
-  | "negative_invalid_signer_set"
-  | "negative_invalid_root_binding";
-
 const ROOT_DIR = resolve(__dirname, "..");
 const UPDATE_SCRIPT = resolve(ROOT_DIR, "scripts/phase3_governance_drill_update.sh");
 const VALIDATE_SCRIPT = resolve(ROOT_DIR, "scripts/phase3_governance_drill_check.sh");
@@ -34,12 +28,12 @@ Notes:
   - It does not construct governance transactions itself; supply your proven tx command for each scenario.`);
 }
 
-function run(cmd: string) {
+function run(cmd) {
   return execSync(cmd, { cwd: ROOT_DIR, stdio: "pipe", encoding: "utf8" });
 }
 
-function parseArgs(argv: string[]) {
-  const out: Record<string, string> = {};
+function parseArgs(argv) {
+  const out = {};
   for (let i = 0; i < argv.length; i += 1) {
     const v = argv[i];
     if (v.startsWith("--")) {
@@ -50,19 +44,19 @@ function parseArgs(argv: string[]) {
   return out;
 }
 
-function assertScenarioId(id: string): asserts id is ScenarioId {
-  const allowed = new Set<ScenarioId>([
+function assertScenarioId(id) {
+  const allowed = new Set([
     "bootstrap_0_to_1",
     "update_1_to_1",
     "negative_invalid_signer_set",
     "negative_invalid_root_binding",
   ]);
-  if (!allowed.has(id as ScenarioId)) {
+  if (!allowed.has(id)) {
     throw new Error(`Invalid --id: ${id}`);
   }
 }
 
-function extractTxHash(output: string): string {
+function extractTxHash(output) {
   const match = output.match(/0x[a-fA-F0-9]{64}/);
   if (!match) {
     throw new Error("Could not find tx hash (0x + 64 hex) in command output.");
@@ -124,6 +118,7 @@ function main() {
 try {
   main();
 } catch (err) {
-  console.error((err as Error).message);
+  const message = err && err.message ? err.message : String(err);
+  console.error(message);
   process.exit(1);
 }

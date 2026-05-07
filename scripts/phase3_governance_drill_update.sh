@@ -95,9 +95,9 @@ cmd_set() {
         | map(
             if .id == $id then
               .status = $status
-              | (if $tx_hash != "" then .tx_hash = $tx_hash else . end)
-              | (if $notes != "" then .notes = $notes else . end)
-              | (if $expected_error_code != "" then .expected_error_code = ($expected_error_code | tonumber) else . end)
+              | .tx_hash = (if $tx_hash != "" then $tx_hash else "" end)
+              | .notes = (if $notes != "" then $notes else "" end)
+              | .expected_error_code = (if $expected_error_code != "" then ($expected_error_code | tonumber) else null end)
             else
               .
             end

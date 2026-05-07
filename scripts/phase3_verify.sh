@@ -30,14 +30,14 @@ echo ""
 echo "Building firewall-lock..."
 (
   cd "$FIREWALL_DIR"
-  cargo build --release --target=riscv64imac-unknown-none-elf
+  cargo build --locked --release --target=riscv64imac-unknown-none-elf
 )
 
 echo ""
 echo "Building blacklist-registry (dev key feature for local verification)..."
 (
   cd "$REGISTRY_DIR"
-  cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+  cargo build --locked --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
 )
 
 echo ""
@@ -46,7 +46,7 @@ GUARD_LOG="$OUT_DIR/guard_${STAMP}.log"
 set +e
 (
   cd "$REGISTRY_DIR"
-  cargo build --release --target=riscv64imac-unknown-none-elf
+  cargo build --locked --release --target=riscv64imac-unknown-none-elf
 ) >"$GUARD_LOG" 2>&1
 GUARD_RC=$?
 set -e
@@ -138,8 +138,8 @@ cat > "$REPORT" <<EOF
 ## Build Commands
 
 \`\`\`bash
-cd contracts/firewall-lock && cargo build --release --target=riscv64imac-unknown-none-elf
-cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+cd contracts/firewall-lock && cargo build --locked --release --target=riscv64imac-unknown-none-elf
+cd contracts/blacklist-registry && cargo build --locked --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
 \`\`\`
 
 ## Artifact Manifest

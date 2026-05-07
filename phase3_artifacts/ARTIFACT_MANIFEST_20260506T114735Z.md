@@ -10,11 +10,11 @@
 ```bash
 cd contracts/firewall-lock
 cargo clean
-cargo build --release --target=riscv64imac-unknown-none-elf
+cargo build --locked --release --target=riscv64imac-unknown-none-elf
 
 cd ../blacklist-registry
 cargo clean
-cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+cargo build --locked --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
 ```
 
 ## Artifacts
@@ -27,3 +27,8 @@ cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signe
 ## Machine-readable Output
 
 - `phase3_artifacts/artifact_manifest_20260506T114735Z.json`
+
+## Scope Note
+
+- `blacklist-registry` artifact in this manifest is a pre-production dev-key build (`--features dev-signer-keys`).
+- Production signer-set finalization requires a separate production manifest and SHA256 set.

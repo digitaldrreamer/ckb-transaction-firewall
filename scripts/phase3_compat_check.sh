@@ -21,12 +21,18 @@ trap 'rm -f "$tmp_expected" "$tmp_doc" "$tmp_expected_norm"' EXIT
 
 # Extract on-chain frozen firewall error mapping: CODE NAME
 awk '
-  /pub const [A-Z_]+: i8 = [0-9]+;/ {
-    name = $3
-    gsub(":", "", name)
-    code = $6
-    gsub(";", "", code)
-    print code " " name
+  {
+    if ($0 ~ /pub[[:space:]]+const[[:space:]]+[A-Z_][A-Z0-9_]*[[:space:]]*:[[:space:]]*i8[[:space:]]*=[[:space:]]*-?[0-9]+[[:space:]]*;/) {
+      name = $0
+      sub(/^.*const[[:space:]]+/, "", name)
+      sub(/[[:space:]]*:.*$/, "", name)
+
+      code = $0
+      sub(/^.*=[[:space:]]*/, "", code)
+      sub(/[[:space:]]*;.*$/, "", code)
+
+      print code " " name
+    }
   }
 ' "$FIREWALL_SRC" | sort -n > "$tmp_expected"
 

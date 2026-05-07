@@ -66,6 +66,14 @@ jobs:
         working-directory: sdk/typescript
         run: npm test
 
+      - name: Build Rust SDK
+        working-directory: sdk/rust
+        run: cargo build
+
+      - name: Run Rust SDK tests
+        working-directory: sdk/rust
+        run: cargo test
+
       - name: Run phase 3 contract/spec compatibility check
         run: ./scripts/phase3_compat_check.sh
 

@@ -13,6 +13,7 @@ set +e
 CHECK_OUTPUT="$("$ROOT_DIR/scripts/phase3_closeout_check.sh" 2>&1)"
 CHECK_RC=$?
 set -e
+CHECK_OUTPUT="${CHECK_OUTPUT//$ROOT_DIR/<repo_root>}"
 
 cat >"$REPORT" <<EOF
 # Phase 3 Status Snapshot

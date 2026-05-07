@@ -14,7 +14,7 @@
 
 ## Rotation Procedure
 
-1. Generate new 5-signer pubkey set offline.
+1. Generate new signer pubkey set offline per current on-chain governance policy/threshold (see `docs/governance.md` and active governance contract policy).
 2. Update signer set in `contracts/blacklist-registry/src/main.rs`.
 3. Rebuild and verify:
    - `./scripts/phase3_repro_build.sh`

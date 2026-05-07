@@ -7,8 +7,8 @@
 ## Build Commands
 
 ```bash
-cd contracts/firewall-lock && cargo build --release --target=riscv64imac-unknown-none-elf
-cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+cd contracts/firewall-lock && cargo build --locked --release --target=riscv64imac-unknown-none-elf
+cd contracts/blacklist-registry && cargo build --locked --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
 ```
 
 ## Artifact Manifest
@@ -23,6 +23,9 @@ cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-un
 - Test log: `phase3_artifacts/tests_20260506T234414Z.log`
 - Cycle log: `phase3_artifacts/cycles_20260506T234414Z.log`
 - Guard log: `phase3_artifacts/guard_20260506T234414Z.log`
+- Test log SHA256: `b5bbe1e525aeb5d8381b21c240cd3bd0b3896844e9c453e285646cacab2ebdc7`
+- Cycle log SHA256: `4acfe2632721f33d7fe105eecabb6cc3cd31bf85db475fa674ab530291530dbb`
+- Guard log SHA256: `1aca91420e587e22762df4a15d0f78c2d90a3f49c8e30aa6f01f1f11a0ddbf68`
 
 ### Test Command
 ```bash
