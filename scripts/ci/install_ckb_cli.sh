@@ -14,6 +14,19 @@ cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
 curl -fsSL "${BASE_URL}/${ARCHIVE}" -o "${TMP}/${ARCHIVE}"
+
+# Verify archive integrity if checksum is provided
+if [[ -n "${EXPECTED_SHA256:-}" ]]; then
+  ACTUAL_SHA256="$(sha256sum "${TMP}/${ARCHIVE}" | awk '{print $1}')"
+  if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
+    echo "ERROR: SHA256 mismatch for ${ARCHIVE}" >&2
+    echo "  Expected: $EXPECTED_SHA256" >&2
+    echo "  Actual:   $ACTUAL_SHA256" >&2
+    exit 1
+  fi
+  echo "SHA256 verification passed for ${ARCHIVE}"
+fi
+
 tar xzf "${TMP}/${ARCHIVE}" -C "$TMP"
 BIN="$(find "$TMP" -type f -name ckb-cli | head -1)"
 if [[ -z "$BIN" ]]; then

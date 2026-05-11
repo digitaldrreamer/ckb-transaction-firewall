@@ -19,7 +19,7 @@ Cycle micro-benchmarking for this contract is integrated with the **full unit + 
 
 ```bash
 cd contracts/blacklist-registry
-cargo build --locked --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+cargo build --locked --release --target=riscv64imac-unknown-none-elf
 
 cd ../../tests/unit
 cargo test --test blacklist_registry_tests

@@ -47,5 +47,5 @@ This prepares missing transaction files, submits scenarios, refreshes drill JSON
 
 ## Related Phase 3 runbooks
 
-- [docs/phase3/runbooks/deployment-runbook.md](../phase3/runbooks/deployment-runbook.md)
-- [docs/phase3/runbooks/governance-incident-playbook.md](../phase3/runbooks/governance-incident-playbook.md)
+- [docs/phase3/runbooks/deployment-runbook.md](../../phase3/runbooks/deployment-runbook.md)
+- [docs/phase3/runbooks/governance-incident-playbook.md](../../phase3/runbooks/governance-incident-playbook.md)

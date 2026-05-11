@@ -19,4 +19,4 @@ Phase 3 closeout checks passed.
 **Notes**
 
 - Requires `ckb-cli` on `PATH` and outbound HTTPS to `CKB_RPC_URL`.
-- For full live drill execution (rebuilding scenario txs), use `scripts/phase4_governance_autorun_live.sh` per [docs/phase4/runbooks/governance-drill-live-execution.md](../../docs/phase4/runbooks/governance-drill-live-execution.md).
+- For full live drill execution (rebuilding scenario txs), use `scripts/phase4_governance_autorun_live.sh` per [docs/phase4/runbooks/governance-drill-live-execution.md](../docs/phase4/runbooks/governance-drill-live-execution.md).
