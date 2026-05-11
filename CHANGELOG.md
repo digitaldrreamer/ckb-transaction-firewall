@@ -205,7 +205,10 @@
 - Added `contracts/blacklist-registry/CYCLE_REPORT.md` for registry governance cycle posture.
 - Updated `scripts/README.md`, `docs/governance.md`, and governance incident playbook cross-links.
 
-## 2026-05-11
+### CI
+
+- Mark `scripts/ci/install_ckb_cli.sh` executable in git; invoke installer with `bash` in `.github/workflows/tests.yml`.
+- Run blocking Phase 3 closeout only after prior steps succeed (`success()`), so a failed install does not surface as a false governance-evidence failure.
 
 ### Firewall lock integration depth (GAPS_ANALYSIS)
 
@@ -214,8 +217,6 @@
 - Added 256-entry registry stress happy-path test; fixture `tests/unit/fixtures/always_failure_lock` with README attribution.
 - Extended `build_tx_with_firewall_lock` to attach `header_deps`; `insert_test_headers` helper for ckb-testtool.
 - Updated `contracts/firewall-lock/GAPS_ANALYSIS.md` integration section status.
-
-## 2026-05-11
 
 ### Firewall lock header matrix integration tests
 
