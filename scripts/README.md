@@ -197,7 +197,30 @@ Implemented capabilities:
 - reuses phase3 drill schema/status validation as baseline,
 - rejects known synthetic/deterministic evidence markers in scenario notes,
 - verifies each scenario `tx_hash` is resolvable via `ckb-cli rpc get_transaction`,
-- can be enabled in closeout gate via `REAL_GOV_EVIDENCE_REQUIRED=1`.
+- requires on-chain status **committed** for every hash.
+
+### CI: Phase 4 closeout on `main`
+
+GitHub Actions workflow `.github/workflows/tests.yml`:
+
+- installs pinned `ckb-cli` via `scripts/ci/install_ckb_cli.sh` (`CKB_CLI_VERSION=v1.15.0` in the workflow),
+- runs `./scripts/phase3_closeout_check.sh` with `REAL_GOV_EVIDENCE_REQUIRED=1` and `CKB_RPC_URL=https://testnet.ckb.dev` for **push to `main`** and **pull requests targeting `main`**,
+- so the Phase 4 chain gate is always enforced on the integration branch, not opt-in there.
+
+Feature branches and PRs to non-`main` targets still run closeout in report-only mode without `REAL_GOV_EVIDENCE_REQUIRED` (see workflow `if:` conditions).
+
+### `scripts/ci/install_ckb_cli.sh`
+
+Purpose:
+
+- Download and install a **pinned** `ckb-cli` release for CI runners (default `CKB_CLI_VERSION=v1.15.0`, `x86_64-unknown-linux-gnu`).
+
+Environment:
+
+- `CKB_CLI_VERSION` — release tag (default `v1.15.0`)
+- `CKB_CLI_ARCH` — archive suffix (default `x86_64-unknown-linux-gnu`)
+- `CKB_CLI_INSTALL_DIR` — destination directory (default `$HOME/.local/bin`)
+- Appends `CKB_CLI_INSTALL_DIR` to `GITHUB_PATH` when set so later steps resolve `ckb-cli`.
 
 ### `phase4_governance_autorun_live.sh`
 

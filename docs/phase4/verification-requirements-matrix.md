@@ -1,6 +1,8 @@
 # Phase 4 Verification Requirements Matrix
 
-| Requirement ID | Requirement statement | Verification method (test/static check/testnet drill/review) | Evidence artifact path | Pass criteria | Blocking severity if fail |
+**Status index:** [verification-status.md](verification-status.md) (requirement-to-evidence mapping, closure 2026-05-11).
+
+## Matrix
 |---|---|---|---|---|---|
 | P4-CRYPTO-001 | Registry governance update must enforce threshold signer cryptographic verification on-chain for authorized signer set. | test | tests/unit/tests/blacklist_registry_tests.rs | Positive/negative signer-threshold tests pass with cryptographic checks enabled. | Critical |
 | P4-CRYPTO-002 | Bootstrap path must require strict 5-of-5 cryptographic signer verification. | test | tests/unit/tests/blacklist_registry_tests.rs | Bootstrap succeeds only with 5 valid signatures; any fewer fail with expected code. | Critical |
@@ -10,7 +12,7 @@
 | P4-WITNESS-002 | Fallback behavior to `WitnessArgs.lock` must be defined and validated without ambiguity. | test/review | docs/governance.md | Explicit tests and docs show deterministic precedence and no dual-source ambiguity. | High |
 | P4-WITNESS-003 | Malformed GOV1 witness layout must fail with stable, documented error code. | test | tests/unit/tests/blacklist_registry_tests.rs | Corrupt/misaligned witness inputs always fail with expected code. | High |
 | P4-VM-001 | Contract execution must avoid invalid instructions on target CKB-VM/testnet runtime. | testnet drill | tests/integration/governance_drill/latest.json | All governance scenarios execute without VM `InvalidInstruction` failures. | Critical |
-| P4-VM-002 | Cycle usage for governance verification path must remain within agreed budget. | test/static check | contracts/firewall-lock/CYCLE_REPORT.md | Reported cycle probes stay within defined budget thresholds for release profile. | High |
+| P4-VM-002 | Cycle usage for governance verification path must remain within agreed budget. | test/static check | [contracts/blacklist-registry/CYCLE_REPORT.md](../../contracts/blacklist-registry/CYCLE_REPORT.md) and `scripts/phase3_verify.sh` | Reported cycle probes stay within defined budget thresholds for release profile. | High |
 | P4-BWC-001 | Backward compatibility: existing valid registry entries remain readable and enforceable after upgrade. | test | tests/unit/tests/firewall_lock_tests.rs | Historical/legacy-compatible fixtures still pass filtering checks. | High |
 | P4-BWC-002 | Backward compatibility: unsupported legacy witness versions fail explicitly (no silent accept). | test | tests/unit/tests/blacklist_registry_tests.rs | Unsupported version tests fail with documented rejection behavior. | High |
 | P4-DEPLOY-001 | Deployment script must verify governance lock identity compatibility before signing/apply. | static check/test | scripts/phase3_governance_lock_preflight.sh | Preflight blocks incompatible lock modes and allows compatible paths. | Critical |

@@ -118,3 +118,9 @@ Repository: `ckb-transaction-firewall`
 - CI and closeout checks enforce production governance evidence requirements on protected branches.
 - Security review reports zero open Critical/High governance findings.
 - Phase 4 go/no-go record is approved and archived with complete traceable artifacts.
+
+## 8) Closure record (archived)
+
+- Requirement-to-evidence index: [verification-status.md](verification-status.md)
+- Decision record: [go-no-go/phase4-decision-record.md](go-no-go/phase4-decision-record.md)
+- Milestone artifacts: [../../phase4_artifacts/](../../phase4_artifacts/)

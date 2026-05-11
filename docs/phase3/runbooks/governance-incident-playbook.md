@@ -1,5 +1,7 @@
 # Governance Incident Response Playbook (Phase 3)
 
+Phase 4 live governance drill procedures and chain-backed evidence checks: `docs/phase4/runbooks/governance-drill-live-execution.md`, `docs/phase4/verification-status.md`.
+
 ## Incident Classes
 
 - Malicious/invalid proposal execution attempt
