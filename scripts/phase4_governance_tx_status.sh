@@ -93,7 +93,8 @@ main() {
         reason="$(jq -r '.tx_status.reason // ""' <<<"$tx_json")"
       fi
 
-      if [[ "$status" != "unknown" && "$status" != "~" ]]; then
+      # * Wait for a terminal chain-visible status (matches phase4_governance_evidence_check.sh expectations).
+      if [[ "$status" == "committed" || "$status" == "rejected" ]]; then
         break
       fi
       if (( $(date +%s) >= timeout_at )); then

@@ -34,6 +34,11 @@ jobs:
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
 
+      - name: Install ckb-cli (pinned, Phase 4 governance evidence)
+        run: ./scripts/ci/install_ckb_cli.sh
+        env:
+          CKB_CLI_VERSION: v1.15.0
+
       - name: Run firewall lock unit tests
         working-directory: contracts/firewall-lock
         run: cargo test --features std
@@ -98,6 +103,9 @@ jobs:
 
       - name: Enforce phase 3 closeout status (blocking on main and PRs to main)
         if: ${{ always() && (github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.base_ref == 'main')) }}
+        env:
+          REAL_GOV_EVIDENCE_REQUIRED: "1"
+          CKB_RPC_URL: https://testnet.ckb.dev
         run: ./scripts/phase3_closeout_check.sh
 
       - name: Report phase 3 closeout status (non-blocking on non-main branches/PRs)

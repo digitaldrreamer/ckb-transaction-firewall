@@ -96,11 +96,11 @@ if [[ "$REAL_GOV_EVIDENCE_REQUIRED" == "1" ]]; then
     fail "G2 real chain-backed governance evidence invalid/missing (phase4 gate)"
   fi
   if [[ -f "$ROOT_DIR/tests/integration/governance_drill/chain_status_latest.json" ]]; then
-    if jq -e '.scenarios | length > 0 and all(.[]; (.tx_status.status // "unknown") != "unknown" and (.tx_status.status // "~") != "~")' \
+    if jq -e '.scenarios | length > 0 and all(.[]; (.tx_status.status // "") == "committed")' \
       "$ROOT_DIR/tests/integration/governance_drill/chain_status_latest.json" >/dev/null 2>&1; then
-      pass "G2 chain status artifact present with resolved tx statuses"
+      pass "G2 chain status artifact present with committed tx statuses"
     else
-      fail "G2 chain status artifact present but has unresolved tx status entries"
+      fail "G2 chain status artifact present but not all scenarios are committed on-chain"
     fi
   else
     fail "G2 chain status artifact missing (tests/integration/governance_drill/chain_status_latest.json)"

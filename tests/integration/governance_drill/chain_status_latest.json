@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-05-07T06:38:41Z",
+  "generated_utc": "2026-05-11T22:35:27Z",
   "rpc_url": "https://testnet.ckb.dev",
   "scenarios": [
     {
@@ -39,10 +39,10 @@
       "id": "negative_invalid_root_binding",
       "tx_hash": "0xb402d2fd54a528f1742166305d5463aaf6f4a63f4667b2609c99a03c355284ef",
       "tx_status": {
-        "status": "pending",
-        "block_hash": "",
-        "block_number": "",
-        "tx_index": "",
+        "status": "committed",
+        "block_hash": "0x4640e4f130bfebb405f52e6c940215bdbbf1e9c5378804177974fce1e7e11ea0",
+        "block_number": "0x1409493",
+        "tx_index": "0x1",
         "reason": ""
       }
     }
