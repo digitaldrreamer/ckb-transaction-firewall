@@ -4,8 +4,8 @@
 use ckb_testtool::builtin::ALWAYS_SUCCESS;
 use ckb_testtool::ckb_types::{
     bytes::Bytes,
-    core::TransactionBuilder,
-    packed::{CellDep, CellInput, CellOutput, OutPoint, Script},
+    core::{HeaderBuilder, ScriptHashType, TransactionBuilder},
+    packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, Script},
     prelude::*,
 };
 use ckb_testtool::context::Context;
@@ -22,11 +22,16 @@ const ERROR_REGISTRY_NOT_SORTED: i8 = 10;
 const ERROR_BLACKLISTED_LOCK_ARGS: i8 = 11;
 const ERROR_BLACKLISTED_TYPE_ARGS: i8 = 12;
 const ERROR_AMBIGUOUS_REGISTRY_CELL_DEP: i8 = 17;
+const ERROR_MISSING_INNER_LOCK_CELL_DEP: i8 = 13;
+const ERROR_INNER_LOCK_REJECTED: i8 = 15;
 
 // * Use compiled contract binary from Phase 1 build output
 const FIREWALL_BINARY: &[u8] = include_bytes!(
     "../../../contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/firewall-lock"
 );
+
+// * CKB `always_failure` lock binary (from ckb-script testdata; see tests/unit/fixtures/README.md)
+const ALWAYS_FAILURE_LOCK: &[u8] = include_bytes!("../fixtures/always_failure_lock");
 
 fn build_firewall_lock_args_with_version_flags(version: u8, flags: u8) -> Bytes {
     // v1 layout: version(1) + flags(1) + registry code_hash(32) + registry hash_type(1)
@@ -51,6 +56,24 @@ fn build_firewall_lock_args_with_version_flags(version: u8, flags: u8) -> Bytes 
 
 fn build_short_invalid_args() -> Bytes {
     Bytes::from(vec![0x01, 0x03, 0xAA]) // * shorter than required minimum 72 bytes
+}
+
+/// * BLKL registry payload with per-entry `expires_at` (LE u64; `0` = permanent).
+fn build_registry_payload_with_expires(entries: Vec<(Vec<u8>, u64)>, sorted: bool) -> Bytes {
+    let mut rows = entries;
+    if sorted {
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+    }
+    let mut data = vec![];
+    data.extend_from_slice(b"BLKL");
+    data.push(0x01);
+    data.extend_from_slice(&(rows.len() as u32).to_le_bytes());
+    for (id, expires_at) in rows {
+        data.push(id.len() as u8);
+        data.extend_from_slice(&id);
+        data.extend_from_slice(&expires_at.to_le_bytes());
+    }
+    Bytes::from(data)
 }
 
 fn build_registry_payload(entries: Vec<Vec<u8>>, sorted: bool) -> Bytes {
@@ -100,11 +123,28 @@ fn build_full_lock_args(
     Bytes::from(args)
 }
 
+/// * Insert synthetic block headers so `load_header` / median time match integration expectations.
+fn insert_test_headers(context: &mut Context, timestamps: &[u64]) -> Vec<Byte32> {
+    let mut hashes = Vec::with_capacity(timestamps.len());
+    for (i, &ts) in timestamps.iter().enumerate() {
+        let header = HeaderBuilder::default()
+            .timestamp(ts.pack())
+            .number(0u64.pack())
+            .nonce(((i + 1) as u128).pack())
+            .build();
+        let h = header.hash();
+        context.insert_header(header);
+        hashes.push(h);
+    }
+    hashes
+}
+
 fn build_tx_with_firewall_lock(
     context: &mut Context,
     firewall_script_out_point: OutPoint,
     lock_args: Bytes,
     extra_cell_deps: Vec<CellDep>,
+    header_dep_hashes: &[Byte32],
     output_lock_args: Bytes,
     output_type_args: Option<Bytes>,
     output_type_code_out_point: Option<OutPoint>,
@@ -161,6 +201,10 @@ fn build_tx_with_firewall_lock(
         tx_builder = tx_builder.cell_dep(dep);
     }
 
+    for h in header_dep_hashes {
+        tx_builder = tx_builder.header_dep(h.clone());
+    }
+
     let tx = tx_builder.build();
 
     context.complete_tx(tx)
@@ -186,6 +230,7 @@ fn test_reject_invalid_lock_args_layout() {
         firewall_out_point,
         build_short_invalid_args(),
         vec![],
+        &[],
         Bytes::new(),
         None,
         None,
@@ -207,6 +252,7 @@ fn test_reject_unsupported_version() {
         firewall_out_point,
         lock_args,
         vec![],
+        &[],
         Bytes::new(),
         None,
         None,
@@ -229,6 +275,7 @@ fn test_reject_unsupported_flags() {
         firewall_out_point,
         lock_args,
         vec![],
+        &[],
         Bytes::new(),
         None,
         None,
@@ -250,6 +297,7 @@ fn test_reject_missing_registry_cell_dep() {
         firewall_out_point,
         lock_args,
         vec![],
+        &[],
         Bytes::new(),
         None,
         None,
@@ -299,6 +347,7 @@ fn test_reject_invalid_registry_data() {
         firewall_out_point,
         lock_args,
         vec![registry_dep],
+        &[],
         Bytes::new(),
         None,
         None,
@@ -361,6 +410,7 @@ fn test_reject_registry_not_sorted() {
         firewall_out_point,
         lock_args,
         vec![registry_dep],
+        &[],
         Bytes::new(),
         None,
         None,
@@ -410,6 +460,7 @@ fn test_reject_blacklisted_output_lock_args() {
         firewall_out_point,
         lock_args,
         vec![registry_dep],
+        &[],
         Bytes::from(blacklist_id),
         None,
         Some(type_code_out_point),
@@ -459,6 +510,7 @@ fn test_reject_blacklisted_output_type_args() {
         firewall_out_point,
         lock_args,
         vec![registry_dep],
+        &[],
         Bytes::new(),
         Some(Bytes::from(blacklist_type_args)),
         Some(type_code_out_point),
@@ -511,6 +563,7 @@ fn test_reject_ambiguous_registry_cell_dep() {
         firewall_out_point,
         lock_args,
         vec![registry_dep_1, registry_dep_2],
+        &[],
         Bytes::new(),
         None,
         Some(type_code_out_point),
@@ -577,6 +630,7 @@ fn run_non_blacklisted_pass_and_get_cycles(flags: u8, include_type_script: bool)
         firewall_out_point,
         lock_args,
         vec![registry_dep, inner_dep],
+        &[],
         Bytes::from(vec![0x11, 0x22]),
         output_type_args,
         Some(type_code_out_point),
@@ -645,6 +699,7 @@ fn run_non_blacklisted_large_registry_and_get_cycles(
         firewall_out_point,
         lock_args,
         vec![registry_dep, inner_dep],
+        &[],
         Bytes::from(vec![0x11, 0x22]),
         output_type_args,
         Some(type_code_out_point),
@@ -653,6 +708,621 @@ fn run_non_blacklisted_large_registry_and_get_cycles(
     context
         .verify_tx(&tx, MAX_CYCLES)
         .expect("tx should pass for non-blacklisted outputs with large registry")
+}
+
+#[test]
+fn test_pass_temporary_blacklist_expired_with_header_median() {
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x10]))
+        .expect("build registry type script");
+
+    let temp_id = vec![0xCC, 0xDD];
+    let expires_at = 5000u64;
+    let registry_payload =
+        build_registry_payload_with_expires(vec![(temp_id.clone(), expires_at)], true);
+
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_code_out_point, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+    let registry_out_point = context.create_cell(registry_output, registry_payload);
+    let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
+
+    let inner_script = context
+        .build_script(&inner_code_out_point, Bytes::new())
+        .expect("build inner script");
+    let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
+    let inner_hash_type: u8 = u8::from(inner_script.hash_type());
+    let lock_args =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+
+    let inner_dep = CellDep::new_builder()
+        .out_point(inner_code_out_point.clone())
+        .build();
+
+    // * Median of [6000, 7000, 8000] is 7000 >= 5000 => temporary entry expired => spend allowed.
+    let header_hashes = insert_test_headers(&mut context, &[6000, 7000, 8000]);
+
+    let tx = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point,
+        lock_args,
+        vec![registry_dep, inner_dep],
+        &header_hashes,
+        Bytes::from(temp_id),
+        None,
+        Some(type_code_out_point),
+    );
+
+    context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect("expired temporary blacklist should not block spend");
+}
+
+#[test]
+fn test_reject_temporary_blacklist_active_with_header_median() {
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x11]))
+        .expect("build registry type script");
+
+    let temp_id = vec![0xDE, 0xAD];
+    let expires_at = 9000u64;
+    let registry_payload =
+        build_registry_payload_with_expires(vec![(temp_id.clone(), expires_at)], true);
+
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_code_out_point, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+    let registry_out_point = context.create_cell(registry_output, registry_payload);
+    let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
+
+    let inner_script = context
+        .build_script(&inner_code_out_point, Bytes::new())
+        .expect("build inner script");
+    let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
+    let inner_hash_type: u8 = u8::from(inner_script.hash_type());
+    let lock_args =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+
+    let inner_dep = CellDep::new_builder()
+        .out_point(inner_code_out_point.clone())
+        .build();
+
+    // * Median of [6000, 7000, 8000] is 7000 < 9000 => temporary entry still active.
+    let header_hashes = insert_test_headers(&mut context, &[6000, 7000, 8000]);
+
+    let tx = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point,
+        lock_args,
+        vec![registry_dep, inner_dep],
+        &header_hashes,
+        Bytes::from(temp_id),
+        None,
+        Some(type_code_out_point),
+    );
+
+    let err = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect_err("active temporary blacklist should reject");
+    assert_error_code(err, ERROR_BLACKLISTED_LOCK_ARGS);
+}
+
+#[test]
+fn test_median_time_even_header_count_affects_expiry() {
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x12]))
+        .expect("build registry type script");
+
+    let temp_id = vec![0xBE, 0xEF];
+    // * Even count timestamps [1000,2000,3000,4000] => median (2000+3000)/2 = 2500.
+    let expires_at = 2600u64;
+    let registry_payload =
+        build_registry_payload_with_expires(vec![(temp_id.clone(), expires_at)], true);
+
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_code_out_point, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+    let registry_out_point = context.create_cell(registry_output, registry_payload);
+    let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
+
+    let inner_script = context
+        .build_script(&inner_code_out_point, Bytes::new())
+        .expect("build inner script");
+    let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
+    let inner_hash_type: u8 = u8::from(inner_script.hash_type());
+    let lock_args =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+
+    let inner_dep = CellDep::new_builder()
+        .out_point(inner_code_out_point.clone())
+        .build();
+
+    let header_hashes = insert_test_headers(&mut context, &[1000, 2000, 3000, 4000]);
+
+    let tx = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point,
+        lock_args,
+        vec![registry_dep, inner_dep],
+        &header_hashes,
+        Bytes::from(temp_id),
+        None,
+        Some(type_code_out_point),
+    );
+
+    let err = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect_err("median 2500 < 2600 => temp entry still active");
+    assert_error_code(err, ERROR_BLACKLISTED_LOCK_ARGS);
+}
+
+/// * `header_dep` order in the transaction does not change median: the lock sorts timestamps internally.
+#[test]
+fn test_header_dep_order_permutation_invariant_for_median_expiry() {
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x21]))
+        .expect("build registry type script");
+
+    let temp_id = vec![0x01, 0x02];
+    let expires_at = 5000u64;
+    let registry_payload =
+        build_registry_payload_with_expires(vec![(temp_id.clone(), expires_at)], true);
+
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_code_out_point, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+    let registry_out_point = context.create_cell(registry_output, registry_payload);
+    let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
+
+    let inner_script = context
+        .build_script(&inner_code_out_point, Bytes::new())
+        .expect("build inner script");
+    let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
+    let inner_hash_type: u8 = u8::from(inner_script.hash_type());
+    let lock_args =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+
+    let inner_dep = CellDep::new_builder()
+        .out_point(inner_code_out_point.clone())
+        .build();
+
+    let hashes = insert_test_headers(&mut context, &[6000, 7000, 8000]);
+    let permutations = vec![
+        vec![hashes[0].clone(), hashes[1].clone(), hashes[2].clone()],
+        vec![hashes[2].clone(), hashes[0].clone(), hashes[1].clone()],
+        vec![hashes[1].clone(), hashes[2].clone(), hashes[0].clone()],
+    ];
+
+    for order in permutations {
+        let tx = build_tx_with_firewall_lock(
+            &mut context,
+            firewall_out_point.clone(),
+            lock_args.clone(),
+            vec![registry_dep.clone(), inner_dep.clone()],
+            &order,
+            Bytes::from(temp_id.clone()),
+            None,
+            Some(type_code_out_point.clone()),
+        );
+        context
+            .verify_tx(&tx, MAX_CYCLES)
+            .expect("median invariant across header_dep permutations");
+    }
+}
+
+/// * Nine headers (odd count): timestamps 1000..9000 step 1000 => median 5000.
+#[test]
+fn test_median_nine_headers_expiry_matrix() {
+    let timestamps: Vec<u64> = (1..=9).map(|i| i * 1000).collect();
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x22]))
+        .expect("build registry type script");
+
+    let temp_id = vec![0x03, 0x04];
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_code_out_point, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+
+    let inner_script = context
+        .build_script(&inner_code_out_point, Bytes::new())
+        .expect("build inner script");
+    let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
+    let inner_hash_type: u8 = u8::from(inner_script.hash_type());
+    let inner_dep = CellDep::new_builder()
+        .out_point(inner_code_out_point.clone())
+        .build();
+
+    let header_hashes = insert_test_headers(&mut context, &timestamps);
+
+    // * expires 4500 < median 5000 => expired => pass
+    let payload_expired = build_registry_payload_with_expires(vec![(temp_id.clone(), 4500)], true);
+    let registry_out_expired = context.create_cell(registry_output.clone(), payload_expired);
+    let dep_expired = CellDep::new_builder()
+        .out_point(registry_out_expired)
+        .build();
+    let lock_args_expired =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let tx_ok = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point.clone(),
+        lock_args_expired,
+        vec![dep_expired, inner_dep.clone()],
+        &header_hashes,
+        Bytes::from(temp_id.clone()),
+        None,
+        Some(type_code_out_point.clone()),
+    );
+    context
+        .verify_tx(&tx_ok, MAX_CYCLES)
+        .expect("median 5000 >= 4500 => temporary blacklist inactive");
+
+    // * expires 6000 > median 5000 => active => reject
+    let payload_active = build_registry_payload_with_expires(vec![(temp_id.clone(), 6000)], true);
+    let registry_out_active = context.create_cell(registry_output, payload_active);
+    let dep_active = CellDep::new_builder()
+        .out_point(registry_out_active)
+        .build();
+    let lock_args_active =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let tx_bad = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point,
+        lock_args_active,
+        vec![dep_active, inner_dep],
+        &header_hashes,
+        Bytes::from(temp_id),
+        None,
+        Some(type_code_out_point),
+    );
+    let err = context
+        .verify_tx(&tx_bad, MAX_CYCLES)
+        .expect_err("median 5000 < 6000 => temporary blacklist still active");
+    assert_error_code(err, ERROR_BLACKLISTED_LOCK_ARGS);
+}
+
+/// * With no `header_deps`, median time is 0: conservative fail-safe keeps temporary rows active.
+#[test]
+fn test_no_header_deps_zero_median_keeps_temporary_blacklist_active() {
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x23]))
+        .expect("build registry type script");
+
+    let temp_id = vec![0x05, 0x06];
+    let registry_payload =
+        build_registry_payload_with_expires(vec![(temp_id.clone(), 9_999_999)], true);
+
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_code_out_point, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+    let registry_out_point = context.create_cell(registry_output, registry_payload);
+    let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
+
+    let inner_script = context
+        .build_script(&inner_code_out_point, Bytes::new())
+        .expect("build inner script");
+    let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
+    let inner_hash_type: u8 = u8::from(inner_script.hash_type());
+    let lock_args =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+
+    let inner_dep = CellDep::new_builder()
+        .out_point(inner_code_out_point.clone())
+        .build();
+
+    let tx = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point,
+        lock_args,
+        vec![registry_dep, inner_dep],
+        &[],
+        Bytes::from(temp_id),
+        None,
+        Some(type_code_out_point),
+    );
+
+    let err = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect_err("median 0 < expires_at => temporary entry enforced");
+    assert_error_code(err, ERROR_BLACKLISTED_LOCK_ARGS);
+}
+
+/// * Duplicate header timestamps collapse to one median value; boundary `expires_at == median` is expired.
+#[test]
+fn test_median_duplicate_header_timestamps_boundary_eq_expires() {
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x24]))
+        .expect("build registry type script");
+
+    let temp_id = vec![0x07, 0x08];
+    let expires_at = 7000u64;
+    let registry_payload =
+        build_registry_payload_with_expires(vec![(temp_id.clone(), expires_at)], true);
+
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_code_out_point, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+    let registry_out_point = context.create_cell(registry_output, registry_payload);
+    let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
+
+    let inner_script = context
+        .build_script(&inner_code_out_point, Bytes::new())
+        .expect("build inner script");
+    let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
+    let inner_hash_type: u8 = u8::from(inner_script.hash_type());
+    let lock_args =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+
+    let inner_dep = CellDep::new_builder()
+        .out_point(inner_code_out_point.clone())
+        .build();
+
+    let header_hashes = insert_test_headers(&mut context, &[7000, 7000, 7000]);
+
+    let tx = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point,
+        lock_args,
+        vec![registry_dep, inner_dep],
+        &header_hashes,
+        Bytes::from(temp_id),
+        None,
+        Some(type_code_out_point),
+    );
+
+    context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect("median == expires_at => temporary blacklist expired (not strictly before)");
+}
+
+/// * Single header: median equals that header's timestamp.
+#[test]
+fn test_median_single_header_timestamp() {
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x25]))
+        .expect("build registry type script");
+
+    let temp_id = vec![0x09, 0x0a];
+    let expires_at = 40_000u64;
+    let registry_payload =
+        build_registry_payload_with_expires(vec![(temp_id.clone(), expires_at)], true);
+
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_code_out_point, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+    let registry_out_point = context.create_cell(registry_output, registry_payload);
+    let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
+
+    let inner_script = context
+        .build_script(&inner_code_out_point, Bytes::new())
+        .expect("build inner script");
+    let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
+    let inner_hash_type: u8 = u8::from(inner_script.hash_type());
+    let lock_args =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+
+    let inner_dep = CellDep::new_builder()
+        .out_point(inner_code_out_point.clone())
+        .build();
+
+    let header_hashes = insert_test_headers(&mut context, &[50_000]);
+
+    let tx = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point,
+        lock_args,
+        vec![registry_dep, inner_dep],
+        &header_hashes,
+        Bytes::from(temp_id),
+        None,
+        Some(type_code_out_point),
+    );
+
+    context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect("single header median 50000 >= 40000 => expired");
+}
+
+#[test]
+fn test_reject_missing_inner_lock_cell_dep() {
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x13]))
+        .expect("build registry type script");
+
+    let registry_payload = build_registry_payload(vec![vec![0xAA, 0xBB]], true);
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_code_out_point, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+    let registry_out_point = context.create_cell(registry_output, registry_payload);
+    let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
+
+    let inner_script = context
+        .build_script(&inner_code_out_point, Bytes::new())
+        .expect("build inner script");
+    let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
+    let inner_hash_type: u8 = u8::from(inner_script.hash_type());
+    let lock_args =
+        build_full_lock_args(0x01, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+
+    // * Intentionally omit inner lock code cell_dep so spawn_cell cannot resolve the binary.
+    let tx = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point,
+        lock_args,
+        vec![registry_dep],
+        &[],
+        Bytes::from(vec![0x11, 0x22]),
+        None,
+        Some(type_code_out_point),
+    );
+
+    let err = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect_err("missing inner lock cell dep should fail spawn");
+    assert_error_code(err, ERROR_MISSING_INNER_LOCK_CELL_DEP);
+}
+
+#[test]
+fn test_reject_inner_lock_spawn_always_failure() {
+    let mut context = Context::default();
+    let firewall_out_point = context.deploy_cell(Bytes::from(FIREWALL_BINARY.to_vec()));
+    let type_code_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_success_out = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let inner_fail_out = context.deploy_cell(Bytes::from(ALWAYS_FAILURE_LOCK.to_vec()));
+
+    let registry_type_script = context
+        .build_script(&type_code_out_point, Bytes::from(vec![0x14]))
+        .expect("build registry type script");
+
+    let registry_payload = build_registry_payload(vec![vec![0xAA, 0xBB]], true);
+    let registry_output = CellOutput::new_builder()
+        .capacity(1000u64.pack())
+        .lock(
+            context
+                .build_script(&inner_success_out, Bytes::new())
+                .expect("build registry lock"),
+        )
+        .type_(Some(registry_type_script.clone()).pack())
+        .build();
+    let registry_out_point = context.create_cell(registry_output, registry_payload);
+    let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
+
+    let inner_fail_script = context
+        .build_script_with_hash_type(&inner_fail_out, ScriptHashType::Data, Bytes::new())
+        .expect("build always_failure inner lock script");
+    let inner_fail_hash: [u8; 32] = inner_fail_script.code_hash().unpack();
+    let inner_fail_hash_type: u8 = u8::from(inner_fail_script.hash_type());
+
+    let lock_args = build_full_lock_args(
+        0x01,
+        0x01,
+        &registry_type_script,
+        inner_fail_hash,
+        inner_fail_hash_type,
+        &[],
+    );
+
+    let inner_fail_dep = CellDep::new_builder().out_point(inner_fail_out).build();
+
+    let tx = build_tx_with_firewall_lock(
+        &mut context,
+        firewall_out_point,
+        lock_args,
+        vec![registry_dep, inner_fail_dep],
+        &[],
+        Bytes::from(vec![0x11, 0x22]),
+        None,
+        Some(type_code_out_point),
+    );
+
+    let err = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect_err("inner lock that always fails should surface InnerLockRejected");
+    assert_error_code(err, ERROR_INNER_LOCK_REJECTED);
+}
+
+#[test]
+fn test_pass_non_blacklisted_registry_256_entries_stress() {
+    let cycles = run_non_blacklisted_large_registry_and_get_cycles(0x03, true, 256);
+    assert!(cycles > 0, "256-entry registry path should consume cycles");
 }
 
 #[test]
