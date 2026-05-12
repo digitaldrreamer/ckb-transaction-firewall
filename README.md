@@ -76,6 +76,7 @@ cargo build --release --target=riscv64imac-unknown-none-elf
 cd ../../sdk/typescript
 npm ci
 npm run typecheck
+npm run build
 ```
 
 ---
@@ -84,10 +85,16 @@ npm run typecheck
 
 ### TypeScript (`sdk/typescript`)
 
-Depend via **workspace** or **`file:`** until an npm publish exists ([`package.json`](./sdk/typescript/package.json) is currently `"private": true`).
+```bash
+npm install @ckb-firewall/sdk
+```
+
+Requires **Node 20+**. The library is **ESM-only** (`import` / `import()`; no `require`).
+
+From this repository:
 
 ```bash
-cd sdk/typescript && npm ci && npm run typecheck && npm test
+cd sdk/typescript && npm ci && npm run typecheck && npm test && npm run build
 ```
 
 ```typescript
@@ -183,6 +190,7 @@ The Transaction Firewall is the **enforcement floor** for the [CKB Agent Control
 | Lock script spec (args, errors) | [docs/lock-script-spec.md](./docs/lock-script-spec.md) |
 | Governance | [docs/governance.md](./docs/governance.md), [governance/voting.md](./governance/voting.md) |
 | Operator / CI scripts | [scripts/README.md](./scripts/README.md) |
+| **Public testnet deploy** (contracts + TS `registryScript`) | [docs/deployments/testnet.md](./docs/deployments/testnet.md) |
 | Phase 3 & 4 runbooks & matrices | [docs/phase3/](./docs/phase3/), [docs/phase4/](./docs/phase4/) |
 | Internal plans & milestone evidence | [docs/internal/](./docs/internal/) |
 | Research notes | [research/](./research/) |

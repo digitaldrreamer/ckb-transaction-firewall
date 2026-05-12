@@ -160,6 +160,8 @@ Implemented capabilities:
 - dry-run mode (generate txs and print sign/apply commands),
 - sign/apply execution path via `ckb-cli`.
 
+Operator guide (testnet RPC, post-deploy registry identity for the TypeScript SDK): [docs/deployments/testnet.md](../docs/deployments/testnet.md).
+
 ### `update-blacklist.ts`
 
 Purpose:

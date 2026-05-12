@@ -255,6 +255,12 @@
 
 - Clarified in [README.md](README.md) and [ABOUT.md](ABOUT.md) that the SDK and Firewall lock apply to any CKB transaction-building software (not only AI agents), and that blacklist checks target **outputs** (destinations created by the transaction), not a built-in inbound-sender filter.
 
+### Testnet deployment (TypeScript path)
+
+- Added [docs/deployments/testnet.md](docs/deployments/testnet.md) for CKB public testnet: `scripts/deploy.sh`, `ckb-cli` sign/apply, reading registry type script for `FirewallConfig`, and wiring `cellDeps` for `checkTransaction`.
+- Added [docs/deployments/testnet.registry.example.json](docs/deployments/testnet.registry.example.json) placeholder for RPC + `registryScript`.
+- Linked from [README.md](README.md), [scripts/README.md](scripts/README.md), and [sdk/typescript/README.md](sdk/typescript/README.md).
+
 ### Firewall lock tests and docs
 
 - Replaced remaining narrow length/count casts in `firewall_lock_tests.rs` with `u32::try_from` / `u16::try_from` for registry builders and lock args.
@@ -263,3 +269,14 @@
 ### Release versioning
 
 - Bumped on-chain crates, Rust SDK, TypeScript `package.json`, and `tests/unit` harness to **0.2.0**; refreshed per-crate `Cargo.lock` root package versions.
+
+## 2026-05-12
+
+### TypeScript SDK (publish-ready)
+
+- Added ESM build (`tsconfig.build.json`, `dist/`), `package.json` `exports`, `types`, `files`, MIT `LICENSE`, repository metadata, and `engines` (Node >=20).
+- Tightened compiler options (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `useUnknownInCatchVariables`).
+- Introduced typed `FirewallSdkError` subclasses and a discriminated `FirewallDecision` union with literal failure reasons.
+- CI: build, tarball checks for `dist/index.js` and `dist/index.d.ts`, Node ESM smoke import, `@arethetypeswrong/cli` with `--profile esm-only`.
+- Documented npm install, Node 20+, and ESM-only usage in README files.
+- Simplified root README TypeScript section (install-first, no publish-metadata framing); aligned `sdk/typescript/README.md` module/types section.

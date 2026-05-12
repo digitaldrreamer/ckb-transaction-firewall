@@ -2,6 +2,16 @@
 
 TypeScript implementation of Layer 1 pre-flight checks for CKB agent transaction flows.
 
+## CKB testnet (public devnet)
+
+Deploy `firewall-lock` and `blacklist-registry` to testnet, then copy the live registry **type script** into `FirewallConfig.registryScript`. Step-by-step commands, `ckb-cli` queries, and an example JSON shape: [docs/deployments/testnet.md](../../docs/deployments/testnet.md), [docs/deployments/testnet.registry.example.json](../../docs/deployments/testnet.registry.example.json).
+
+## Module and types
+
+- **ESM-only** build under `dist/`; Node **20+** (`engines` in [`package.json`](./package.json)).
+- **Types:** `FirewallDecision` is a discriminated union; failures use literal `reason` strings aligned with `FIREWALL_ERROR_CODES`.
+- **Errors:** `MissingRegistryCellDepError`, `InvalidRegistryDataError`, `RegistryNotSortedError`, `AmbiguousRegistryCellDepError` extend `FirewallSdkError` and are thrown from registry resolution / parsing; `TransactionFirewall.checkTransaction` maps them to decisions.
+
 ## Responsibilities
 
 - fetch and parse blacklist registry state from CKB RPC,
@@ -18,6 +28,7 @@ TypeScript implementation of Layer 1 pre-flight checks for CKB agent transaction
 ## Implemented Modules (current)
 
 - `src/types.ts`: typed transaction/dependency/config/result models.
+- `src/errors.ts`: typed SDK errors for registry resolution and parsing.
 - `src/blacklist.ts`: exact registry dep resolution + BLKL v1 payload parsing.
 - `src/firewall.ts`: deterministic allow/deny preflight evaluation.
 - `src/index.ts`: public exports.
@@ -29,6 +40,8 @@ cd sdk/typescript
 npm ci
 npm run typecheck
 npm test
+npm run build
+npm run attw
 ```
 
 ## Registry Resolution Contract

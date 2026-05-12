@@ -1,0 +1,9 @@
+{
+  "_comment": "Example shape for TS FirewallConfig + RPC. Replace with values from YOUR testnet deploy; do not commit funded keys.",
+  "rpcUrl": "https://testnet.ckb.dev",
+  "registryScript": {
+    "codeHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "hashType": "type",
+    "args": "0x"
+  }
+}
