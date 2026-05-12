@@ -155,20 +155,16 @@ cargo build --release --target=riscv64imac-unknown-none-elf
 
 ### 4. Blacklist Registry Type Script
 
-**Status**: Not started (separate contract)
+**Status**: Implemented under `contracts/blacklist-registry/` (governance witness path, drills, VM tests). This section originally tracked greenfield work; remaining effort is **production hardening** (audit, mainnet policy, operational runbooks), not missing code.
 
-**What's Needed**:
-- Implement governance signature validation
-- Multi-sig verification (3-of-5 threshold)
-- Registry data integrity checks
-- Update authorization logic
-- Tests for governance flows
+**Residual / follow-up**:
+- Mainnet-specific signer policy and key ceremony beyond testnet drills
+- Extended adversarial tests for witness edge cases (see registry `CYCLE_REPORT.md` / security docs)
+- Performance work overlaps with §3 (cycle profiling)
 
-**Priority**: HIGH - Required for complete system
+**Priority**: MEDIUM for testnet posture; HIGH before mainnet custodial assumptions
 
-**Estimated Effort**: 1-2 days
-
-**Dependencies**: Similar structure to firewall lock
+**Estimated Effort**: Ongoing (ops + review), not a single implementation spike
 
 ### 5. Documentation Gaps
 
