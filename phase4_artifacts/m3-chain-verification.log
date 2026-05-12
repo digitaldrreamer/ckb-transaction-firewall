@@ -1,5 +1,12 @@
+=== 2026-05-11T22:41:16Z phase4_governance_evidence_check ===
+Phase 4 governance evidence check
+Artifact: tests/integration/governance_drill/latest.json
+RPC: https://testnet.ckb.dev
+Phase 4 governance evidence check passed (chain-verifiable tx hashes).
+=== phase4_governance_tx_status ===
+wrote chain status artifact: tests/integration/governance_drill/chain_status_latest.json
 {
-  "generated_utc": "2026-05-11T22:35:27Z",
+  "generated_utc": "2026-05-11T22:41:23Z",
   "rpc_url": "https://testnet.ckb.dev",
   "scenarios": [
     {

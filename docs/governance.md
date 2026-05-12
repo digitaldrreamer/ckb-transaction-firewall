@@ -65,9 +65,10 @@ Schema is tracked in `governance/proposal-schema.json`.
 - Execution transaction replaces registry cell atomically.
 - Witness payload references approved proposal id and vote result digest.
 
-### On-chain binding (registry type script)
+### Phase 4 chain verification (CI and operators)
 
-The registry replacement transaction is protected by the **Blacklist Registry type script** (`contracts/blacklist-registry`).
+Merged changes to `main` (and pull requests targeting `main`) run `scripts/phase3_closeout_check.sh` with `REAL_GOV_EVIDENCE_REQUIRED=1`, which invokes `scripts/phase4_governance_evidence_check.sh`. That check requires every governance drill scenario transaction hash in `tests/integration/governance_drill/latest.json` to resolve as **committed** on the configured testnet RPC. Operator steps are documented in `docs/phase4/runbooks/governance-drill-live-execution.md`.
+
 
 At consensus, the type script enforces:
 

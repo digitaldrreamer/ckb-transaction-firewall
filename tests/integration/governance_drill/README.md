@@ -1,12 +1,13 @@
 # Governance Drill Artifacts
 
-This folder defines the evidence format for Phase 3 governance end-to-end drills on testnet.
+This folder defines the evidence format for Phase 3 governance end-to-end drills on testnet. Phase 4 adds **chain-backed** verification on `main` (see `docs/phase4/runbooks/governance-drill-live-execution.md`).
 
 ## Files
 
 - `template.json`: required scenario matrix and schema shape.
 - `latest.json`: operator-produced latest run evidence.
 - `mode2_signer_state.json`: strict mode (option 2) signer-separation evidence.
+- `chain_status_latest.json`: persisted `ckb-cli rpc get_transaction` status per scenario (used when `REAL_GOV_EVIDENCE_REQUIRED=1`).
 
 ## Execution Workflow (Strict Mode: option 2)
 

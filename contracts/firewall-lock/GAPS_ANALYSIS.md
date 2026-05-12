@@ -79,27 +79,28 @@
 
 ### 1. Integration Tests (Phase 1.6+)
 
-**Status**: Core suite implemented and passing (10 tests)
+**Status**: Core suite plus median-time / inner-lock / stress coverage (26 tests; see `tests/unit/tests/firewall_lock_tests.rs`)
 
 **Completed**:
 - Load compiled firewall lock binary into test context
 - Create transaction fixtures with proper cell deps
 - Validate error codes in real CKB-VM execution for codes: `5,6,7,8,9,10,11,12,17`
 - Add a non-blacklisted happy path pass case
+- **Median-time + `header_dep` integration**: temporary blacklist expiry vs active using synthetic headers (`insert_test_headers`); even-count median path (`test_median_time_even_header_count_affects_expiry`)
+- **Inner-lock spawn**: missing inner code cell dep → `13` (`MissingInnerLockCellDep`); `always_failure` inner binary → `15` (`InnerLockRejected`) via `tests/unit/fixtures/always_failure_lock`
+- **Stress**: explicit 256-entry registry happy path (`test_pass_non_blacklisted_registry_256_entries_stress`) alongside existing 512 / 2000 cycle probes
+- **Header matrices (optional hardening)**: permutation invariance of `header_dep` order (`test_header_dep_order_permutation_invariant_for_median_expiry`), nine-header median grid (`test_median_nine_headers_expiry_matrix`), no-header zero-median fail-safe (`test_no_header_deps_zero_median_keeps_temporary_blacklist_active`), duplicate timestamps + `expires_at == median` boundary (`test_median_duplicate_header_timestamps_boundary_eq_expires`), single-header median (`test_median_single_header_timestamp`)
 
-**What's Needed Next**:
-- Add median-time specific expiry behavior test with header contexts
-- Add spawn/inner-lock behavioral coverage beyond current base path
-- Add larger fixture matrices for stress coverage
+**Optional follow-ups** (lower priority):
+- ~~Additional header timestamp edge matrices (many `header_deps`, ordering permutations)~~ — covered: `test_header_dep_order_permutation_invariant_for_median_expiry`, `test_median_nine_headers_expiry_matrix`, `test_no_header_deps_zero_median_keeps_temporary_blacklist_active`, `test_median_duplicate_header_timestamps_boundary_eq_expires`, `test_median_single_header_timestamp`
+- Spawn failure sub-codes if the script distinguishes them in future versions
 
-**Priority**: HIGH - Required before production deployment
+**Priority**: HIGH for production — remaining items are optional hardening
 
-**Estimated Effort**: 1-2 days
+**Estimated Effort**: Remaining optional work: under one day (spawn sub-codes only if contract evolves)
 
 **Blockers**:
-- Requires compiled binary (needs Rust toolchain + RISC-V target)
-- Requires understanding of ckb-testtool transaction building
-- Requires test fixtures for various scenarios
+- Requires compiled RISC-V binary (`cargo build --release --target=riscv64imac-unknown-none-elf` in `contracts/firewall-lock`)
 
 ### 2. Binary Compilation & Build System
 
@@ -307,7 +308,7 @@ cargo build --release --target=riscv64imac-unknown-none-elf
 ### Minimum Viable (Can Deploy to Testnet):
 - [x] Lock script compiles to valid RISC-V binary
 - [x] Binary size <100KB
-- [x] Basic integration tests pass (10/10)
+- [x] Basic integration tests pass (26/26 firewall lock integration tests in `tests/unit`)
 - [ ] Registry type script implemented
 - [ ] Governance flow tested end-to-end
 
@@ -342,10 +343,10 @@ cargo build --release --target=riscv64imac-unknown-none-elf
 
 **Lines of Code**: ~800 lines (main.rs)
 
-**Test Coverage**: 24 unit tests, 10 integration tests (passing)
+**Test Coverage**: 24 unit tests, 26 integration tests (passing)
 
-**Completion**: 90% (core logic + compile + integration tests done)
+**Completion**: ~96% (core logic + compile + integration suite including median matrices / inner-lock / stress paths)
 
-**Blockers**: Registry type script and governance flow validation
+**Blockers**: Registry type script and governance flow validation (tracked separately from firewall lock gaps)
 
 **Time to Complete Phase 1**: 3-5 days with focused effort

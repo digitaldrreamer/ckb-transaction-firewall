@@ -193,3 +193,34 @@
     - `tests/integration/governance_drill/chain_status_latest.json`
   - final evidence gate passed:
     - `scripts/phase4_governance_evidence_check.sh`
+
+## 2026-05-11
+
+### Phase 4 program closure (governance hardening)
+
+- Enforced chain-backed governance evidence on `main` and PRs to `main`: `REAL_GOV_EVIDENCE_REQUIRED=1` in `phase3_closeout_check.sh` CI step; pinned `ckb-cli` via `scripts/ci/install_ckb_cli.sh` in `.github/workflows/tests.yml`.
+- Hardened `phase4_governance_tx_status.sh` to poll until `committed` or `rejected`; closeout requires all `chain_status_latest.json` scenarios `committed` when Phase 4 gate is on.
+- Refreshed `tests/integration/governance_drill/chain_status_latest.json` against testnet.
+- Added Phase 4 milestone artifacts under `phase4_artifacts/`, ADR `docs/phase4/adr/ADR-Phase4-Governance-Verification.md`, runbook `docs/phase4/runbooks/governance-drill-live-execution.md`, Phase 4 security tracker, go/no-go record, and `docs/phase4/verification-status.md` linked from the verification matrix.
+- Added `contracts/blacklist-registry/CYCLE_REPORT.md` for registry governance cycle posture.
+- Updated `scripts/README.md`, `docs/governance.md`, and governance incident playbook cross-links.
+
+### CI
+
+- Mark `scripts/ci/install_ckb_cli.sh` executable in git; invoke installer with `bash` in `.github/workflows/tests.yml`.
+- Run blocking Phase 3 closeout only after prior steps succeed (`success()`), so a failed install does not surface as a false governance-evidence failure.
+
+### Firewall lock integration depth (GAPS_ANALYSIS)
+
+- Added median-time / `header_dep` VM tests for temporary blacklist expiry vs active paths and even-count median.
+- Added inner-lock spawn coverage: missing inner cell dep (error 13) and `always_failure` fixture inner lock (error 15).
+- Added 256-entry registry stress happy-path test; fixture `tests/unit/fixtures/always_failure_lock` with README attribution.
+- Extended `build_tx_with_firewall_lock` to attach `header_deps`; `insert_test_headers` helper for ckb-testtool.
+- Updated `contracts/firewall-lock/GAPS_ANALYSIS.md` integration section status.
+
+### Firewall lock header matrix integration tests
+
+- Added permutation, nine-header median grid, no-header zero-median, duplicate-timestamp boundary, and single-header median VM tests (`firewall_lock_tests.rs`).
+- Updated `GAPS_ANALYSIS.md` optional header-matrix follow-ups; expanded `tests/unit/fixtures/README.md` (third-party testdata explanation).
+- Documented SHA-256 and byte size for `always_failure_lock` in `tests/unit/fixtures/README.md` (matches `ckb-script` 0.118.0 `testdata/always_failure`).
+- Added explicit “Replacing this fixture” checklist to `tests/unit/fixtures/README.md` (update size, SHA-256, `ckb-script` version line, run tests, changelog).
