@@ -230,3 +230,19 @@
 - Updated `GAPS_ANALYSIS.md` optional header-matrix follow-ups; expanded `tests/unit/fixtures/README.md` (third-party testdata explanation).
 - Documented SHA-256 and byte size for `always_failure_lock` in `tests/unit/fixtures/README.md` (matches `ckb-script` 0.118.0 `testdata/always_failure`).
 - Added explicit “Replacing this fixture” checklist to `tests/unit/fixtures/README.md` (update size, SHA-256, `ckb-script` version line, run tests, changelog).
+
+## 2026-05-12
+
+### CI hardening
+
+- Bumped `actions/checkout`, `actions/setup-node`, and `actions/upload-artifact` to **v5**; set Node.js **22** for SDK steps; added `permissions: contents: read` and job-level `bash` defaults in `.github/workflows/tests.yml`.
+- Extended `scripts/ci/install_ckb_cli.sh` with `curl` **retry delay** and **max-time** knobs (`CURL_RETRY_DELAY_SECONDS`, `CURL_MAX_TIME_SECONDS`); documented them in `scripts/README.md`.
+
+### Firewall lock tests and docs
+
+- Replaced remaining narrow length/count casts in `firewall_lock_tests.rs` with `u32::try_from` / `u16::try_from` for registry builders and lock args.
+- Corrected stale §4 “Blacklist Registry” status in `contracts/firewall-lock/GAPS_ANALYSIS.md` (registry contract exists; remaining work is hardening/ops).
+
+### Release versioning
+
+- Bumped on-chain crates, Rust SDK, TypeScript `package.json`, and `tests/unit` harness to **0.2.0**; refreshed per-crate `Cargo.lock` root package versions.
