@@ -10,8 +10,8 @@ This file maps each **P4-** requirement to its verification method and evidence.
 | ID | Status | Evidence |
 |----|--------|----------|
 | P4-CRYPTO-001 | PASS | `tests/unit/tests/blacklist_registry_tests.rs` (`cargo test --test blacklist_registry_tests`); log `docs/internal/phase4_artifacts/m2-test-results.txt` |
-| P4-CRYPTO-002 | PASS | Same — `test_pass_bootstrap_registry_creation_with_5_of_5_signers`, `test_reject_bootstrap_registry_creation_with_3_of_5_signers` |
-| P4-WITNESS-001 | PASS | Same — `test_pass_valid_registry_update_with_gov1_witness` |
+| P4-CRYPTO-002 | PASS | Same suite: `test_pass_bootstrap_registry_creation_with_5_of_5_signers`, `test_reject_bootstrap_registry_creation_with_3_of_5_signers` |
+| P4-WITNESS-001 | PASS | Same suite: `test_pass_valid_registry_update_with_gov1_witness` |
 | P4-VM-001 | PASS | Live drill: `tests/integration/governance_drill/latest.json` + `scripts/phase4_governance_evidence_check.sh` (no `InvalidInstruction` on committed txs) |
 | P4-DEPLOY-001 | PASS | `scripts/phase3_governance_lock_preflight.sh` (per matrix); exercised in deploy flow docs |
 | P4-DRILL-001 | PASS | `tests/integration/governance_drill/latest.json` (all `pass`, valid tx hashes); chain proof script |
@@ -31,7 +31,7 @@ This file maps each **P4-** requirement to its verification method and evidence.
 | P4-VM-002 | PASS | `contracts/blacklist-registry/CYCLE_REPORT.md`; aggregate budgets via `scripts/phase3_verify.sh` |
 | P4-BWC-001 | PASS | `tests/unit/tests/firewall_lock_tests.rs` (per matrix) |
 | P4-BWC-002 | PASS | Unsupported witness version rejection in registry tests |
-| P4-DEPLOY-002 | PASS | `scripts/deploy.sh` review — stale `deploy/info.json` handling; waiver N/A if unused in testnet drill path |
+| P4-DEPLOY-002 | PASS | `scripts/deploy.sh` review: stale `deploy/info.json` handling; waiver N/A if unused in testnet drill path |
 | P4-DRILL-002 | PASS | `tests/integration/governance_drill/mode2_signer_state.json` + `scripts/phase3_governance_mode2.sh validate` |
 | P4-DOC-002 | PASS | `scripts/README.md` updated for CI Phase 4 semantics (see doc-sync commit) |
 

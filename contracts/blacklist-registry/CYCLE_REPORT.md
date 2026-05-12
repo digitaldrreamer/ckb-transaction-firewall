@@ -34,4 +34,4 @@ cargo test --test blacklist_registry_tests
 
 ## Date
 
-2026-05-11 (UTC) — aligned with Phase 4 closure evidence refresh.
+2026-05-11 (UTC), aligned with Phase 4 closure evidence refresh.

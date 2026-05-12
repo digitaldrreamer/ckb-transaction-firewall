@@ -2,7 +2,7 @@
 
 ## Decision
 
-**GO** — Phase 4 governance hardening closure criteria met for the evidence posture defined in [docs/phase4/production-hardening-plan.md](../production-hardening-plan.md) and [docs/phase4/verification-requirements-matrix.md](../verification-requirements-matrix.md).
+**GO**: Phase 4 governance hardening closure criteria met for the evidence posture defined in [docs/phase4/production-hardening-plan.md](../production-hardening-plan.md) and [docs/phase4/verification-requirements-matrix.md](../verification-requirements-matrix.md).
 
 ## Preconditions verified
 
@@ -26,7 +26,7 @@
 
 | Role | Name | Signature / Date |
 |------|------|------------------|
-| Maintainer | Repository maintainers | 2026-05-11 UTC — **GO** |
+| Maintainer | Repository maintainers | 2026-05-11 UTC: **GO** |
 
 ## References
 

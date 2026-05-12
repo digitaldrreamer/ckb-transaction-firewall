@@ -4,13 +4,13 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 > AI agents can be hijacked into sending funds to malicious addresses.  
-> CKB Transaction Firewall enforces a **community-governed blacklist** at **consensus** — inside the **lock script** — so malicious or compromised agent code cannot bypass the check for cells that use this lock. A TypeScript and Rust **SDK** adds a fast **pre-flight** layer before you sign.
+> CKB Transaction Firewall enforces a **community-governed blacklist** at **consensus**, inside the **lock script**, so malicious or compromised agent code cannot bypass the check for cells that use this lock. A TypeScript and Rust **SDK** adds a fast **pre-flight** layer before you sign.
 
 ---
 
 ## Why this exists
 
-Autonomous agents construct, sign, and broadcast transactions without a human in the loop at every step. That autonomy is valuable — but **application-only safety checks are not enough**: compromised agent code, **prompt injection** (including [on-chain payload tricks](https://arxiv.org/abs/2503.16248)), **bad tool outputs**, and **multi-agent cascades** can route funds to attacker-controlled addresses. Simulation can be skipped; monitoring is too late once a tx is final.
+Autonomous agents construct, sign, and broadcast transactions without a human in the loop at every step. That autonomy is valuable, but **application-only safety checks are not enough**: compromised agent code, **prompt injection** (including [on-chain payload tricks](https://arxiv.org/abs/2503.16248)), **bad tool outputs**, and **multi-agent cascades** can route funds to attacker-controlled addresses. Simulation can be skipped; monitoring is too late once a tx is final.
 
 The Firewall adds a **protocol-layer floor**: the same blacklist rules the SDK checks are enforced by **every CKB node** when the wallet cell uses the Firewall lock. **Normative governance** (quorum, multisig, review windows) lives in [governance/voting.md](./governance/voting.md) and [docs/governance.md](./docs/governance.md).
 
@@ -18,7 +18,7 @@ The Firewall adds a **protocol-layer floor**: the same blacklist rules the SDK c
 
 ## How it works
 
-The system is intentionally **two-layered** — they solve different problems and neither replaces the other.
+The system is intentionally **two-layered**: they solve different problems and neither replaces the other.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -28,7 +28,7 @@ The system is intentionally **two-layered** — they solve different problems an
                                │ agent constructs a transaction
                                ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                    LAYER 1 — SDK Pre-flight                      │
+│                    LAYER 1: SDK Pre-flight                       │
 │  Fast feedback, structured errors, fee savings                    │
 │  - Resolve registry `cell_dep`, parse BLKL payload               │
 │  - Reject blacklisted outputs before signing                      │
@@ -39,7 +39,7 @@ The system is intentionally **two-layered** — they solve different problems an
                                │
                                ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│                  LAYER 2 — CKB Consensus Enforcement             │
+│                  LAYER 2: CKB Consensus Enforcement              │
 │  Authoritative, miner-enforced (requires Firewall lock on cell)  │
 │  - Firewall lock runs in validation                               │
 │  - Registry read via `cell_dep`; fail-closed if missing/ambiguous │
@@ -48,7 +48,7 @@ The system is intentionally **two-layered** — they solve different problems an
 
 **Why both?** If the SDK is never called, a standard lock offers no consensus blacklist. If only the SDK existed, a compromised runtime could skip the check entirely. Together: **SDK = fast path for the agent; lock = guarantee for everyone else.**
 
-Deeper CKB rationale (cell model, lock scripts vs account chains, oracle-free design): **[docs/architecture.md](./docs/architecture.md)**. For the **full narrative** — extended threat model, component-by-component description, governance story, security model detail, and Control Hub relationship — see **[ABOUT.md](./ABOUT.md)**.
+Deeper CKB rationale (cell model, lock scripts vs account chains, oracle-free design): **[docs/architecture.md](./docs/architecture.md)**. For the **full narrative** (extended threat model, component-by-component description, governance story, security model detail, and Control Hub relationship), see **[ABOUT.md](./ABOUT.md)**.
 
 ---
 
@@ -64,7 +64,7 @@ Deeper CKB rationale (cell model, lock scripts vs account chains, oracle-free de
 
 ## Quick start
 
-From a clean clone — build the firewall binary, then prove the TypeScript SDK typechecks:
+From a clean clone: build the firewall binary, then prove the TypeScript SDK typechecks:
 
 ```bash
 rustup target add riscv64imac-unknown-none-elf
@@ -111,7 +111,7 @@ if (!decision.ok) {
 cd sdk/rust && cargo test
 ```
 
-Use `ckb_transaction_firewall_sdk::check_transaction` with `FirewallConfig` and `UnsignedTxLike` — see [`sdk/rust/src/lib.rs`](./sdk/rust/src/lib.rs).
+Use `ckb_transaction_firewall_sdk::check_transaction` with `FirewallConfig` and `UnsignedTxLike`; see [`sdk/rust/src/lib.rs`](./sdk/rust/src/lib.rs).
 
 ---
 
@@ -192,7 +192,7 @@ The Transaction Firewall is the **enforcement floor** for the [CKB Agent Control
 ## Contributing
 
 - **Code & docs:** open an issue for larger changes, then a PR to `main`. Run the relevant `cargo test` / `npm test` paths.
-- **Blacklist governance:** follow [governance/voting.md](./governance/voting.md) — not ordinary GitHub PRs.
+- **Blacklist governance:** follow [governance/voting.md](./governance/voting.md), not ordinary GitHub PRs.
 - **Security:** use **GitHub Security Advisories** for sensitive reports when possible.
 
 ```bash
@@ -205,4 +205,4 @@ git push -u origin feat/your-change
 
 ## License
 
-MIT — see `license = "MIT"` in each crate’s `Cargo.toml` (e.g. [contracts/firewall-lock/Cargo.toml](./contracts/firewall-lock/Cargo.toml)).
+MIT; see `license = "MIT"` in each crate’s `Cargo.toml` (e.g. [contracts/firewall-lock/Cargo.toml](./contracts/firewall-lock/Cargo.toml)).

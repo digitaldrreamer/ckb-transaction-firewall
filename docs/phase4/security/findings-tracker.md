@@ -1,4 +1,4 @@
-# Security findings tracker (Phase 4 — governance)
+# Security findings tracker (Phase 4, governance)
 
 ## Summary
 
@@ -15,7 +15,7 @@ This tracker records **Phase 4 governance authorization** findings (GOV1, signer
 
 | ID | Severity | Component | Status | Notes |
 |----|----------|------------|--------|-------|
-| — | — | — | — | No open items at Phase 4 closure (2026-05-11 UTC). |
+| (none) | (none) | (none) | (none) | No open items at Phase 4 closure (2026-05-11 UTC). |
 
 ## Gate rule
 

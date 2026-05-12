@@ -12,7 +12,7 @@ The firewall lock delegates to an **inner lock** via `spawn_cell`. To assert err
 
 ### Provenance / licensing
 
-Upstream: [https://github.com/nervosnetwork/ckb](https://github.com/nervosnetwork/ckb) — the **`ckb-script`** crate ships `testdata/always_failure` (exact path inside the git tree varies by branch/tag; the crates.io package matches the layout used when recording the hash below).
+Upstream: [https://github.com/nervosnetwork/ckb](https://github.com/nervosnetwork/ckb). The **`ckb-script`** crate ships `testdata/always_failure` (exact path inside the git tree varies by branch/tag; the crates.io package matches the layout used when recording the hash below).
 
 ### Integrity (manual verification)
 

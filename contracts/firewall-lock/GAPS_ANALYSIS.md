@@ -92,10 +92,10 @@
 - **Header matrices (optional hardening)**: permutation invariance of `header_dep` order (`test_header_dep_order_permutation_invariant_for_median_expiry`), nine-header median grid (`test_median_nine_headers_expiry_matrix`), no-header zero-median fail-safe (`test_no_header_deps_zero_median_keeps_temporary_blacklist_active`), duplicate timestamps + `expires_at == median` boundary (`test_median_duplicate_header_timestamps_boundary_eq_expires`), single-header median (`test_median_single_header_timestamp`)
 
 **Optional follow-ups** (lower priority):
-- ~~Additional header timestamp edge matrices (many `header_deps`, ordering permutations)~~ — covered: `test_header_dep_order_permutation_invariant_for_median_expiry`, `test_median_nine_headers_expiry_matrix`, `test_no_header_deps_zero_median_keeps_temporary_blacklist_active`, `test_median_duplicate_header_timestamps_boundary_eq_expires`, `test_median_single_header_timestamp`
+- ~~Additional header timestamp edge matrices (many `header_deps`, ordering permutations)~~; covered: `test_header_dep_order_permutation_invariant_for_median_expiry`, `test_median_nine_headers_expiry_matrix`, `test_no_header_deps_zero_median_keeps_temporary_blacklist_active`, `test_median_duplicate_header_timestamps_boundary_eq_expires`, `test_median_single_header_timestamp`
 - Spawn failure sub-codes if the script distinguishes them in future versions
 
-**Priority**: HIGH for production — remaining items are optional hardening
+**Priority**: HIGH for production; remaining items are optional hardening
 
 **Estimated Effort**: Remaining optional work: under one day (spawn sub-codes only if contract evolves)
 

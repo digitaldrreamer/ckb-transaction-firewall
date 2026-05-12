@@ -6,8 +6,8 @@ On-chain governance authorization for the blacklist registry: GOV1 witness handl
 
 ## Findings status
 
-- **Phase 4 tracker:** [docs/phase4/security/findings-tracker.md](../docs/phase4/security/findings-tracker.md) — zero open Critical / High for governance scope at closure.
-- **Phase 3 tracker (continuity):** [docs/phase3/security/findings-tracker.md](../docs/phase3/security/findings-tracker.md) — zero open Critical / High.
+- **Phase 4 tracker:** [docs/phase4/security/findings-tracker.md](../docs/phase4/security/findings-tracker.md); zero open Critical / High for governance scope at closure.
+- **Phase 3 tracker (continuity):** [docs/phase3/security/findings-tracker.md](../docs/phase3/security/findings-tracker.md); zero open Critical / High.
 
 ## Sign-off
 
