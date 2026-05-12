@@ -38,9 +38,9 @@ Acceptance criteria:
 - Reproducible outputs confirmed across two clean runs.
 - Artifact manifest committed and reviewed.
 Evidence links:
-- Artifact manifest: `phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md`, `phase3_artifacts/artifact_manifest_latest.json`
+- Artifact manifest: `docs/internal/phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md`, `docs/internal/phase3_artifacts/artifact_manifest_latest.json`
 - Build command record: `scripts/phase3_repro_build.sh`
-- Verification run output: `phase3_artifacts/PHASE3_EVIDENCE_LATEST.md`
+- Verification run output: `docs/internal/phase3_artifacts/PHASE3_EVIDENCE_LATEST.md`
 
 ### 3. Cycle and Stress Validation
 - [ ] Profile hot paths in `firewall-lock` and `blacklist-registry`.

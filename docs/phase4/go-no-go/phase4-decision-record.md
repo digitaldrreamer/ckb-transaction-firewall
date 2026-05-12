@@ -8,12 +8,12 @@
 
 | Check | Evidence |
 |-------|----------|
-| Live testnet txs for all drill scenarios | [tests/integration/governance_drill/latest.json](../../tests/integration/governance_drill/latest.json) |
-| Signer separation (Mode 2) | [tests/integration/governance_drill/mode2_signer_state.json](../../tests/integration/governance_drill/mode2_signer_state.json) |
-| Chain status all committed | [tests/integration/governance_drill/chain_status_latest.json](../../tests/integration/governance_drill/chain_status_latest.json) |
-| Phase 4 CI gate on `main` | [.github/workflows/tests.yml](../../.github/workflows/tests.yml) + [phase4_artifacts/m4-ci-gate-proof.md](../../phase4_artifacts/m4-ci-gate-proof.md) |
+| Live testnet txs for all drill scenarios | [latest.json](../../../tests/integration/governance_drill/latest.json) |
+| Signer separation (Mode 2) | [mode2_signer_state.json](../../../tests/integration/governance_drill/mode2_signer_state.json) |
+| Chain status all committed | [chain_status_latest.json](../../../tests/integration/governance_drill/chain_status_latest.json) |
+| Phase 4 CI gate on `main` | [.github/workflows/tests.yml](../../../.github/workflows/tests.yml) + [m4-ci-gate-proof.md](../../internal/phase4_artifacts/m4-ci-gate-proof.md) |
 | Security trackers green | [docs/phase4/security/findings-tracker.md](../security/findings-tracker.md), [docs/phase3/security/findings-tracker.md](../phase3/security/findings-tracker.md) |
-| Milestone artifacts M1–M5 | [phase4_artifacts/](../../phase4_artifacts/) |
+| Milestone artifacts M1–M5 | [phase4 milestone evidence](../../internal/phase4_artifacts/) |
 
 ## Risk acceptance
 
@@ -31,4 +31,4 @@
 ## References
 
 - ADR: [ADR-Phase4-Governance-Verification.md](../adr/ADR-Phase4-Governance-Verification.md)
-- Security sign-off: [phase4_artifacts/m5-security-signoff.md](../../phase4_artifacts/m5-security-signoff.md)
+- Security sign-off: [m5-security-signoff.md](../../internal/phase4_artifacts/m5-security-signoff.md)

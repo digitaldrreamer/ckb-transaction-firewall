@@ -241,9 +241,11 @@
 
 ### Documentation layout
 
-- Added [ABOUT.md](ABOUT.md) for long-form narrative (threat model, CKB rationale, dual-layer design, security model, Control Hub relationship).
-- Refocused [README.md](README.md) on overview, doc map, SDK install, contract build, VM tests, on-chain lock usage, contributing, changelog, and license; corrected build commands (RISC-V `cargo` instead of `capsule`); aligned TypeScript example with `TransactionFirewall` / `registryScript` API.
-- Pointed [sdk/README.md](sdk/README.md) at the root README and ABOUT.
+- Rewrote [README.md](README.md) as the project landing page: hook, **why / how** (including dual-layer diagram), prerequisites, quick start, SDK usage, builds, tests, on-chain lock usage, security model, ecosystem, doc map, contributing, license; added CI and license badges.
+- Merged CKB-vs-account-chain rationale from the former `ABOUT.md` into [docs/architecture.md](docs/architecture.md) as **“Why CKB fits this design”**; removed `ABOUT.md`.
+- Moved `PHASE3_PLAN.md` → [docs/internal/phase3-plan.md](docs/internal/phase3-plan.md), `phase3_artifacts/` and `phase4_artifacts/` → [docs/internal/](docs/internal/) with an index [docs/internal/README.md](docs/internal/README.md); updated scripts, workflow upload path, and cross-links.
+- Added [research/README.md](research/README.md) describing the `research/` folder.
+- Pointed [sdk/README.md](sdk/README.md) at the root README and architecture doc.
 
 ### Firewall lock tests and docs
 

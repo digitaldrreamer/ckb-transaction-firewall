@@ -10,7 +10,7 @@ Purpose:
 
 - Execute two clean RISC-V release builds for both contracts.
 - Fail on hash/size drift between rounds (determinism gate).
-- Emit timestamped and latest artifact manifests under `phase3_artifacts/`.
+- Emit timestamped and latest artifact manifests under `docs/internal/phase3_artifacts/`.
 
 Expected capabilities:
 
@@ -24,7 +24,7 @@ Purpose:
 
 - Run Phase 3 correctness/performance safety checks.
 - Enforce cycle budgets and registry size gate.
-- Emit timestamped and latest Phase 3 evidence reports under `phase3_artifacts/`.
+- Emit timestamped and latest Phase 3 evidence reports under `docs/internal/phase3_artifacts/`.
 
 Expected capabilities:
 
@@ -134,7 +134,7 @@ Expected capabilities:
 Purpose:
 
 - Generate a timestamped markdown snapshot of current Phase 3 closeout status.
-- Persist latest status report in `phase3_artifacts/` for CI artifact review.
+- Persist latest status report in `docs/internal/phase3_artifacts/` for CI artifact review.
 
 Expected capabilities:
 

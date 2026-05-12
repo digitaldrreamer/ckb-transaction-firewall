@@ -43,8 +43,8 @@ Repository: `ckb-transaction-firewall`
 - Approved implementation strategy that avoids unsupported/unsafe instruction patterns.
 - Evidence artifacts:
 - `docs/phase4/adr/ADR-Phase4-Governance-Verification.md`
-- `phase4_artifacts/m1-invalid-instruction-repro.md`
-- `phase4_artifacts/m1-design-review-signoff.md`
+- `docs/internal/phase4_artifacts/m1-invalid-instruction-repro.md`
+- `docs/internal/phase4_artifacts/m1-design-review-signoff.md`
 
 ## Milestone M2: VM-Compatible Cryptographic Verification Implementation
 - Objective: implement on-chain cryptographic signer verification compatible with target CKB VM.
@@ -53,9 +53,9 @@ Repository: `ckb-transaction-firewall`
 - Structural-only fallback paths disabled for production mode.
 - Unit and integration tests cover signer validity, threshold, duplicate, out-of-range, and root-binding mismatch.
 - Evidence artifacts:
-- `phase4_artifacts/m2-test-results.txt`
+- `docs/internal/phase4_artifacts/m2-test-results.txt`
 - `contracts/blacklist-registry/CYCLE_REPORT.md` updated with new governance-path cycles.
-- `phase4_artifacts/m2-static-review-checklist.md`
+- `docs/internal/phase4_artifacts/m2-static-review-checklist.md`
 
 ## Milestone M3: Live Governance Drill Reinstatement
 - Objective: execute all governance scenarios using real chain transactions.
@@ -68,7 +68,7 @@ Repository: `ckb-transaction-firewall`
 - Evidence artifacts:
 - `tests/integration/governance_drill/latest.json` with committed tx hashes and final statuses.
 - `tests/integration/governance_drill/mode2_signer_state.json` with verified signer separation.
-- `phase4_artifacts/m3-chain-verification.log`
+- `docs/internal/phase4_artifacts/m3-chain-verification.log`
 
 ## Milestone M4: Production Gate Hardening + Operational Readiness
 - Objective: enforce production-only acceptance criteria in CI and runbooks.
@@ -77,9 +77,9 @@ Repository: `ckb-transaction-firewall`
 - Closeout checker validates live tx-backed governance evidence and rejects deterministic mode.
 - Runbooks updated with exact operator commands, failure handling, and rollback paths.
 - Evidence artifacts:
-- `phase4_artifacts/m4-ci-gate-proof.md`
+- `docs/internal/phase4_artifacts/m4-ci-gate-proof.md`
 - `docs/phase4/runbooks/governance-drill-live-execution.md`
-- `phase4_artifacts/m4-dry-run-transcript.md`
+- `docs/internal/phase4_artifacts/m4-dry-run-transcript.md`
 
 ## Milestone M5: Security Review and Launch Readiness Decision
 - Objective: obtain explicit security acceptance for governance model.
@@ -90,7 +90,7 @@ Repository: `ckb-transaction-firewall`
 - Evidence artifacts:
 - `docs/phase4/security/findings-tracker.md`
 - `docs/phase4/go-no-go/phase4-decision-record.md`
-- `phase4_artifacts/m5-security-signoff.md`
+- `docs/internal/phase4_artifacts/m5-security-signoff.md`
 
 ## 5) Risks and Mitigations
 - Risk: VM compatibility regressions reappear under testnet/mainnet runtime differences.
@@ -123,4 +123,4 @@ Repository: `ckb-transaction-firewall`
 
 - Requirement-to-evidence index: [verification-status.md](verification-status.md)
 - Decision record: [go-no-go/phase4-decision-record.md](go-no-go/phase4-decision-record.md)
-- Milestone artifacts: [../../phase4_artifacts/](../../phase4_artifacts/)
+- Milestone artifacts: [../../docs/internal/phase4_artifacts/](../../docs/internal/phase4_artifacts/)

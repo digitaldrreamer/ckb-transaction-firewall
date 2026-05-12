@@ -26,7 +26,7 @@ cargo build --locked --release --target=riscv64imac-unknown-none-elf --features 
 
 ## Machine-readable Output
 
-- `phase3_artifacts/artifact_manifest_20260506T114735Z.json`
+- `docs/internal/phase3_artifacts/artifact_manifest_20260506T114735Z.json`
 
 ## Scope Note
 

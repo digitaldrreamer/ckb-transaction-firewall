@@ -9,7 +9,7 @@ This file maps each **P4-** requirement to its verification method and evidence.
 
 | ID | Status | Evidence |
 |----|--------|----------|
-| P4-CRYPTO-001 | PASS | `tests/unit/tests/blacklist_registry_tests.rs` (`cargo test --test blacklist_registry_tests`); log `phase4_artifacts/m2-test-results.txt` |
+| P4-CRYPTO-001 | PASS | `tests/unit/tests/blacklist_registry_tests.rs` (`cargo test --test blacklist_registry_tests`); log `docs/internal/phase4_artifacts/m2-test-results.txt` |
 | P4-CRYPTO-002 | PASS | Same — `test_pass_bootstrap_registry_creation_with_5_of_5_signers`, `test_reject_bootstrap_registry_creation_with_3_of_5_signers` |
 | P4-WITNESS-001 | PASS | Same — `test_pass_valid_registry_update_with_gov1_witness` |
 | P4-VM-001 | PASS | Live drill: `tests/integration/governance_drill/latest.json` + `scripts/phase4_governance_evidence_check.sh` (no `InvalidInstruction` on committed txs) |
@@ -41,4 +41,4 @@ This file maps each **P4-** requirement to its verification method and evidence.
 |----------|------|
 | ADR | [docs/phase4/adr/ADR-Phase4-Governance-Verification.md](adr/ADR-Phase4-Governance-Verification.md) |
 | Go / No-Go | [docs/phase4/go-no-go/phase4-decision-record.md](go-no-go/phase4-decision-record.md) |
-| M1–M5 evidence | [phase4_artifacts/](../phase4_artifacts/) |
+| M1–M5 evidence | [phase4 milestone evidence](../internal/phase4_artifacts/) |

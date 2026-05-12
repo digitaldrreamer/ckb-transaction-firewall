@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="$ROOT_DIR/phase3_artifacts"
+OUT_DIR="$ROOT_DIR/docs/internal/phase3_artifacts"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 REPORT="$OUT_DIR/PHASE3_EVIDENCE_${STAMP}.md"
 LATEST_LINK="$OUT_DIR/PHASE3_EVIDENCE_LATEST.md"
@@ -151,9 +151,9 @@ cd contracts/blacklist-registry && cargo build --locked --release --target=riscv
 
 ## Validation Runs
 
-- Test log: \`phase3_artifacts/$(basename "$TEST_LOG")\`
-- Cycle log: \`phase3_artifacts/$(basename "$CYCLE_LOG")\`
-- Guard log: \`phase3_artifacts/$(basename "$GUARD_LOG")\`
+- Test log: \`docs/internal/phase3_artifacts/$(basename "$TEST_LOG")\`
+- Cycle log: \`docs/internal/phase3_artifacts/$(basename "$CYCLE_LOG")\`
+- Guard log: \`docs/internal/phase3_artifacts/$(basename "$GUARD_LOG")\`
 
 ### Test Command
 \`\`\`bash

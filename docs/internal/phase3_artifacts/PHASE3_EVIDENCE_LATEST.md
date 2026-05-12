@@ -7,8 +7,8 @@
 ## Build Commands
 
 ```bash
-cd contracts/firewall-lock && cargo build --release --target=riscv64imac-unknown-none-elf
-cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+cd contracts/firewall-lock && cargo build --locked --release --target=riscv64imac-unknown-none-elf
+cd contracts/blacklist-registry && cargo build --locked --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
 ```
 
 ## Artifact Manifest
@@ -18,13 +18,14 @@ cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-un
 | firewall-lock | `contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/firewall-lock` | 23336 | 23K | `7c2f6dfb429ddba22be9bae6fd38ad9d7aa51636a07ce61209ca1eb8f10b46e2` |
 | blacklist-registry | `contracts/blacklist-registry/target/riscv64imac-unknown-none-elf/release/blacklist-registry` | 30808 | 31K | `66dae5e1744e32656264e9ac9e93f948daaa1df204bef56cc765112414ba9455` |
 
-Note: This evidence snapshot was generated from commit `6232b25` and may differ from the canonical deterministic manifest snapshot generated at a different commit/build context.
-
 ## Validation Runs
 
-- Test log: `phase3_artifacts/tests_20260506T234414Z.log`
-- Cycle log: `phase3_artifacts/cycles_20260506T234414Z.log`
-- Guard log: `phase3_artifacts/guard_20260506T234414Z.log`
+- Test log: `docs/internal/phase3_artifacts/tests_20260506T234414Z.log`
+- Cycle log: `docs/internal/phase3_artifacts/cycles_20260506T234414Z.log`
+- Guard log: `docs/internal/phase3_artifacts/guard_20260506T234414Z.log`
+- Test log SHA256: `b5bbe1e525aeb5d8381b21c240cd3bd0b3896844e9c453e285646cacab2ebdc7`
+- Cycle log SHA256: `4acfe2632721f33d7fe105eecabb6cc3cd31bf85db475fa674ab530291530dbb`
+- Guard log SHA256: `1aca91420e587e22762df4a15d0f78c2d90a3f49c8e30aa6f01f1f11a0ddbf68`
 
 ### Test Command
 ```bash

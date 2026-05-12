@@ -45,7 +45,7 @@ check_security_tracker_zeroes() {
 }
 
 check_manifest_dev_signer_keys_policy() {
-  local manifest_json="$ROOT_DIR/phase3_artifacts/artifact_manifest_latest.json"
+  local manifest_json="$ROOT_DIR/docs/internal/phase3_artifacts/artifact_manifest_latest.json"
   if [[ ! -f "$manifest_json" ]]; then
     fail "Deterministic manifest JSON missing for feature-policy check ($manifest_json)"
     return
@@ -108,8 +108,8 @@ if [[ "$REAL_GOV_EVIDENCE_REQUIRED" == "1" ]]; then
 fi
 
 # G3/G5 evidence artifacts
-check_file "phase3_artifacts/PHASE3_EVIDENCE_LATEST.md" "Phase 3 evidence report"
-check_file "phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md" "Deterministic build manifest"
+check_file "docs/internal/phase3_artifacts/PHASE3_EVIDENCE_LATEST.md" "Phase 3 evidence report"
+check_file "docs/internal/phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md" "Deterministic build manifest"
 check_manifest_dev_signer_keys_policy
 
 # G1 security docs
