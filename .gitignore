@@ -1,6 +1,7 @@
 target/
 node_modules/
 dist/
+deploy/
 .env
 *.lock
 **/*.rs.bk
