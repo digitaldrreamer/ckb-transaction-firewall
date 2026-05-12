@@ -242,10 +242,10 @@
 ### Documentation layout
 
 - Rewrote [README.md](README.md) as the project landing page: hook, **why / how** (including dual-layer diagram), prerequisites, quick start, SDK usage, builds, tests, on-chain lock usage, security model, ecosystem, doc map, contributing, license; added CI and license badges.
-- Merged CKB-vs-account-chain rationale from the former `ABOUT.md` into [docs/architecture.md](docs/architecture.md) as **“Why CKB fits this design”**; removed `ABOUT.md`.
+- Merged CKB-vs-account-chain rationale into [docs/architecture.md](docs/architecture.md) as **“Why CKB fits this design”**; restored and retained **[ABOUT.md](ABOUT.md)** for the full narrative (threat model, components, governance, security model, Control Hub).
 - Moved `PHASE3_PLAN.md` → [docs/internal/phase3-plan.md](docs/internal/phase3-plan.md), `phase3_artifacts/` and `phase4_artifacts/` → [docs/internal/](docs/internal/) with an index [docs/internal/README.md](docs/internal/README.md); updated scripts, workflow upload path, and cross-links.
 - Added [research/README.md](research/README.md) describing the `research/` folder.
-- Pointed [sdk/README.md](sdk/README.md) at the root README and architecture doc.
+- Pointed [sdk/README.md](sdk/README.md) at [README.md](README.md), [ABOUT.md](ABOUT.md), and [docs/architecture.md](docs/architecture.md).
 
 ### Firewall lock tests and docs
 

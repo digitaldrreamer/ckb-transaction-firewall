@@ -48,7 +48,7 @@ The system is intentionally **two-layered** — they solve different problems an
 
 **Why both?** If the SDK is never called, a standard lock offers no consensus blacklist. If only the SDK existed, a compromised runtime could skip the check entirely. Together: **SDK = fast path for the agent; lock = guarantee for everyone else.**
 
-Deeper CKB rationale (cell model, lock scripts vs account chains, oracle-free design): **[docs/architecture.md](./docs/architecture.md)**.
+Deeper CKB rationale (cell model, lock scripts vs account chains, oracle-free design): **[docs/architecture.md](./docs/architecture.md)**. For the **full narrative** — extended threat model, component-by-component description, governance story, security model detail, and Control Hub relationship — see **[ABOUT.md](./ABOUT.md)**.
 
 ---
 
@@ -176,6 +176,7 @@ The Transaction Firewall is the **enforcement floor** for the [CKB Agent Control
 
 | Topic | Where |
 |--------|--------|
+| **Extended narrative** (threat model, components, governance, security, ecosystem) | [ABOUT.md](./ABOUT.md) |
 | Architecture, trust model, **why CKB** | [docs/architecture.md](./docs/architecture.md) |
 | Lock script spec (args, errors) | [docs/lock-script-spec.md](./docs/lock-script-spec.md) |
 | Governance | [docs/governance.md](./docs/governance.md), [governance/voting.md](./governance/voting.md) |
