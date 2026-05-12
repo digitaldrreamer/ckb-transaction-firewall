@@ -14,6 +14,8 @@ Autonomous agents construct, sign, and broadcast transactions without a human in
 
 The Firewall adds a **protocol-layer floor**: the same blacklist rules the SDK checks are enforced by **every CKB node** when the wallet cell uses the Firewall lock. **Normative governance** (quorum, multisig, review windows) lives in [governance/voting.md](./governance/voting.md) and [docs/governance.md](./docs/governance.md).
 
+**Not only for agents.** Any software that builds CKB transactions (wallets, dapps, custodial batch jobs, scripts) can run the **SDK** pre-flight before signing. **Consensus** enforcement is the same for every spender: it applies to cells whose **lock** is the Firewall lock, regardless of whether an LLM was involved. The blacklist is evaluated against **outputs this transaction creates** (destination lock/type args on those outputs). It does not, by itself, implement a separate “only accept funds from non-blacklisted senders” policy; inbound flows still depend on how you construct and review transactions.
+
 ---
 
 ## How it works

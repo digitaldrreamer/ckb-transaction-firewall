@@ -1,6 +1,6 @@
 # About the CKB Transaction Firewall
 
-> Protocol-level transaction safety for AI agents on Nervos CKB: community-governed blacklist enforcement via lock scripts.
+> Protocol-level transaction safety on Nervos CKB: community-governed blacklist enforcement via lock scripts. AI agents are the headline threat model; any wallet or application that builds CKB transactions can use the same SDK and lock.
 
 For **install, build, tests, and contribution workflow**, see [README.md](./README.md).
 
@@ -8,13 +8,15 @@ For **install, build, tests, and contribution workflow**, see [README.md](./READ
 
 ## What This Is
 
-CKB Transaction Firewall is a **safety primitive for AI agents operating on Nervos CKB**. It prevents agents from sending transactions to blacklisted addresses: addresses known to be exploit contracts, drainer wallets, or compromised protocols.
+CKB Transaction Firewall is a **safety primitive for software that spends CKB cells**, with **autonomous AI agents** as the motivating use case. It prevents transactions whose **outputs** would pay blacklisted destinations: identities (lock args / type args on outputs) known to be exploit contracts, drainer wallets, or compromised protocols.
 
-The enforcement happens at two independent layers: once in the agent's signing flow (fast, pre-broadcast, developer-friendly), and once at CKB consensus (authoritative, enforced by every miner on the network). Both layers check the same community-maintained blacklist, which lives entirely on-chain as a CKB cell.
+The enforcement happens at two independent layers: once in the signing flow before broadcast (fast, developer-friendly SDK), and once at CKB consensus (authoritative, enforced by every miner on the network). Both layers check the same community-maintained blacklist, which lives entirely on-chain as a CKB cell. **Wallets, dapps, and batch signers** can call the SDK the same way an agent runtime would; only the integration layer differs.
 
-> **Important:** The consensus layer is bypass-proof only for agents whose wallet cells use the Firewall Lock Script as their lock. An agent cell using a standard secp256k1 lock receives no consensus-layer protection. The lock script must be deliberately adopted; see [README.md § Using the Firewall lock on-chain](./README.md#using-the-firewall-lock-on-chain).
+> **Important:** The consensus layer is bypass-proof only for **cells** that use the Firewall Lock Script as their lock. A cell using a standard secp256k1 lock alone receives no consensus-layer blacklist enforcement. The lock script must be deliberately adopted; see [README.md § Using the Firewall lock on-chain](./README.md#using-the-firewall-lock-on-chain).
 
-This is foundational infrastructure. It is the safety floor that all other agent tooling on CKB is built on top of. The [CKB Agent Control Hub](https://github.com/digitaldrreamer/ckb-agent-control-hub), the authorization and identity layer for CKB agents, uses the Transaction Firewall as its enforcement backend.
+The blacklist logic targets **where this transaction sends** (new outputs), not a built-in filter on “who may pay me.” Inbound or counterparty-specific policies are still your own transaction design and review problem.
+
+This is foundational infrastructure. It is the safety floor that agent and wallet tooling on CKB can build on. The [CKB Agent Control Hub](https://github.com/digitaldrreamer/ckb-agent-control-hub), the authorization and identity layer for CKB agents, uses the Transaction Firewall as its enforcement backend.
 
 ---
 

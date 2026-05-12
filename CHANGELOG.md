@@ -251,6 +251,10 @@
 
 - Replaced Unicode em dashes (U+2014) with commas, colons, or semicolons across landing and narrative docs, architecture, Phase 4 verification and runbooks, internal milestone notes, scripts README, research notes, contract reports, and unit-test READMEs for ASCII-friendly prose.
 
+### Documentation (scope)
+
+- Clarified in [README.md](README.md) and [ABOUT.md](ABOUT.md) that the SDK and Firewall lock apply to any CKB transaction-building software (not only AI agents), and that blacklist checks target **outputs** (destinations created by the transaction), not a built-in inbound-sender filter.
+
 ### Firewall lock tests and docs
 
 - Replaced remaining narrow length/count casts in `firewall_lock_tests.rs` with `u32::try_from` / `u16::try_from` for registry builders and lock args.
