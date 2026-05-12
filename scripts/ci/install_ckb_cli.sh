@@ -13,7 +13,7 @@ TMP="$(mktemp -d)"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
-curl -fsSL "${BASE_URL}/${ARCHIVE}" -o "${TMP}/${ARCHIVE}"
+curl -fsSL --retry 5 --connect-timeout 10 "${BASE_URL}/${ARCHIVE}" -o "${TMP}/${ARCHIVE}"
 
 # Verify archive integrity if checksum is provided
 if [[ -n "${EXPECTED_SHA256:-}" ]]; then
