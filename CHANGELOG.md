@@ -209,6 +209,12 @@
 
 - Mark `scripts/ci/install_ckb_cli.sh` executable in git; invoke installer with `bash` in `.github/workflows/tests.yml`.
 - Run blocking Phase 3 closeout only after prior steps succeed (`success()`), so a failed install does not surface as a false governance-evidence failure.
+- Added `deploy/` to `.gitignore` for local deployment and chain-run outputs.
+
+### Hardening (review follow-up)
+
+- Added `curl --retry` and `--connect-timeout` to `scripts/ci/install_ckb_cli.sh` for transient download failures.
+- Replaced `id.len() as u8` with `u8::try_from` in `firewall_lock_tests.rs` registry payload helpers to avoid silent truncation.
 
 ### Firewall lock integration depth (GAPS_ANALYSIS)
 
