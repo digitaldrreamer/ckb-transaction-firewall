@@ -15,6 +15,7 @@ TMP="$(mktemp -d)"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
+# * --max-time bounds the entire curl invocation (connect + transfer + all retries), not each try alone.
 curl -fsSL \
   --retry 5 \
   --retry-delay "${CURL_RETRY_DELAY_SECONDS}" \

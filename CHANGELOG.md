@@ -237,6 +237,7 @@
 
 - Bumped `actions/checkout`, `actions/setup-node`, and `actions/upload-artifact` to **v5**; set Node.js **22** for SDK steps; added `permissions: contents: read` and job-level `bash` defaults in `.github/workflows/tests.yml`.
 - Extended `scripts/ci/install_ckb_cli.sh` with `curl` **retry delay** and **max-time** knobs (`CURL_RETRY_DELAY_SECONDS`, `CURL_MAX_TIME_SECONDS`); documented them in `scripts/README.md`.
+- Clarified in `scripts/README.md` that `curl --max-time` applies to the **whole** download including retries; added matching comment in `install_ckb_cli.sh`.
 
 ### Firewall lock tests and docs
 

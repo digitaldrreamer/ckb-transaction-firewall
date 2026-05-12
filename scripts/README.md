@@ -220,7 +220,7 @@ Environment:
 - `CKB_CLI_VERSION` — release tag (default `v1.15.0`)
 - `CKB_CLI_ARCH` — archive suffix (default `x86_64-unknown-linux-gnu`)
 - `CKB_CLI_INSTALL_DIR` — destination directory (default `$HOME/.local/bin`)
-- `CURL_MAX_TIME_SECONDS` — per-request wall-clock cap for the release download (default `120`)
+- `CURL_MAX_TIME_SECONDS` — **total** wall-clock cap for the `curl` download (default `120`), including all retries; not a per-attempt limit (see `curl` `--max-time`).
 - `CURL_RETRY_DELAY_SECONDS` — pause between curl retries in seconds (default `3`)
 - Appends `CKB_CLI_INSTALL_DIR` to `GITHUB_PATH` when set so later steps resolve `ckb-cli`.
 
