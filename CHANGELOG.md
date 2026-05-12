@@ -239,6 +239,12 @@
 - Extended `scripts/ci/install_ckb_cli.sh` with `curl` **retry delay** and **max-time** knobs (`CURL_RETRY_DELAY_SECONDS`, `CURL_MAX_TIME_SECONDS`); documented them in `scripts/README.md`.
 - Clarified in `scripts/README.md` that `curl --max-time` applies to the **whole** download including retries; added matching comment in `install_ckb_cli.sh`.
 
+### Documentation layout
+
+- Added [ABOUT.md](ABOUT.md) for long-form narrative (threat model, CKB rationale, dual-layer design, security model, Control Hub relationship).
+- Refocused [README.md](README.md) on overview, doc map, SDK install, contract build, VM tests, on-chain lock usage, contributing, changelog, and license; corrected build commands (RISC-V `cargo` instead of `capsule`); aligned TypeScript example with `TransactionFirewall` / `registryScript` API.
+- Pointed [sdk/README.md](sdk/README.md) at the root README and ABOUT.
+
 ### Firewall lock tests and docs
 
 - Replaced remaining narrow length/count casts in `firewall_lock_tests.rs` with `u32::try_from` / `u16::try_from` for registry builders and lock args.
