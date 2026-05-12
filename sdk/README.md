@@ -1,8 +1,8 @@
 # SDK
 
-SDKs provide Layer 1 pre-flight blacklist checks before transaction signing.
+Pre-flight blacklist checks for agent runtimes **before** transaction signing.
 
-## Planned submodules
+- **TypeScript:** [`typescript/`](./typescript/) — see root [README.md](../README.md) for install and usage.
+- **Rust:** [`rust/`](./rust/) — `ckb_transaction_firewall_sdk` crate; see root [README.md](../README.md).
 
-- `typescript/`: primary SDK for JS/TS agent runtimes.
-- `rust/`: native SDK for Rust-based agent runtimes.
+Narrative and threat model: [ABOUT.md](../ABOUT.md).
