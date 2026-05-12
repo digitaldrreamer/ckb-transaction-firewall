@@ -5,6 +5,8 @@ set -euo pipefail
 VERSION="${CKB_CLI_VERSION:-v1.15.0}"
 ARCH="${CKB_CLI_ARCH:-x86_64-unknown-linux-gnu}"
 INSTALL_DIR="${CKB_CLI_INSTALL_DIR:-$HOME/.local/bin}"
+CURL_MAX_TIME_SECONDS="${CURL_MAX_TIME_SECONDS:-120}"
+CURL_RETRY_DELAY_SECONDS="${CURL_RETRY_DELAY_SECONDS:-3}"
 BASE_URL="https://github.com/nervosnetwork/ckb-cli/releases/download/${VERSION}"
 ARCHIVE="ckb-cli_${VERSION}_${ARCH}.tar.gz"
 
@@ -13,7 +15,13 @@ TMP="$(mktemp -d)"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
-curl -fsSL --retry 5 --connect-timeout 10 "${BASE_URL}/${ARCHIVE}" -o "${TMP}/${ARCHIVE}"
+# * --max-time bounds the entire curl invocation (connect + transfer + all retries), not each try alone.
+curl -fsSL \
+  --retry 5 \
+  --retry-delay "${CURL_RETRY_DELAY_SECONDS}" \
+  --connect-timeout 10 \
+  --max-time "${CURL_MAX_TIME_SECONDS}" \
+  "${BASE_URL}/${ARCHIVE}" -o "${TMP}/${ARCHIVE}"
 
 # Verify archive integrity if checksum is provided
 if [[ -n "${EXPECTED_SHA256:-}" ]]; then

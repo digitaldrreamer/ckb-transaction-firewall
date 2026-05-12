@@ -67,7 +67,11 @@ fn build_registry_payload_with_expires(entries: Vec<(Vec<u8>, u64)>, sorted: boo
     let mut data = vec![];
     data.extend_from_slice(b"BLKL");
     data.push(0x01);
-    data.extend_from_slice(&(rows.len() as u32).to_le_bytes());
+    data.extend_from_slice(
+        &u32::try_from(rows.len())
+            .expect("registry row count exceeds u32")
+            .to_le_bytes(),
+    );
     for (id, expires_at) in rows {
         data.push(u8::try_from(id.len()).expect("id too long"));
         data.extend_from_slice(&id);
@@ -85,7 +89,11 @@ fn build_registry_payload(entries: Vec<Vec<u8>>, sorted: bool) -> Bytes {
     let mut data = vec![];
     data.extend_from_slice(b"BLKL");
     data.push(0x01);
-    data.extend_from_slice(&(ids.len() as u32).to_le_bytes());
+    data.extend_from_slice(
+        &u32::try_from(ids.len())
+            .expect("registry id count exceeds u32")
+            .to_le_bytes(),
+    );
 
     for id in ids {
         data.push(u8::try_from(id.len()).expect("id too long"));
@@ -112,12 +120,20 @@ fn build_full_lock_args(
 
     args.extend_from_slice(&registry_code_hash);
     args.push(registry_hash_type);
-    args.extend_from_slice(&(registry_type_args.len() as u16).to_le_bytes());
+    args.extend_from_slice(
+        &u16::try_from(registry_type_args.len())
+            .expect("registry type args length exceeds u16 prefix")
+            .to_le_bytes(),
+    );
     args.extend_from_slice(&registry_type_args);
 
     args.extend_from_slice(&inner_code_hash);
     args.push(inner_hash_type);
-    args.extend_from_slice(&(inner_args.len() as u16).to_le_bytes());
+    args.extend_from_slice(
+        &u16::try_from(inner_args.len())
+            .expect("inner lock args length exceeds u16 prefix")
+            .to_le_bytes(),
+    );
     args.extend_from_slice(inner_args);
 
     Bytes::from(args)
