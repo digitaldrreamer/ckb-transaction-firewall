@@ -69,7 +69,7 @@ fn build_registry_payload_with_expires(entries: Vec<(Vec<u8>, u64)>, sorted: boo
     data.push(0x01);
     data.extend_from_slice(&(rows.len() as u32).to_le_bytes());
     for (id, expires_at) in rows {
-        data.push(id.len() as u8);
+        data.push(u8::try_from(id.len()).expect("id too long"));
         data.extend_from_slice(&id);
         data.extend_from_slice(&expires_at.to_le_bytes());
     }
@@ -88,7 +88,7 @@ fn build_registry_payload(entries: Vec<Vec<u8>>, sorted: bool) -> Bytes {
     data.extend_from_slice(&(ids.len() as u32).to_le_bytes());
 
     for id in ids {
-        data.push(id.len() as u8);
+        data.push(u8::try_from(id.len()).expect("id too long"));
         data.extend_from_slice(&id);
         data.extend_from_slice(&0u64.to_le_bytes()); // * permanent entry
     }
