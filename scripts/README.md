@@ -252,8 +252,9 @@ Implemented capabilities:
 
 - reads deployment lock metadata from `deploy/info.json`,
 - recovers corrupted/empty `deploy/gov_bootstrap_tx.json` from a committed template,
-- collects live lock-only cells via RPC indexer search,
-- auto-topups self-owned plain cells when inventory is below required scenario count,
+- collects large-enough live lock-only cells via RPC indexer search and committed top-up tx outputs,
+- auto-topups self-owned plain cells when inventory is low, using `FROM_ACCOUNT` / `TOPUP_FROM_ACCOUNT` or the first testnet account from `ckb-cli account list`,
+- supports non-interactive signing with `TOPUP_PRIVKEY_PATH`, `SKIP_AUTO_TOPUP=1`, higher `TOPUP_FEE_RATE`, and repeated top-up rounds when indexer visibility lags,
 - clones `deploy/gov_bootstrap_tx.json` into required scenario files with refreshed input outpoints.
 
 ### `phase4_submit_tx.sh`

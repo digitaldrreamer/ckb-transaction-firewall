@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-05-13
+
+### Release readiness
+
+- Prepared `@ckb-firewall/sdk` for npm publishing: public scoped package config, package metadata, ESM build outputs, tarball validation, and type compatibility checks.
+- Published the canonical CKB testnet BLKL registry cell in [docs/deployments/testnet.registry.example.json](docs/deployments/testnet.registry.example.json) and aligned the SDK/testnet docs around caller-supplied `cellDeps`.
+- Hardened governance tx preparation for slow indexers and wallet top-ups: capacity filtering, committed top-up polling, merged tx outputs, explicit sender selection, and safer prompt handling.
+
 ## 2026-04-26
 
 ### Phase 1: Firewall Lock Script Implementation
@@ -230,45 +238,6 @@
 - Updated `GAPS_ANALYSIS.md` optional header-matrix follow-ups; expanded `tests/unit/fixtures/README.md` (third-party testdata explanation).
 - Documented SHA-256 and byte size for `always_failure_lock` in `tests/unit/fixtures/README.md` (matches `ckb-script` 0.118.0 `testdata/always_failure`).
 - Added explicit “Replacing this fixture” checklist to `tests/unit/fixtures/README.md` (update size, SHA-256, `ckb-script` version line, run tests, changelog).
-
-## 2026-05-12
-
-### CI hardening
-
-- Bumped `actions/checkout`, `actions/setup-node`, and `actions/upload-artifact` to **v5**; set Node.js **22** for SDK steps; added `permissions: contents: read` and job-level `bash` defaults in `.github/workflows/tests.yml`.
-- Extended `scripts/ci/install_ckb_cli.sh` with `curl` **retry delay** and **max-time** knobs (`CURL_RETRY_DELAY_SECONDS`, `CURL_MAX_TIME_SECONDS`); documented them in `scripts/README.md`.
-- Clarified in `scripts/README.md` that `curl --max-time` applies to the **whole** download including retries; added matching comment in `install_ckb_cli.sh`.
-
-### Documentation layout
-
-- Rewrote [README.md](README.md) as the project landing page: hook, **why / how** (including dual-layer diagram), prerequisites, quick start, SDK usage, builds, tests, on-chain lock usage, security model, ecosystem, doc map, contributing, license; added CI and license badges.
-- Merged CKB-vs-account-chain rationale into [docs/architecture.md](docs/architecture.md) as **“Why CKB fits this design”**; restored and retained **[ABOUT.md](ABOUT.md)** for the full narrative (threat model, components, governance, security model, Control Hub).
-- Moved `PHASE3_PLAN.md` → [docs/internal/phase3-plan.md](docs/internal/phase3-plan.md), `phase3_artifacts/` and `phase4_artifacts/` → [docs/internal/](docs/internal/) with an index [docs/internal/README.md](docs/internal/README.md); updated scripts, workflow upload path, and cross-links.
-- Added [research/README.md](research/README.md) describing the `research/` folder.
-- Pointed [sdk/README.md](sdk/README.md) at [README.md](README.md), [ABOUT.md](ABOUT.md), and [docs/architecture.md](docs/architecture.md).
-
-### Documentation (typography)
-
-- Replaced Unicode em dashes (U+2014) with commas, colons, or semicolons across landing and narrative docs, architecture, Phase 4 verification and runbooks, internal milestone notes, scripts README, research notes, contract reports, and unit-test READMEs for ASCII-friendly prose.
-
-### Documentation (scope)
-
-- Clarified in [README.md](README.md) and [ABOUT.md](ABOUT.md) that the SDK and Firewall lock apply to any CKB transaction-building software (not only AI agents), and that blacklist checks target **outputs** (destinations created by the transaction), not a built-in inbound-sender filter.
-
-### Testnet deployment (TypeScript path)
-
-- Added [docs/deployments/testnet.md](docs/deployments/testnet.md) for CKB public testnet: `scripts/deploy.sh`, `ckb-cli` sign/apply, reading registry type script for `FirewallConfig`, and wiring `cellDeps` for `checkTransaction`.
-- Added [docs/deployments/testnet.registry.example.json](docs/deployments/testnet.registry.example.json) placeholder for RPC + `registryScript`.
-- Linked from [README.md](README.md), [scripts/README.md](scripts/README.md), and [sdk/typescript/README.md](sdk/typescript/README.md).
-
-### Firewall lock tests and docs
-
-- Replaced remaining narrow length/count casts in `firewall_lock_tests.rs` with `u32::try_from` / `u16::try_from` for registry builders and lock args.
-- Corrected stale §4 “Blacklist Registry” status in `contracts/firewall-lock/GAPS_ANALYSIS.md` (registry contract exists; remaining work is hardening/ops).
-
-### Release versioning
-
-- Bumped on-chain crates, Rust SDK, TypeScript `package.json`, and `tests/unit` harness to **0.2.0**; refreshed per-crate `Cargo.lock` root package versions.
 
 ## 2026-05-12
 
