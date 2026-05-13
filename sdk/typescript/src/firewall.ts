@@ -1,23 +1,30 @@
 import { parseRegistryPayload, resolveRegistryDep } from "./blacklist.js";
-import type { FirewallConfig, FirewallDecision, UnsignedTxLike, RegistryEntry } from "./types.js";
+import {
+  AmbiguousRegistryCellDepError,
+  InvalidRegistryDataError,
+  MissingRegistryCellDepError,
+  RegistryNotSortedError,
+} from "./errors.js";
+import type { FirewallConfig, FirewallDecision, UnsignedTxLike } from "./types.js";
 
 function normalize(hex: string): string {
   return hex.startsWith("0x") ? hex.toLowerCase() : `0x${hex.toLowerCase()}`;
 }
 
-function mapErrorToDecision(err: Error): FirewallDecision {
-  switch (err.message) {
-    case "MissingRegistryCellDep":
-      return { ok: false, code: 8, reason: err.message };
-    case "InvalidRegistryData":
-      return { ok: false, code: 9, reason: err.message };
-    case "RegistryNotSorted":
-      return { ok: false, code: 10, reason: err.message };
-    case "AmbiguousRegistryCellDep":
-      return { ok: false, code: 17, reason: err.message };
-    default:
-      return { ok: false, code: 9, reason: "InvalidRegistryData" };
+function mapUnknownToDecision(err: unknown): FirewallDecision {
+  if (err instanceof MissingRegistryCellDepError) {
+    return { ok: false, code: 8, reason: "MissingRegistryCellDep" };
   }
+  if (err instanceof InvalidRegistryDataError) {
+    return { ok: false, code: 9, reason: "InvalidRegistryData" };
+  }
+  if (err instanceof RegistryNotSortedError) {
+    return { ok: false, code: 10, reason: "RegistryNotSorted" };
+  }
+  if (err instanceof AmbiguousRegistryCellDepError) {
+    return { ok: false, code: 17, reason: "AmbiguousRegistryCellDep" };
+  }
+  return { ok: false, code: 9, reason: "InvalidRegistryData" };
 }
 
 export class TransactionFirewall {
@@ -28,9 +35,9 @@ export class TransactionFirewall {
     try {
       const dep = resolveRegistryDep(tx.cellDeps, this.config.registryScript);
       const payload = parseRegistryPayload(dep.data);
-      registryIds = new Set(payload.entries.map((e: RegistryEntry) => normalize(e.identifier)));
-    } catch (err) {
-      return mapErrorToDecision(err as Error);
+      registryIds = new Set(payload.entries.map((e) => normalize(e.identifier)));
+    } catch (err: unknown) {
+      return mapUnknownToDecision(err);
     }
 
     for (const out of tx.outputs) {

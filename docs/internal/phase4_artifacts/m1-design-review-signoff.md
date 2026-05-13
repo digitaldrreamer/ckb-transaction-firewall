@@ -2,7 +2,7 @@
 
 | Item | Result |
 |------|--------|
-| ADR filed | [docs/phase4/adr/ADR-Phase4-Governance-Verification.md](../../docs/phase4/adr/ADR-Phase4-Governance-Verification.md) |
+| ADR filed | [docs/phase4/adr/ADR-Phase4-Governance-Verification.md](../../phase4/adr/ADR-Phase4-Governance-Verification.md) |
 | VM-safe governance verification | Accepted: on-chain crypto checks restored; compatibility-only shortcuts removed for production path |
 | Testnet validation | Accepted: `latest.json` scenarios chain-verified via `phase4_governance_evidence_check.sh` |
 

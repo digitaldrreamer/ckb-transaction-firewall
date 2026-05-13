@@ -11,7 +11,7 @@
 
 | ID | Severity | Component | Status | Owner | Link | Notes |
 |---|---|---|---|---|---|---|
-| TBA | TBA | TBA | open/closed | TBA | TBA | TBA |
+| (none) | (none) | (none) | (none) | (none) | (none) | No open findings at release readiness review. |
 
 ## Gate Rule
 

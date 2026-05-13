@@ -11,8 +11,8 @@ On `main` and on pull requests targeting `main`, GitHub Actions job **Tests** (`
 
 That invokes:
 
-- `scripts/phase4_governance_evidence_check.sh` — requires every scenario `tx_hash` in `tests/integration/governance_drill/latest.json` to resolve as **committed** on testnet.
-- Stricter `chain_status_latest.json` validation — every scenario must show `tx_status.status == "committed"`.
+- `scripts/phase4_governance_evidence_check.sh` requires every scenario `tx_hash` in `tests/integration/governance_drill/latest.json` to resolve as **committed** on testnet.
+- Stricter `chain_status_latest.json` validation: every scenario must show `tx_status.status == "committed"`.
 
 ## How to obtain a run link
 

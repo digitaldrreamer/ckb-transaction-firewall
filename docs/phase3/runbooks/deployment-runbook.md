@@ -8,8 +8,8 @@
 
 ## Preconditions
 
-- Reproducible manifest present (`phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md`)
-- Phase 3 verification report present (`phase3_artifacts/PHASE3_EVIDENCE_LATEST.md`)
+- Reproducible manifest present (`docs/internal/phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md`)
+- Phase 3 verification report present (`docs/internal/phase3_artifacts/PHASE3_EVIDENCE_LATEST.md`)
 - Governance lock preflight passed (`scripts/phase3_governance_lock_preflight.sh`, supports P4-DEPLOY-001 evidence)
 - Governance approvals complete
 - Signer keys available and verified

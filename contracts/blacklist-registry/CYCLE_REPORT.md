@@ -8,7 +8,7 @@
 
 ## Governance path (Phase 4)
 
-Cycle micro-benchmarking for this contract is integrated with the **full unit + integration suite** executed by `scripts/phase3_verify.sh` (see `phase3_artifacts/cycles_*.log` from CI or local verification runs). Governance-heavy scenarios (GOV1 parsing, secp256k1 recovery, threshold checks) are covered by integration tests; aggregate **firewall + registry** cycle budgets for large-registry happy paths are enforced in `scripts/phase3_verify.sh` against the firewall lock `profile-cycles.sh` output (registry participates in joint verification fixtures where applicable).
+Cycle micro-benchmarking for this contract is integrated with the **full unit + integration suite** executed by `scripts/phase3_verify.sh` (see `docs/internal/phase3_artifacts/cycles_*.log` from CI or local verification runs). Governance-heavy scenarios (GOV1 parsing, secp256k1 recovery, threshold checks) are covered by integration tests; aggregate **firewall + registry** cycle budgets for large-registry happy paths are enforced in `scripts/phase3_verify.sh` against the firewall lock `profile-cycles.sh` output (registry participates in joint verification fixtures where applicable).
 
 ## Policy
 
@@ -29,9 +29,9 @@ cargo test --test blacklist_registry_tests
 
 | Check | Status |
 |-------|--------|
-| `blacklist_registry_tests` (12 tests) | PASS (see `phase4_artifacts/m2-test-results.txt`) |
+| `blacklist_registry_tests` (12 tests) | PASS (see `docs/internal/phase4_artifacts/m2-test-results.txt`) |
 | Live governance drill VM execution | PASS (committed txs in `tests/integration/governance_drill/latest.json`) |
 
 ## Date
 
-2026-05-11 (UTC) — aligned with Phase 4 closure evidence refresh.
+2026-05-11 (UTC), aligned with Phase 4 closure evidence refresh.

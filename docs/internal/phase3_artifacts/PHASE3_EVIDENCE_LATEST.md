@@ -1,14 +1,14 @@
 # Phase 3 Evidence Report
 
-- Generated (UTC): 20260506T114638Z
+- Generated (UTC): 20260506T234414Z
 - Branch: `feat/phase3-verification-hardening`
-- Commit: `92b22a686304cf80afc217887ee4e0794d19102c`
+- Commit: `6232b25a680bb0c4d8e3581e7dcd2b283b883d59`
 
 ## Build Commands
 
 ```bash
-cd contracts/firewall-lock && cargo build --release --target=riscv64imac-unknown-none-elf
-cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+cd contracts/firewall-lock && cargo build --locked --release --target=riscv64imac-unknown-none-elf
+cd contracts/blacklist-registry && cargo build --locked --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
 ```
 
 ## Artifact Manifest
@@ -16,13 +16,16 @@ cd contracts/blacklist-registry && cargo build --release --target=riscv64imac-un
 | Artifact | Path | Size (bytes) | Human size | SHA256 |
 |---|---|---:|---:|---|
 | firewall-lock | `contracts/firewall-lock/target/riscv64imac-unknown-none-elf/release/firewall-lock` | 23336 | 23K | `7c2f6dfb429ddba22be9bae6fd38ad9d7aa51636a07ce61209ca1eb8f10b46e2` |
-| blacklist-registry | `contracts/blacklist-registry/target/riscv64imac-unknown-none-elf/release/blacklist-registry` | 98256 | 96K | `fd704f21d808015a63c97dfd9db594d32deafc969acd0287c9be9db66581d21d` |
+| blacklist-registry | `contracts/blacklist-registry/target/riscv64imac-unknown-none-elf/release/blacklist-registry` | 30808 | 31K | `66dae5e1744e32656264e9ac9e93f948daaa1df204bef56cc765112414ba9455` |
 
 ## Validation Runs
 
-- Test log: `phase3_artifacts/tests_20260506T114638Z.log`
-- Cycle log: `phase3_artifacts/cycles_20260506T114638Z.log`
-- Guard log: `phase3_artifacts/guard_20260506T114638Z.log`
+- Test log: `docs/internal/phase3_artifacts/tests_20260506T234414Z.log`
+- Cycle log: `docs/internal/phase3_artifacts/cycles_20260506T234414Z.log`
+- Guard log: `docs/internal/phase3_artifacts/guard_20260506T234414Z.log`
+- Test log SHA256: `b5bbe1e525aeb5d8381b21c240cd3bd0b3896844e9c453e285646cacab2ebdc7`
+- Cycle log SHA256: `4acfe2632721f33d7fe105eecabb6cc3cd31bf85db475fa674ab530291530dbb`
+- Guard log SHA256: `1aca91420e587e22762df4a15d0f78c2d90a3f49c8e30aa6f01f1f11a0ddbf68`
 
 ### Test Command
 ```bash

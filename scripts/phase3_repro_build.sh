@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="$ROOT_DIR/phase3_artifacts"
+OUT_DIR="$ROOT_DIR/docs/internal/phase3_artifacts"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 MANIFEST_MD="$OUT_DIR/ARTIFACT_MANIFEST_${STAMP}.md"
 MANIFEST_JSON="$OUT_DIR/artifact_manifest_${STAMP}.json"
@@ -123,7 +123,7 @@ cargo build --release --target=$TARGET --features dev-signer-keys
 
 ## Machine-readable Output
 
-- \`phase3_artifacts/$(basename "$MANIFEST_JSON")\`
+- \`docs/internal/phase3_artifacts/$(basename "$MANIFEST_JSON")\`
 EOF
 
 cp "$MANIFEST_MD" "$LATEST_MD"

@@ -1,4 +1,4 @@
-# Governance drill — live execution (Phase 4)
+# Governance drill: live execution (Phase 4)
 
 ## Purpose
 
@@ -43,7 +43,7 @@ This prepares missing transaction files, submits scenarios, refreshes drill JSON
 ## Rollback
 
 - Revert `tests/integration/governance_drill/*.json` to the last known-good commit.
-- Re-run `phase3_governance_drill_check.sh` only (without `REAL_GOV_EVIDENCE_REQUIRED`) for local debugging — **do not** use this relaxed posture on `main` merges.
+- Re-run `phase3_governance_drill_check.sh` only (without `REAL_GOV_EVIDENCE_REQUIRED`) for local debugging; **do not** use this relaxed posture on `main` merges.
 
 ## Related Phase 3 runbooks
 

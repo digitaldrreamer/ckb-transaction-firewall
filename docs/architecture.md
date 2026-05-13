@@ -85,3 +85,37 @@ This document defines the v1 architecture of the CKB Transaction Firewall and th
 - Contract and SDK versions must be tracked independently.
 - Registry data format version should be included in serialized payload.
 - Any breaking change to registry encoding requires compatibility notes and migration planning.
+
+---
+
+## Why CKB fits this design
+
+This section complements the component view above: it explains **why** the Firewall is implemented on Nervos CKB rather than as a generic “any chain” library.
+
+### Lock scripts are first-class validation logic
+
+On Ethereum, the traditional account model separates externally-owned accounts (EOAs, with no programmable validation logic) from smart contracts (which require explicit coding of every validation rule and carry deployment overhead). There is no native way to say “any transaction spending from this address must pass this blacklist check” without deploying a custom contract wallet or modifying every application that interacts with the address.
+
+This gap has narrowed with recent Ethereum upgrades. [EIP-7702](https://eips.ethereum.org/EIPS/eip-7702), shipped in the Pectra upgrade (May 2025), allows EOAs to delegate execution to contract code for the duration of a transaction, and [ERC-4337](https://eips.ethereum.org/EIPS/eip-4337) (live since 2023) enables arbitrary validation logic via smart contract wallets. These are meaningful steps toward programmable validation at the address level.
+
+However, CKB’s model is structurally different in ways that matter for this use case. On CKB, every cell has a **lock script**: arbitrary RISC-V code that runs at consensus every time the cell is spent. The lock script is not an application contract. It is the spending condition itself, evaluated by every CKB node as part of transaction validation. This is a permanent, unconditional constraint baked into the cell, not a transaction-scoped delegation (as in EIP-7702) or a separate infrastructure layer requiring bundlers and an alt mempool (as in ERC-4337).
+
+This means a firewall lock script can be applied to any agent wallet cell. When the agent tries to spend its funds, the lock script runs, checks the blacklist, and either permits or rejects the transaction at the miner level, not the application level. No contract deployment per wallet. No trust in the agent’s own code. The check is simply part of what it means to spend the cell.
+
+### The cell model makes blacklists composable
+
+On CKB, data lives in cells. A cell can be referenced in a transaction as a `cell_dep`, a read-only dependency that is available to all scripts during validation but is not consumed by the transaction. This is the mechanism the Firewall uses for its blacklist.
+
+The Blacklist Registry Cell contains the current blacklist data. Scripts reference it as a `cell_dep` during transaction validation. Important consequences:
+
+- The blacklist is read by every transaction that uses the Firewall lock, without those transactions spending or modifying the blacklist cell.
+- Updating the blacklist is a single governance transaction that replaces the Registry Cell. All future transactions automatically use the new blacklist, with no redeployment of scripts, no migration, and no per-wallet update.
+- The Registry Cell’s integrity is protected by its own type script, which requires valid governance signatures for any update. The blacklist cannot be silently modified.
+
+This architecture is not possible on account-model chains without significantly more complexity. On CKB it is the natural pattern.
+
+> **Governance sequencing note:** When a governance transaction destroys the Registry Cell to replace it, any in-flight transactions that reference the old cell as a `cell_dep` may cause miners to fail block template generation if the cells are in the same mempool window. Governance updates should be timed and sequenced carefully. This is an inherent property of the CKB cell model and is not unique to this project. See [CKB security advisory GHSA-v666-6w97-pcwm](https://github.com/nervosnetwork/ckb/security/advisories/GHSA-v666-6w97-pcwm) for context.
+
+### No oracle dependency
+
+Many blockchain security systems rely on off-chain oracles to feed data on-chain for validation. Oracles introduce trust assumptions: if the oracle is compromised, the security guarantee disappears. The Transaction Firewall has no oracle. The blacklist is a CKB cell, updated by on-chain governance transactions, read by on-chain scripts. The entire system operates within CKB’s security model.

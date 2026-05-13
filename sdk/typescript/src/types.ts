@@ -40,7 +40,12 @@ export const FIREWALL_ERROR_CODES = {
 
 export type FirewallDecision =
   | { ok: true }
-  | { ok: false; code: FirewallReasonCode; reason?: string };
+  | { ok: false; code: 8; reason: "MissingRegistryCellDep" }
+  | { ok: false; code: 9; reason: "InvalidRegistryData" }
+  | { ok: false; code: 10; reason: "RegistryNotSorted" }
+  | { ok: false; code: 11; reason: "BlacklistedLockArgs" }
+  | { ok: false; code: 12; reason: "BlacklistedTypeArgs" }
+  | { ok: false; code: 17; reason: "AmbiguousRegistryCellDep" };
 
 export interface RegistryEntry {
   identifier: string;

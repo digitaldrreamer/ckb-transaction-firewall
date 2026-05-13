@@ -43,6 +43,16 @@ jobs:
         run: bash scripts/ci/install_ckb_cli.sh
         env:
           CKB_CLI_VERSION: v1.15.0
+          EXPECTED_SHA256: 1b65da74ced8f8db614bbaa5194ab1780edd8fc79a6627aba4fbefb6bcec86f2
+
+      - name: Check shell script syntax
+        run: |
+          while IFS= read -r script; do
+            bash -n "$script"
+          done < <(find scripts -name '*.sh' -type f | sort)
+
+      - name: Check repository Markdown links
+        run: python3 scripts/check_markdown_links.py
 
       - name: Run firewall lock unit tests
         working-directory: contracts/firewall-lock
@@ -75,6 +85,27 @@ jobs:
       - name: Run TypeScript SDK tests
         working-directory: sdk/typescript
         run: npm test
+
+      - name: Build TypeScript SDK
+        working-directory: sdk/typescript
+        run: npm run build
+
+      - name: Smoke import built TypeScript SDK
+        working-directory: sdk/typescript
+        run: node -e "import('./dist/index.js').then((m) => { if (typeof m.TransactionFirewall !== 'function') process.exit(1); })"
+
+      - name: Verify TypeScript SDK npm tarball
+        working-directory: sdk/typescript
+        run: |
+          npm pack
+          TAR=$(ls -1 ckb-firewall-sdk-*.tgz | head -1)
+          tar -tzf "$TAR" | grep -q 'package/dist/index.js'
+          tar -tzf "$TAR" | grep -q 'package/dist/index.d.ts'
+          rm -f "$TAR"
+
+      - name: Are-the-types-wrong (TypeScript SDK, ESM profile)
+        working-directory: sdk/typescript
+        run: npm run attw
 
       - name: Build Rust SDK
         working-directory: sdk/rust
@@ -127,5 +158,5 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: phase3-artifacts
-          path: phase3_artifacts/
+          path: docs/internal/phase3_artifacts/
           retention-days: 14

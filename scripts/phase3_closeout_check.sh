@@ -45,7 +45,7 @@ check_security_tracker_zeroes() {
 }
 
 check_manifest_dev_signer_keys_policy() {
-  local manifest_json="$ROOT_DIR/phase3_artifacts/artifact_manifest_latest.json"
+  local manifest_json="$ROOT_DIR/docs/internal/phase3_artifacts/artifact_manifest_latest.json"
   if [[ ! -f "$manifest_json" ]]; then
     fail "Deterministic manifest JSON missing for feature-policy check ($manifest_json)"
     return
@@ -108,8 +108,8 @@ if [[ "$REAL_GOV_EVIDENCE_REQUIRED" == "1" ]]; then
 fi
 
 # G3/G5 evidence artifacts
-check_file "phase3_artifacts/PHASE3_EVIDENCE_LATEST.md" "Phase 3 evidence report"
-check_file "phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md" "Deterministic build manifest"
+check_file "docs/internal/phase3_artifacts/PHASE3_EVIDENCE_LATEST.md" "Phase 3 evidence report"
+check_file "docs/internal/phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md" "Deterministic build manifest"
 check_manifest_dev_signer_keys_policy
 
 # G1 security docs
@@ -122,18 +122,8 @@ check_file "docs/phase3/runbooks/deployment-runbook.md" "Deployment runbook"
 check_file "docs/phase3/runbooks/key-rotation-runbook.md" "Key rotation runbook"
 check_file "docs/phase3/runbooks/governance-incident-playbook.md" "Governance incident playbook"
 
-# Signer cutover policy
-check_file "docs/phase3/keys/signer-custody-policy-template.md" "Signer custody policy template"
-
-# Go/No-Go templates
-check_file "docs/phase3/go-no-go/decision-record-template.md" "Go/No-Go decision record template"
-check_file "docs/phase3/go-no-go/rollout-checklist-template.md" "Mainnet rollout checklist template"
-check_file "docs/phase3/go-no-go/post-deploy-verification-template.md" "Post-deploy verification template"
-
-# Soak + integration evidence templates
-check_file "docs/phase3/soak/testnet-soak-report-template.md" "Testnet soak report template"
-check_file "docs/phase3/integration/testnet-integration-report-template.md" "Testnet integration report template"
-check_file "docs/phase3/integration/sdk-parity-matrix-template.md" "SDK parity matrix template"
+# Release readiness checklist
+check_file "docs/release-checklists.md" "Release checklist"
 
 echo ""
 if [[ $FAILED -eq 0 ]]; then

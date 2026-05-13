@@ -4,4 +4,4 @@ Record accepted residual risks with explicit rationale and expiry.
 
 | Waiver ID | Finding ID | Severity | Rationale | Approval | Expiry | Status |
 |---|---|---|---|---|---|---|
-| TBA | TBA | TBA | TBA | TBA | TBA | active/expired |
+| (none) | (none) | (none) | (none) | (none) | (none) | No active waivers. |

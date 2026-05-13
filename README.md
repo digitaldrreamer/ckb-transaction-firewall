@@ -1,110 +1,101 @@
 # CKB Transaction Firewall
 
-> Protocol-level transaction safety for AI agents on Nervos CKB — community-governed blacklist enforcement via lock scripts.
+[![Tests](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-## What this is (in brief)
-
-**CKB Transaction Firewall** is a pair of on-chain scripts (firewall **lock** + blacklist **registry** type script) plus small **SDKs** (TypeScript and Rust) that run a **pre-flight** blacklist check before you sign a transaction.
-
-**Why it matters:** autonomous agents can be steered by prompt injection, bad tools, or compromised code. Application-only checks can be skipped; consensus checks on cells locked with this script cannot be bypassed by buggy or malicious agent code.
-
-**Long-form background** (threat model, why CKB, dual-layer design, components, security model): see **[ABOUT.md](./ABOUT.md)**.
+> AI agents can be hijacked into sending funds to malicious addresses.  
+> CKB Transaction Firewall enforces a **community-governed blacklist** at **consensus**, inside the **lock script**, so malicious or compromised agent code cannot bypass the check for cells that use this lock. A TypeScript and Rust **SDK** adds a fast **pre-flight** layer before you sign.
 
 ---
 
-## Documentation map
+## Why this exists
 
-| Topic | Where |
-|--------|--------|
-| Narrative, architecture, security model | [ABOUT.md](./ABOUT.md) |
-| Lock script interface (args, errors, registry rules) | [docs/lock-script-spec.md](./docs/lock-script-spec.md) |
-| System architecture | [docs/architecture.md](./docs/architecture.md) |
-| Governance (GOV1, drills, policy) | [docs/governance.md](./docs/governance.md), [governance/voting.md](./governance/voting.md) |
-| Operator scripts (deploy, CI, governance automation) | [scripts/README.md](./scripts/README.md) |
-| Contract-specific notes | [contracts/firewall-lock/README.md](./contracts/firewall-lock/README.md), [contracts/blacklist-registry/README.md](./contracts/blacklist-registry/README.md) |
-| Release history | [CHANGELOG.md](./CHANGELOG.md) |
+Autonomous agents construct, sign, and broadcast transactions without a human in the loop at every step. That autonomy is valuable, but **application-only safety checks are not enough**: compromised agent code, **prompt injection** (including [on-chain payload tricks](https://arxiv.org/abs/2503.16248)), **bad tool outputs**, and **multi-agent cascades** can route funds to attacker-controlled addresses. Simulation can be skipped; monitoring is too late once a tx is final.
+
+The Firewall adds a **protocol-layer floor**: the same blacklist rules the SDK checks are enforced by **every CKB node** when the wallet cell uses the Firewall lock. **Normative governance** (quorum, multisig, review windows) lives in [governance/voting.md](./governance/voting.md) and [docs/governance.md](./docs/governance.md).
+
+**Not only for agents.** Any software that builds CKB transactions (wallets, dapps, custodial batch jobs, scripts) can run the **SDK** pre-flight before signing. **Consensus** enforcement is the same for every spender: it applies to cells whose **lock** is the Firewall lock, regardless of whether an LLM was involved. The blacklist is evaluated against **outputs this transaction creates** (destination lock/type args on those outputs). It does not, by itself, implement a separate “only accept funds from non-blacklisted senders” policy; inbound flows still depend on how you construct and review transactions.
 
 ---
 
-## Install the libraries
+## How it works
 
-### TypeScript (`sdk/typescript`)
+The system is intentionally **two-layered**: they solve different problems and neither replaces the other.
 
-From a clone of this repo:
-
-```bash
-cd sdk/typescript
-npm ci
-npm run typecheck
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│                        AI Agent Runtime                          │
+│           (LLM + tool calls + wallet signing logic)              │
+└──────────────────────────────┬───────────────────────────────────┘
+                               │ agent constructs a transaction
+                               ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    LAYER 1: SDK Pre-flight                       │
+│  Fast feedback, structured errors, fee savings                    │
+│  - Resolve registry `cell_dep`, parse BLKL payload               │
+│  - Reject blacklisted outputs before signing                      │
+└──────────────────────────────┬───────────────────────────────────┘
+                               │ transaction passes pre-flight
+                               ▼
+                    agent signs and broadcasts
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                  LAYER 2: CKB Consensus Enforcement              │
+│  Authoritative, miner-enforced (requires Firewall lock on cell)  │
+│  - Firewall lock runs in validation                               │
+│  - Registry read via `cell_dep`; fail-closed if missing/ambiguous │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-To depend on it from another package (until a registry publish exists), use a **file** or **workspace** dependency, for example in your `package.json`:
+**Why both?** If the SDK is never called, a standard lock offers no consensus blacklist. If only the SDK existed, a compromised runtime could skip the check entirely. Together: **SDK = fast path for the agent; lock = guarantee for everyone else.**
 
-```json
-"dependencies": {
-  "@ckb-firewall/sdk": "file:../path/to/ckb-transaction-firewall/sdk/typescript"
-}
-```
-
-### Rust (`sdk/rust`)
-
-```bash
-cd sdk/rust
-cargo build
-cargo test
-```
-
-Add a path dependency in your `Cargo.toml` pointing at `sdk/rust`, or publish / vendor per your policy.
+Deeper CKB rationale (cell model, lock scripts vs account chains, oracle-free design): **[docs/architecture.md](./docs/architecture.md)**. For a short narrative overview, see **[ABOUT.md](./ABOUT.md)**.
 
 ---
 
-## Build the on-chain scripts
+## Prerequisites
 
-Install the RISC-V target and build each contract from its crate directory:
+| Tool | Notes |
+|------|--------|
+| **Rust** (stable) + `riscv64imac-unknown-none-elf` | `rustup target add riscv64imac-unknown-none-elf` |
+| **Node.js** 20+ and **npm** | Used for the TypeScript SDK; CI uses Node 22. |
+| **ckb-cli** | Optional locally; pinned in CI for governance evidence checks ([scripts/README.md](./scripts/README.md)). |
+
+---
+
+## Quick start
+
+From a clean clone: build the firewall binary, then prove the TypeScript SDK typechecks:
 
 ```bash
 rustup target add riscv64imac-unknown-none-elf
-
 cd contracts/firewall-lock
 cargo build --release --target=riscv64imac-unknown-none-elf
 
-cd ../blacklist-registry
-# * dev-signer-keys matches local governance drill / test key material
-cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+cd ../../sdk/typescript
+npm ci
+npm run typecheck
+npm run build
 ```
-
-`governance-lock` lives under `contracts/governance-lock/` for drill and supporting flows; build it the same way when you need that binary.
 
 ---
 
-## Run contract VM tests
+## SDK usage
 
-Integration-style VM tests live under `tests/unit` and expect the **release** RISC-V artifacts above to already exist:
+### TypeScript (`sdk/typescript`)
 
 ```bash
-cd contracts/firewall-lock
-cargo build --release --target=riscv64imac-unknown-none-elf
-
-cd ../blacklist-registry
-cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
-
-cd ../../tests/unit
-cargo test --test firewall_lock_tests
-cargo test --test blacklist_registry_tests
+npm install @ckb-firewall/sdk
 ```
 
-See [tests/unit/README.md](./tests/unit/README.md) for scope and fixtures.
+Requires **Node 20+**. The library is **ESM-only** (`import` / `import()`; no `require`).
 
----
+From this repository:
 
-## Using the Firewall lock on-chain
-
-1. **Deploy** the firewall lock script and blacklist registry type script on your target network, and record **code hash**, **hash type**, and **registry type script identity** (see deployment runbooks under `docs/phase3/runbooks/` and [scripts/README.md](./scripts/README.md)).
-2. **Normative layout** of lock args, flags, error codes, and registry `cell_dep` selection rules are specified in **[docs/lock-script-spec.md](./docs/lock-script-spec.md)** and summarized in [contracts/firewall-lock/README.md](./contracts/firewall-lock/README.md).
-3. **Spend path:** cells whose **lock** is the firewall script must include a live blacklist registry cell as a `cell_dep` whose **type script** matches the registry identity encoded in the firewall lock args (exactly one match; zero or many → validation error).
-4. **Inner lock:** the firewall delegates owner authorization to the configured inner lock (see spec). Without adopting this lock on an agent wallet cell, **only** the SDK pre-flight applies; miners do not run the firewall for standard secp-only locks.
-
-The TypeScript SDK performs **off-chain** checks against the same blacklist payload shape the chain uses — call it **before signing**:
+```bash
+cd sdk/typescript && npm ci && npm run typecheck && npm test && npm run build
+```
 
 ```typescript
 import { TransactionFirewall } from "@ckb-firewall/sdk";
@@ -120,35 +111,108 @@ const firewall = new TransactionFirewall({
 const decision = firewall.checkTransaction(unsignedTxLike);
 if (!decision.ok) {
   console.error(decision.reason, "code", decision.code);
-  // Do not sign.
 }
 ```
 
-Rust equivalent: `ckb_transaction_firewall_sdk::check_transaction` with `FirewallConfig` and `UnsignedTxLike` — see `sdk/rust/src/lib.rs`.
+### Rust (`sdk/rust`)
+
+```bash
+cd sdk/rust && cargo test
+```
+
+Use `ckb_transaction_firewall_sdk::check_transaction` with `FirewallConfig` and `UnsignedTxLike`; see [`sdk/rust/src/lib.rs`](./sdk/rust/src/lib.rs).
+
+---
+
+## Building the contracts
+
+```bash
+rustup target add riscv64imac-unknown-none-elf
+
+cd contracts/firewall-lock
+cargo build --release --target=riscv64imac-unknown-none-elf
+
+cd ../blacklist-registry
+cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+```
+
+`contracts/governance-lock/` supports governance drills; build the same way when you need that binary.
+
+---
+
+## Running tests
+
+VM integration tests expect **release** RISC-V artifacts:
+
+```bash
+cd contracts/firewall-lock && cargo build --release --target=riscv64imac-unknown-none-elf
+cd ../blacklist-registry && cargo build --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+cd ../../tests/unit
+cargo test --test firewall_lock_tests
+cargo test --test blacklist_registry_tests
+```
+
+See [tests/unit/README.md](./tests/unit/README.md).
+
+---
+
+## Using the Firewall lock on-chain
+
+1. **Deploy** scripts and record **code hashes** and **registry type script identity** (see [docs/phase3/runbooks/deployment-runbook.md](./docs/phase3/runbooks/deployment-runbook.md) and [scripts/README.md](./scripts/README.md)).
+2. **Normative** lock args, flags, error codes, and registry dep selection: **[docs/lock-script-spec.md](./docs/lock-script-spec.md)** and [contracts/firewall-lock/README.md](./contracts/firewall-lock/README.md).
+3. **Spend path:** the firewall lock requires exactly **one** live registry `cell_dep` whose **type script** matches the identity encoded in lock args; otherwise validation fails closed.
+4. **Inner lock** delegates ownership checks (e.g. secp256k1). Without the Firewall lock on the cell, **only** the SDK layer applies.
+
+---
+
+## Security model
+
+**Protects against:** sends to **known** blacklisted lock/type args; many agent hijack classes that pick a bad recipient address.
+
+**Does not protect against:** addresses **not yet** on the list; non-address exploit classes; **governance key compromise** (mitigated by multisig + process, not eliminated); cells that **do not** use the Firewall lock.
+
+**Fail-safe:** missing, invalid, or **ambiguous** registry deps → **reject**. See [docs/architecture.md](./docs/architecture.md#failure-semantics).
+
+---
+
+## Ecosystem
+
+The Transaction Firewall is the **enforcement floor** for the [CKB Agent Control Hub](https://github.com/digitaldrreamer/ckb-agent-control-hub) (authorization, identity, marketplace). Control Hub defines what an agent *may* do; this repo defines what **no** agent may do at listed destinations when the lock is in use.
+
+---
+
+## Documentation
+
+| Topic | Where |
+|--------|--------|
+| Overview narrative | [ABOUT.md](./ABOUT.md) |
+| Architecture, trust model, **why CKB** | [docs/architecture.md](./docs/architecture.md) |
+| Lock script spec (args, errors) | [docs/lock-script-spec.md](./docs/lock-script-spec.md) |
+| Governance | [docs/governance.md](./docs/governance.md), [governance/voting.md](./governance/voting.md) |
+| Release checklist | [docs/release-checklists.md](./docs/release-checklists.md) |
+| Operator / CI scripts | [scripts/README.md](./scripts/README.md) |
+| **Public testnet deploy** (contracts + TS `registryScript`) | [docs/deployments/testnet.md](./docs/deployments/testnet.md) |
+| Governance operations and release evidence | [docs/phase3/](./docs/phase3/), [docs/phase4/](./docs/phase4/) |
+| Research notes | [research/](./research/) |
+| Contract READMEs | [contracts/firewall-lock/README.md](./contracts/firewall-lock/README.md), [contracts/blacklist-registry/README.md](./contracts/blacklist-registry/README.md) |
+| Changelog / versions | [CHANGELOG.md](./CHANGELOG.md) |
 
 ---
 
 ## Contributing
 
-- **Code & docs:** open an issue for larger changes, then a PR against `main`. Match existing style; run relevant `cargo test` / `npm test` paths before pushing.
-- **Blacklist governance:** proposals and voting are **not** ordinary PRs — follow **[governance/voting.md](./governance/voting.md)** and **[docs/governance.md](./docs/governance.md)**.
-- **Security:** report sensitive issues through **GitHub Security Advisories** (private disclosure) for this repository when possible.
+- **Code & docs:** open an issue for larger changes, then a PR to `main`. Run the relevant `cargo test` / `npm test` paths.
+- **Blacklist governance:** follow [governance/voting.md](./governance/voting.md), not ordinary GitHub PRs.
+- **Security:** use **GitHub Security Advisories** for sensitive reports when possible.
 
 ```bash
 git checkout -b feat/your-change
-# edit, test, commit
+# … edit, test …
 git push -u origin feat/your-change
-# open PR → main
 ```
-
----
-
-## Changelog and versioning
-
-Semantic versions are tracked per crate / package (`Cargo.toml`, `sdk/typescript/package.json`); see **[CHANGELOG.md](./CHANGELOG.md)** for release notes.
 
 ---
 
 ## License
 
-MIT — see `license = "MIT"` in each crate’s `Cargo.toml` (e.g. `contracts/firewall-lock/Cargo.toml`, `sdk/rust/Cargo.toml`).
+MIT; see `license = "MIT"` in each crate’s `Cargo.toml` (e.g. [contracts/firewall-lock/Cargo.toml](./contracts/firewall-lock/Cargo.toml)).
