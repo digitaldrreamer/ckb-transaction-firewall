@@ -50,7 +50,7 @@ The system is intentionally **two-layered**: they solve different problems and n
 
 **Why both?** If the SDK is never called, a standard lock offers no consensus blacklist. If only the SDK existed, a compromised runtime could skip the check entirely. Together: **SDK = fast path for the agent; lock = guarantee for everyone else.**
 
-Deeper CKB rationale (cell model, lock scripts vs account chains, oracle-free design): **[docs/architecture.md](./docs/architecture.md)**. For the **full narrative** (extended threat model, component-by-component description, governance story, security model detail, and Control Hub relationship), see **[ABOUT.md](./ABOUT.md)**.
+Deeper CKB rationale (cell model, lock scripts vs account chains, oracle-free design): **[docs/architecture.md](./docs/architecture.md)**. For a short narrative overview, see **[ABOUT.md](./ABOUT.md)**.
 
 ---
 
@@ -185,13 +185,14 @@ The Transaction Firewall is the **enforcement floor** for the [CKB Agent Control
 
 | Topic | Where |
 |--------|--------|
-| **Extended narrative** (threat model, components, governance, security, ecosystem) | [ABOUT.md](./ABOUT.md) |
+| Overview narrative | [ABOUT.md](./ABOUT.md) |
 | Architecture, trust model, **why CKB** | [docs/architecture.md](./docs/architecture.md) |
 | Lock script spec (args, errors) | [docs/lock-script-spec.md](./docs/lock-script-spec.md) |
 | Governance | [docs/governance.md](./docs/governance.md), [governance/voting.md](./governance/voting.md) |
+| Release checklist | [docs/release-checklists.md](./docs/release-checklists.md) |
 | Operator / CI scripts | [scripts/README.md](./scripts/README.md) |
 | **Public testnet deploy** (contracts + TS `registryScript`) | [docs/deployments/testnet.md](./docs/deployments/testnet.md) |
-| Phase 3 & 4 runbooks & matrices | [docs/phase3/](./docs/phase3/), [docs/phase4/](./docs/phase4/) |
+| Governance operations and release evidence | [docs/phase3/](./docs/phase3/), [docs/phase4/](./docs/phase4/) |
 | Research notes | [research/](./research/) |
 | Contract READMEs | [contracts/firewall-lock/README.md](./contracts/firewall-lock/README.md), [contracts/blacklist-registry/README.md](./contracts/blacklist-registry/README.md) |
 | Changelog / versions | [CHANGELOG.md](./CHANGELOG.md) |
