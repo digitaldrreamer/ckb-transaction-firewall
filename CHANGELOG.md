@@ -37,8 +37,6 @@
 - Integration coverage includes invalid args/version/flags, missing/invalid/unsorted/ambiguous registry deps, blacklisted output lock/type args, and a non-blacklisted happy path
 
 **Documentation**:
-- Created IMPLEMENTATION.md with architecture and data flow
-- Created GAPS_ANALYSIS.md with remaining work and risk assessment
 - Documented all public APIs and error codes
 - Added inline documentation throughout
 
@@ -148,7 +146,6 @@
   - Unified firewall binary naming to `firewall-lock` in build docs/snippets.
   - Removed developer-specific absolute paths in setup docs.
   - Aligned capsule-free build instructions (`cargo build --release --target=...`) with current workflow.
-  - Updated stale status lines in `GAPS_ANALYSIS.md` and `SESSION_SUMMARY.md`.
 
 ## 2026-05-07
 
@@ -224,18 +221,17 @@
 - Added `curl --retry` and `--connect-timeout` to `scripts/ci/install_ckb_cli.sh` for transient download failures.
 - Replaced `id.len() as u8` with `u8::try_from` in `firewall_lock_tests.rs` registry payload helpers to avoid silent truncation.
 
-### Firewall lock integration depth (GAPS_ANALYSIS)
+### Firewall lock integration depth
 
 - Added median-time / `header_dep` VM tests for temporary blacklist expiry vs active paths and even-count median.
 - Added inner-lock spawn coverage: missing inner cell dep (error 13) and `always_failure` fixture inner lock (error 15).
 - Added 256-entry registry stress happy-path test; fixture `tests/unit/fixtures/always_failure_lock` with README attribution.
 - Extended `build_tx_with_firewall_lock` to attach `header_deps`; `insert_test_headers` helper for ckb-testtool.
-- Updated `contracts/firewall-lock/GAPS_ANALYSIS.md` integration section status.
 
 ### Firewall lock header matrix integration tests
 
 - Added permutation, nine-header median grid, no-header zero-median, duplicate-timestamp boundary, and single-header median VM tests (`firewall_lock_tests.rs`).
-- Updated `GAPS_ANALYSIS.md` optional header-matrix follow-ups; expanded `tests/unit/fixtures/README.md` (third-party testdata explanation).
+- Expanded `tests/unit/fixtures/README.md` with third-party testdata explanation.
 - Documented SHA-256 and byte size for `always_failure_lock` in `tests/unit/fixtures/README.md` (matches `ckb-script` 0.118.0 `testdata/always_failure`).
 - Added explicit “Replacing this fixture” checklist to `tests/unit/fixtures/README.md` (update size, SHA-256, `ckb-script` version line, run tests, changelog).
 

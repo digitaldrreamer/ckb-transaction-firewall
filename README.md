@@ -192,7 +192,6 @@ The Transaction Firewall is the **enforcement floor** for the [CKB Agent Control
 | Operator / CI scripts | [scripts/README.md](./scripts/README.md) |
 | **Public testnet deploy** (contracts + TS `registryScript`) | [docs/deployments/testnet.md](./docs/deployments/testnet.md) |
 | Phase 3 & 4 runbooks & matrices | [docs/phase3/](./docs/phase3/), [docs/phase4/](./docs/phase4/) |
-| Internal plans & milestone evidence | [docs/internal/](./docs/internal/) |
 | Research notes | [research/](./research/) |
 | Contract READMEs | [contracts/firewall-lock/README.md](./contracts/firewall-lock/README.md), [contracts/blacklist-registry/README.md](./contracts/blacklist-registry/README.md) |
 | Changelog / versions | [CHANGELOG.md](./CHANGELOG.md) |

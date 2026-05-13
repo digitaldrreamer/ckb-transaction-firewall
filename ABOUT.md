@@ -178,8 +178,7 @@ ckb-transaction-firewall/
 ├── tests/
 │   ├── unit/                   # VM tests (ckb-testtool) for contracts
 │   └── integration/          # Drills, governance evidence
-├── docs/                       # Architecture, lock spec, governance, phase runbooks, internal evidence
-├── docs/internal/              # Phase 3/4 plans, reproducible build + milestone artifacts
+├── docs/                       # Architecture, lock spec, governance, runbooks, release evidence
 ├── research/                   # Design rationale (see research/README.md)
 ├── scripts/                    # CI helpers, deploy, governance automation
 ├── CHANGELOG.md
