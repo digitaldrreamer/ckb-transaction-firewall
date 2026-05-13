@@ -197,7 +197,7 @@ wait_topup_tx_committed() {
   echo "waiting for top-up tx ${h} to commit (max ${TOPUP_TX_COMMIT_WAIT_SEC}s)..." >&2
   while (( $(date +%s) < deadline )); do
     local st
-    st="$("$CKB_CLI_BIN" --url "$CKB_RPC_URL" rpc get_transaction --hash "$h" --output-format json 2>/dev/null | jq -r '.tx_status.status // empty')" || true
+    st="$("$CKB_CLI_BIN" --url "$CKB_RPC_URL" rpc get_transaction --hash "$h" --output-format json 2>/dev/null | jq -r '.tx_status.status // .result.tx_status.status // empty')" || true
     if [[ "$st" == "committed" ]]; then
       echo "top-up tx committed: $h" >&2
       return 0
@@ -496,6 +496,11 @@ JSON
     "$DEPLOY_DIR/gov_negative_invalid_signer_set_tx.json"
     "$DEPLOY_DIR/gov_negative_invalid_root_binding_tx.json"
   )
+  if (( ${#outpoints[@]} < ${#files[@]} )); then
+    echo "not enough qualifying outpoints to prepare tx files: need ${#files[@]}, got ${#outpoints[@]}." >&2
+    echo "fund or split more lock-only cells, or set MIN_REQUIRED_CELLS to at least ${#files[@]}." >&2
+    exit 1
+  fi
 
   local i=0
   for f in "${files[@]}"; do

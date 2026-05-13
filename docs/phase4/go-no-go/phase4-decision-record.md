@@ -12,7 +12,7 @@
 | Signer separation (Mode 2) | [mode2_signer_state.json](../../../tests/integration/governance_drill/mode2_signer_state.json) |
 | Chain status all committed | [chain_status_latest.json](../../../tests/integration/governance_drill/chain_status_latest.json) |
 | Phase 4 CI gate on `main` | [.github/workflows/tests.yml](../../../.github/workflows/tests.yml) + [m4-ci-gate-proof.md](../../internal/phase4_artifacts/m4-ci-gate-proof.md) |
-| Security trackers green | [docs/phase4/security/findings-tracker.md](../security/findings-tracker.md), [docs/phase3/security/findings-tracker.md](../phase3/security/findings-tracker.md) |
+| Security trackers green | [docs/phase4/security/findings-tracker.md](../security/findings-tracker.md), [docs/phase3/security/findings-tracker.md](../../phase3/security/findings-tracker.md) |
 | Milestone artifacts M1–M5 | [phase4 milestone evidence](../../internal/phase4_artifacts/) |
 
 ## Risk acceptance

@@ -1,8 +1,16 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { parseRegistryPayload, resolveRegistryDep } from "../src/blacklist.js";
 import { TransactionFirewall } from "../src/firewall.js";
 import { FIREWALL_ERROR_CODES } from "../src/types.js";
 import type { CellDepLike, ScriptLike } from "../src/types.js";
+
+interface TestnetRegistryFixture {
+  registryScript: ScriptLike;
+  canonicalRegistryCell: {
+    data: string;
+  };
+}
 
 function registryHex(ids: number[][]): string {
   const bytes: number[] = [];
@@ -35,6 +43,23 @@ describe("blacklist parser", () => {
     expect(parsed.version).toBe(1);
     expect(parsed.entries).toHaveLength(1);
     expect(parsed.entries).toEqual([expect.objectContaining({ identifier: "0xaabb" })]);
+  });
+
+  test("rejects malformed hex pairs", () => {
+    expect(() => parseRegistryPayload("0x424c4b4c010000000g")).toThrowError(
+      "InvalidRegistryData",
+    );
+  });
+
+  test("treats entry count as unsigned", () => {
+    expect(() => parseRegistryPayload("0x424c4b4c0100000080")).toThrowError(
+      "InvalidRegistryData",
+    );
+  });
+
+  test("accepts duplicate sorted entries", () => {
+    const parsed = parseRegistryPayload(registryHex([[0xaa], [0xaa]]));
+    expect(parsed.entries.map((entry) => entry.identifier)).toEqual(["0xaa", "0xaa"]);
   });
 
   test("rejects unsorted entries", () => {
@@ -115,6 +140,28 @@ describe("transaction firewall", () => {
     expect(res.ok).toBe(false);
     if (!res.ok) {
       expect(res.code).toBe(FIREWALL_ERROR_CODES.BlacklistedTypeArgs);
+    }
+  });
+
+  test("checks the canonical testnet registry fixture", () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL("../../../docs/deployments/testnet.registry.example.json", import.meta.url),
+        "utf8",
+      ),
+    ) as TestnetRegistryFixture;
+    const parsed = parseRegistryPayload(fixture.canonicalRegistryCell.data);
+    const blacklistedIdentifier = parsed.entries[0]?.identifier;
+    expect(blacklistedIdentifier).toBeDefined();
+
+    const fw = new TransactionFirewall({ registryScript: fixture.registryScript });
+    const res = fw.checkTransaction({
+      cellDeps: [{ type: fixture.registryScript, data: fixture.canonicalRegistryCell.data }],
+      outputs: [{ lockArgs: blacklistedIdentifier ?? "0x" }],
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.code).toBe(FIREWALL_ERROR_CODES.BlacklistedLockArgs);
     }
   });
 });

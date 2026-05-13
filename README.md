@@ -22,7 +22,7 @@ The Firewall adds a **protocol-layer floor**: the same blacklist rules the SDK c
 
 The system is intentionally **two-layered**: they solve different problems and neither replaces the other.
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────┐
 │                        AI Agent Runtime                          │
 │           (LLM + tool calls + wallet signing logic)              │

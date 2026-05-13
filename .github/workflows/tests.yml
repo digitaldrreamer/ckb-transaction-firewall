@@ -44,6 +44,15 @@ jobs:
         env:
           CKB_CLI_VERSION: v1.15.0
 
+      - name: Check shell script syntax
+        run: |
+          while IFS= read -r script; do
+            bash -n "$script"
+          done < <(find scripts -name '*.sh' -type f | sort)
+
+      - name: Check repository Markdown links
+        run: python3 scripts/check_markdown_links.py
+
       - name: Run firewall lock unit tests
         working-directory: contracts/firewall-lock
         run: cargo test --features std

@@ -125,7 +125,7 @@ The Blacklist Registry Cell is referenced in transactions as a `cell_dep` (read-
 3. Omnilock specification: https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0042-omnilock/0042-omnilock.md
 4. xUDT specification: https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0052-extensible-udt/0052-extensible-udt.md
 5. "Compromising LLM-Integrated Applications with Indirect Prompt Injection": Liu et al., arXiv:2302.12173
-6. AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks: Debenedetti et al., 2024
-7. USDC Blacklist implementation: https://etherscan.io/token/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48#code
+6. AgentDojo: A Dynamic Environment to Evaluate Prompt Injection Attacks: Debenedetti et al., 2024, https://arxiv.org/abs/2406.13352
+7. Circle stablecoin EVM contracts: https://github.com/circlefin/stablecoin-evm
 8. MakerDAO Governance Module: https://docs.makerdao.com/smart-contract-modules/governance-module
 9. EIP-7702: Set EOA account code: https://eips.ethereum.org/EIPS/eip-7702

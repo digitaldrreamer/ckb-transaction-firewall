@@ -30,7 +30,15 @@ function hexToBytes(hex: string): Uint8Array {
     if (hi === undefined || lo === undefined) {
       throw new InvalidRegistryDataError();
     }
-    out[i / 2] = Number.parseInt(`${hi}${lo}`, 16);
+    const pair = `${hi}${lo}`;
+    if (!/^[0-9a-fA-F]{2}$/.test(pair)) {
+      throw new InvalidRegistryDataError();
+    }
+    const byte = Number.parseInt(pair, 16);
+    if (Number.isNaN(byte)) {
+      throw new InvalidRegistryDataError();
+    }
+    out[i / 2] = byte;
   }
   return out;
 }
@@ -86,10 +94,12 @@ export function parseRegistryPayload(registryDataHex: string): RegistryPayload {
   }
 
   const count =
-    readU8(data, 5) |
-    (readU8(data, 6) << 8) |
-    (readU8(data, 7) << 16) |
-    (readU8(data, 8) << 24);
+    (
+      readU8(data, 5) |
+      (readU8(data, 6) << 8) |
+      (readU8(data, 7) << 16) |
+      (readU8(data, 8) << 24)
+    ) >>> 0;
   let offset = 9;
   const entries: RegistryPayload["entries"] = [];
 
@@ -118,7 +128,7 @@ export function parseRegistryPayload(registryDataHex: string): RegistryPayload {
     if (cur === undefined || prev === undefined) {
       throw new InvalidRegistryDataError();
     }
-    if (cur.identifier.toLowerCase() <= prev.identifier.toLowerCase()) {
+    if (cur.identifier < prev.identifier) {
       throw new RegistryNotSortedError();
     }
   }
