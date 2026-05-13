@@ -14,7 +14,7 @@ Deploy `firewall-lock` and `blacklist-registry` to testnet, then copy the live r
 
 ## Responsibilities
 
-- fetch and parse blacklist registry state from CKB RPC,
+- parse caller-supplied blacklist registry cell data,
 - inspect transaction outputs before signing,
 - return structured allow/deny results for agent runtimes,
 - provide helpers for firewall lock configuration.
@@ -49,6 +49,7 @@ npm run attw
 - Registry lookup uses the registry cell’s **type script** triple: `codeHash`, `hashType`, `args` (same bytes as in firewall lock args).
 - SDK MUST scan provided deps/context and enforce exactly-one-match semantics.
 - SDK MUST map zero matches to `MissingRegistryCellDep` (code `8`) and multiple matches to `AmbiguousRegistryCellDep` (code `17`).
+- SDK core MUST NOT perform implicit RPC inside `checkTransaction`; callers fetch the registry cell from their chosen source and pass it as `UnsignedTxLike.cellDeps`.
 
 ## Expected layout
 
