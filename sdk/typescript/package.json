@@ -1,13 +1,56 @@
 {
   "name": "@ckb-firewall/sdk",
   "version": "0.2.0",
-  "private": true,
+  "description": "TypeScript pre-flight checks for CKB transaction firewall blacklist enforcement (Layer 1 agent and wallet flows).",
   "type": "module",
+  "license": "MIT",
+  "author": "digitaldrreamer and contributors",
+  "keywords": [
+    "ckb",
+    "nervos",
+    "transaction",
+    "firewall",
+    "blockchain",
+    "security",
+    "sdk"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/digitaldrreamer/ckb-transaction-firewall.git",
+    "directory": "sdk/typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/digitaldrreamer/ckb-transaction-firewall/issues"
+  },
+  "homepage": "https://github.com/digitaldrreamer/ckb-transaction-firewall#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "attw": "attw --pack . --profile esm-only",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.17.4",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4"
   }

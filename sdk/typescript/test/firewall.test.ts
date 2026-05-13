@@ -34,7 +34,7 @@ describe("blacklist parser", () => {
     const parsed = parseRegistryPayload(registryHex([[0xaa, 0xbb]]));
     expect(parsed.version).toBe(1);
     expect(parsed.entries).toHaveLength(1);
-    expect(parsed.entries[0].identifier).toBe("0xaabb");
+    expect(parsed.entries).toEqual([expect.objectContaining({ identifier: "0xaabb" })]);
   });
 
   test("rejects unsorted entries", () => {
