@@ -128,6 +128,7 @@ export function parseRegistryPayload(registryDataHex: string): RegistryPayload {
     if (cur === undefined || prev === undefined) {
       throw new InvalidRegistryDataError();
     }
+    // Duplicates are permitted (equal identifiers are still blacklisted); only strict descent is an error.
     if (cur.identifier < prev.identifier) {
       throw new RegistryNotSortedError();
     }

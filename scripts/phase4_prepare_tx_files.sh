@@ -448,7 +448,9 @@ JSON
         sent_hash="$(jq -r '.hash // .transaction.hash // empty' <<<"$json_out" 2>/dev/null | head -1 || true)"
       fi
       if [[ ! "$sent_hash" =~ ^0x[0-9a-fA-F]{64}$ ]]; then
-        sent_hash="$(grep -Eo '0x[a-fA-F0-9]{64}' <<<"$json_out" | tail -1 || true)"
+        echo "error: could not parse tx hash from wallet transfer output (expected JSON with .hash field)." >&2
+        echo "Re-run with TOPUP_PRIVKEY_PATH set or ensure ckb-cli --output-format json is supported by this version." >&2
+        exit 1
       fi
       if [[ "$sent_hash" =~ ^0x[0-9a-fA-F]{64}$ ]]; then
         if ! wait_topup_tx_committed "$sent_hash"; then

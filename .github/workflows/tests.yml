@@ -43,6 +43,7 @@ jobs:
         run: bash scripts/ci/install_ckb_cli.sh
         env:
           CKB_CLI_VERSION: v1.15.0
+          EXPECTED_SHA256: 1b65da74ced8f8db614bbaa5194ab1780edd8fc79a6627aba4fbefb6bcec86f2
 
       - name: Check shell script syntax
         run: |
