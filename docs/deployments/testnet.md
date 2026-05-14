@@ -65,7 +65,9 @@ For the current canonical testnet registry, use [`testnet.registry.json`](testne
 
 - `registryScript`: pass this to `new TransactionFirewall({ registryScript })`.
 - `canonicalRegistryCell`: fetch this outpoint from testnet and pass `{ type: registryScript, data }` in `unsignedTx.cellDeps`.
-- `blacklistRegistryTypeScriptDeployOutPoint`: deployment metadata only; do not use its ELF data as a registry payload.
+- `firewallLockDeployOutPoint`: the deployed `firewall-lock` contract binary cell. Deployment metadata only.
+- `blacklistRegistryTypeScriptDeployOutPoint`: the deployed `blacklist-registry` contract binary cell. Deployment metadata only; do not use its ELF data as a registry payload.
+- `deploymentHistory`: log of past deployments with block numbers and tx hashes for upgrade traceability.
 
 ## 4. Optional: publish canonical constants
 

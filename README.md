@@ -156,7 +156,6 @@ The Transaction Firewall is the enforcement floor for the [CKB Agent Control Hub
 | Governance | [docs/governance.md](./docs/governance.md) |
 | Testnet deployment | [docs/deployments/testnet.md](./docs/deployments/testnet.md) |
 | Canonical registry values | [docs/deployments/testnet.registry.json](./docs/deployments/testnet.registry.json) |
-| Operator scripts | [scripts/README.md](./scripts/README.md) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 
 ---
