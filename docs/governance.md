@@ -44,6 +44,22 @@ Schema is tracked in `governance/proposal-schema.json`.
 5. **Execution**: successful proposal becomes signed registry replacement transaction.
 6. **Finalization**: new registry cell is live and linked to proposal id.
 
+### CLI tooling
+
+The `@ckb-firewall/cli` package implements the full lifecycle as interactive commands:
+
+```bash
+npm install -g @ckb-firewall/cli
+
+ckb-firewall propose          # submit a proposal (step 1)
+ckb-firewall vote             # record a validator vote (step 4)
+ckb-firewall proposals        # inspect status and countdown (steps 2–4)
+ckb-firewall sign             # add a multisig signature (step 5)
+ckb-firewall execute          # build and submit the governance tx (step 5–6)
+```
+
+All commands are interactive when run without flags. See [`sdk/cli/README.md`](../sdk/cli/README.md) for full option reference.
+
 ## Voting Policy (v1)
 
 - Validator set: 9 active validators, plus up to 3 standby validators.
