@@ -87,9 +87,9 @@ Use this for real testnet pre-flight checks:
 
 For local/off-chain mocks only, `exampleEmptyRegistryPayloadHex` remains a minimal empty `BLKL` payload.
 
-To rotate or replace the canonical BLKL cell, run the governance bootstrap/update flow with `scripts/phase4_prepare_tx_files.sh` and `scripts/phase4_submit_tx.sh`, then update `canonicalRegistryCell` after the replacement transaction is committed. Full drill execution is documented in [Governance drill: live execution](../phase4/runbooks/governance-drill-live-execution.md).
+To rotate or replace the canonical BLKL cell, run the governance bootstrap/update flow with `scripts/phase4_prepare_tx_files.sh` and `scripts/phase4_submit_tx.sh`, then update `canonicalRegistryCell` after the replacement transaction is committed.
 
 ## Related
 
-- [Phase 3 deployment runbook](../phase3/runbooks/deployment-runbook.md)
-- [`scripts/README.md`](../../scripts/README.md) (`deploy.sh`)
+- [Governance](../governance.md)
+- [Architecture](../architecture.md)
