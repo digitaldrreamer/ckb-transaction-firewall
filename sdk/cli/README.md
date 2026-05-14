@@ -1,5 +1,13 @@
 # @ckb-firewall/cli
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/digitaldrreamer/ckb-transaction-firewall/main/assets/logo.png" alt="CKB Transaction Firewall" width="100" />
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/digitaldrreamer/ckb-transaction-firewall/main/assets/cli-screenshot.png" alt="ckb-firewall CLI" width="720" />
+</p>
+
 [![npm](https://img.shields.io/npm/v/@ckb-firewall/cli)](https://www.npmjs.com/package/@ckb-firewall/cli)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
