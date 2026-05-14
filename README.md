@@ -1,13 +1,18 @@
 # CKB Transaction Firewall
 
-[![npm](https://img.shields.io/npm/v/@ckb-firewall/sdk)](https://www.npmjs.com/package/@ckb-firewall/sdk)
+<p align="center">
+  <img src="./assets/logo.png" alt="CKB Transaction Firewall" width="120" />
+</p>
+
+[![npm sdk](https://img.shields.io/npm/v/@ckb-firewall/sdk?label=%40ckb-firewall%2Fsdk)](https://www.npmjs.com/package/@ckb-firewall/sdk)
+[![npm cli](https://img.shields.io/npm/v/@ckb-firewall/cli?label=%40ckb-firewall%2Fcli)](https://www.npmjs.com/package/@ckb-firewall/cli)
 [![Tests](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 > AI agents can be hijacked into sending funds to malicious addresses.  
 > CKB Transaction Firewall enforces a **community-governed blacklist** at **consensus** — inside the lock script — so no compromised or injected agent code can bypass the check. A TypeScript SDK adds a fast **pre-flight** layer before you sign.
 
-**Contracts live on CKB testnet.** Cell tx [`0x11b0397c`](https://explorer.nervos.org/transaction/0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed) committed at block `0x141be3d`. Registry values: [`docs/deployments/testnet.registry.json`](./docs/deployments/testnet.registry.json).
+**Contracts live on CKB testnet.** Cell tx [`0x11b0397c`](https://testnet.explorer.nervos.org/transaction/0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed) committed at block `0x141be3d`. Registry values: [`docs/deployments/testnet.registry.json`](./docs/deployments/testnet.registry.json).
 
 ---
 
