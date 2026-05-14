@@ -1,5 +1,5 @@
 {
-  "_comment": "Values read from CKB testnet. registryScript is the type script of the live BLKL registry cell and is the value to use for FirewallConfig.registryScript. canonicalRegistryCell is the live cell dep whose data is BLKL v1. blacklistRegistryTypeScriptDeployOutPoint is the registry contract deploy cell; its data is the RISC-V type script binary, not BLKL.",
+  "_comment": "Values read from CKB testnet. registryScript is the type script of the live BLKL registry cell and is the value to use for FirewallConfig.registryScript. canonicalRegistryCell is the live cell dep whose data is BLKL v1. firewallLockDeployOutPoint and blacklistRegistryTypeScriptDeployOutPoint are the contract binary deploy cells; their data is RISC-V ELF, not BLKL.",
   "rpcUrl": "https://testnet.ckb.dev",
   "registryScript": {
     "codeHash": "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
@@ -11,9 +11,22 @@
     "index": 0,
     "data": "0x424c4b4c010100000020ec2cd50681d6b1b71fd762734c6b212c074ffa52fc6aed9aa6bf3566f58a9c150000000000000000"
   },
+  "firewallLockDeployOutPoint": {
+    "txHash": "0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed",
+    "index": 0
+  },
   "blacklistRegistryTypeScriptDeployOutPoint": {
-    "txHash": "0x26437ed4039c4c74e2d85e0d2c7320922dff0e86c1d62580b540a268564e471e",
+    "txHash": "0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed",
     "index": 1
   },
+  "deploymentHistory": [
+    {
+      "txHash": "0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed",
+      "blockNumber": "0x141be3d",
+      "blockHash": "0x267832c57f3a37b36c29333ee5d48c1784a9e560f435a40af20bea3ff53e55f3",
+      "date": "2026-05-14",
+      "note": "0.2.0 release — contract binary upgrade; TYPE_IDs and registryScript unchanged"
+    }
+  ],
   "exampleEmptyRegistryPayloadHex": "0x424c4b4c0100000000"
 }
