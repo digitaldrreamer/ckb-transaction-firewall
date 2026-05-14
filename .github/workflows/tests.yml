@@ -158,5 +158,6 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: phase3-artifacts
-          path: docs/internal/phase3_artifacts/
+          path: phase3_artifacts/
           retention-days: 14
+          if-no-files-found: ignore
