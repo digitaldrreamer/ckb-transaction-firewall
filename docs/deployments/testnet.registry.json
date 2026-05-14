@@ -1,5 +1,12 @@
 {
-  "_comment": "Values read from CKB testnet. registryScript is the type script of the live BLKL registry cell and is the value to use for FirewallConfig.registryScript. canonicalRegistryCell is the live cell dep whose data is BLKL v1. firewallLockDeployOutPoint and blacklistRegistryTypeScriptDeployOutPoint are the contract binary deploy cells; their data is RISC-V ELF, not BLKL.",
+  "_comment": [
+    "Values read from CKB testnet.",
+    "registryScript: type script of the live BLKL registry cell — use as FirewallConfig.registryScript.",
+    "canonicalRegistryCell: live cell dep whose data is a BLKL v1 payload.",
+    "firewallLockDeployOutPoint: deployed firewall-lock contract binary cell (RISC-V ELF, not BLKL).",
+    "blacklistRegistryTypeScriptDeployOutPoint: deployed blacklist-registry contract binary cell (RISC-V ELF, not BLKL).",
+    "deploymentHistory: log of past deployments for upgrade traceability."
+  ],
   "rpcUrl": "https://testnet.ckb.dev",
   "registryScript": {
     "codeHash": "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",

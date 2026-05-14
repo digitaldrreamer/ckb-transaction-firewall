@@ -23,7 +23,7 @@ The Firewall adds a **protocol-layer floor**: the same blacklist rules the SDK c
 
 ## How it works
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │              AI Agent / Wallet Runtime           │
 └──────────────────────┬──────────────────────────┘
@@ -61,13 +61,15 @@ npm install @ckb-firewall/sdk
 ```typescript
 import { TransactionFirewall } from "@ckb-firewall/sdk";
 
-const firewall = new TransactionFirewall({
-  registryScript: {
-    codeHash: "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
-    hashType: "type",
-    args: "0x019bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce80114003f54dea35bcc7a0efef541d361799f77bd1b8581",
-  },
-});
+const registryScript = {
+  codeHash: "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+  hashType: "type",
+  args: "0x019bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce80114003f54dea35bcc7a0efef541d361799f77bd1b8581",
+};
+const registryData = "0x..."; // fetch live cell data from your CKB node
+const recipientLockArgs = "0x..."; // the lock args you want to check
+
+const firewall = new TransactionFirewall({ registryScript });
 
 const result = firewall.checkTransaction({
   cellDeps: [{ type: registryScript, data: registryData }],
