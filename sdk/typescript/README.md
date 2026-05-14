@@ -1,64 +1,78 @@
-# TypeScript SDK
+# @ckb-firewall/sdk
 
-TypeScript implementation of Layer 1 pre-flight checks for CKB agent transaction flows.
+[![npm](https://img.shields.io/npm/v/@ckb-firewall/sdk)](https://www.npmjs.com/package/@ckb-firewall/sdk)
+[![Tests](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-## CKB testnet (public devnet)
+Pre-flight blacklist enforcement for CKB transactions. Works in AI agent runtimes, wallets, dapps, and any service that builds CKB transactions before signing.
 
-Deploy `firewall-lock` and `blacklist-registry` to testnet, then copy the live registry **type script** into `FirewallConfig.registryScript`. Step-by-step commands, `ckb-cli` queries, and an example JSON shape: [docs/deployments/testnet.md](../../docs/deployments/testnet.md), [docs/deployments/testnet.registry.json](../../docs/deployments/testnet.registry.json).
-
-## Module and types
-
-- **ESM-only** build under `dist/`; Node **20+** (`engines` in [`package.json`](./package.json)).
-- **Types:** `FirewallDecision` is a discriminated union; failures use literal `reason` strings aligned with `FIREWALL_ERROR_CODES`.
-- **Errors:** `MissingRegistryCellDepError`, `InvalidRegistryDataError`, `RegistryNotSortedError`, `AmbiguousRegistryCellDepError` extend `FirewallSdkError` and are thrown from registry resolution / parsing; `TransactionFirewall.checkTransaction` maps them to decisions.
-
-## Responsibilities
-
-- parse caller-supplied blacklist registry cell data,
-- inspect transaction outputs before signing,
-- return structured allow/deny results for agent runtimes,
-- provide helpers for firewall lock configuration.
-
-## Public API Direction (v1)
-
-- `TransactionFirewall`: main check engine.
-- `checkTransaction(unsignedTx)`: pre-flight decision API.
-- `buildFirewallLock(config)`: helper for firewall lock composition.
-
-## Implemented Modules (current)
-
-- `src/types.ts`: typed transaction/dependency/config/result models.
-- `src/errors.ts`: typed SDK errors for registry resolution and parsing.
-- `src/blacklist.ts`: exact registry dep resolution + BLKL v1 payload parsing.
-- `src/firewall.ts`: deterministic allow/deny preflight evaluation.
-- `src/index.ts`: public exports.
-
-## Local Validation
+## Install
 
 ```bash
-cd sdk/typescript
-npm ci
-npm run typecheck
-npm test
-npm run build
-npm run attw
+npm install @ckb-firewall/sdk
 ```
 
-## Registry Resolution Contract
+Node 20+. ESM only (`import`; no `require`).
 
-- Registry lookup uses the registry cell’s **type script** triple: `codeHash`, `hashType`, `args` (same bytes as in firewall lock args).
-- SDK MUST scan provided deps/context and enforce exactly-one-match semantics.
-- SDK MUST map zero matches to `MissingRegistryCellDep` (code `8`) and multiple matches to `AmbiguousRegistryCellDep` (code `17`).
-- SDK core MUST NOT perform implicit RPC inside `checkTransaction`; callers fetch the registry cell from their chosen source and pass it as `UnsignedTxLike.cellDeps`.
+## Usage
 
-## Expected layout
+```typescript
+import { TransactionFirewall } from "@ckb-firewall/sdk";
 
-- `src/firewall.ts`: transaction safety entrypoint.
-- `src/blacklist.ts`: registry fetch + parse logic.
-- `src/index.ts`: SDK public exports.
+const firewall = new TransactionFirewall({
+  registryScript: {
+    codeHash: "0x...",
+    hashType: "type",
+    args: "0x...",
+  },
+});
 
-## Error Model
+const result = firewall.checkTransaction({
+  cellDeps: [{ type: registryScript, data: registryData }],
+  outputs: [{ lockArgs: "0x..." }],
+});
 
-SDK methods should return stable, machine-readable error codes plus human-readable messages so operators, dashboards, and autonomous agents can respond consistently.
+if (!result.ok) {
+  // result.code and result.reason are narrowed by the discriminated union
+  console.error(result.reason); // e.g. "BlacklistedLockArgs"
+}
+```
 
-Canonical public constants are documented in `docs/lock-script-spec.md` and must remain aligned with on-chain lock script codes.
+`checkTransaction` is synchronous and makes no RPC calls. You fetch the live registry cell from your CKB node and pass it as a `cellDep` — the SDK parses the BLKL payload and checks every output in the transaction.
+
+## Testnet
+
+The canonical testnet registry values are in [`docs/deployments/testnet.registry.json`](../../docs/deployments/testnet.registry.json). Use those for `registryScript` against `https://testnet.ckb.dev`.
+
+## Result codes
+
+`checkTransaction` returns `{ ok: true }` or `{ ok: false, code, reason }`:
+
+| Code | Reason | Meaning |
+|------|--------|---------|
+| 8 | `MissingRegistryCellDep` | No registry cell dep matched |
+| 9 | `InvalidRegistryData` | Registry payload failed to parse |
+| 10 | `RegistryNotSorted` | Registry entries are out of order |
+| 11 | `BlacklistedLockArgs` | An output's lock args are blacklisted |
+| 12 | `BlacklistedTypeArgs` | An output's type args are blacklisted |
+| 17 | `AmbiguousRegistryCellDep` | More than one registry cell dep matched |
+
+## Typed errors
+
+Registry parsing errors are exported as typed classes for `instanceof` checks in your own error handling:
+
+```typescript
+import {
+  isFirewallSdkError,
+  MissingRegistryCellDepError,
+  InvalidRegistryDataError,
+  RegistryNotSortedError,
+  AmbiguousRegistryCellDepError,
+} from "@ckb-firewall/sdk";
+```
+
+## More
+
+- [CKB Transaction Firewall](https://github.com/digitaldrreamer/ckb-transaction-firewall) — contracts, Rust SDK, governance, testnet deployment
+- [Testnet deployment guide](../../docs/deployments/testnet.md)
+- [Architecture and trust model](../../docs/architecture.md)
