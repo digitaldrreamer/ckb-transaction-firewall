@@ -1,5 +1,9 @@
 # @ckb-firewall/sdk
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/digitaldrreamer/ckb-transaction-firewall/main/assets/logo.png" alt="CKB Transaction Firewall" width="100" />
+</p>
+
 [![npm](https://img.shields.io/npm/v/@ckb-firewall/sdk)](https://www.npmjs.com/package/@ckb-firewall/sdk)
 [![Tests](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
