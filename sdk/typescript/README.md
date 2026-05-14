@@ -40,6 +40,16 @@ if (!result.ok) {
 
 `checkTransaction` is synchronous and makes no RPC calls. You fetch the live registry cell from your CKB node and pass it as a `cellDep` — the SDK parses the BLKL payload and checks every output in the transaction.
 
+## How the SDK and the lock script fit together
+
+This SDK is the **pre-flight** half of a two-part system.
+
+The other half is the **Firewall lock script** — a CKB lock deployed on-chain. When a cell uses the Firewall lock, every CKB node enforces the same blacklist check at consensus, regardless of what the application layer does. A compromised agent that skips the SDK call entirely cannot bypass the lock.
+
+The SDK catches bad transactions **before you sign**, saving fees and giving your runtime a structured error to act on. The lock catches anything that makes it to the network anyway. Used together, neither layer can be bypassed independently — the SDK alone can be skipped by compromised code, and the lock alone gives you no early feedback before broadcasting.
+
+If your cells don't use the Firewall lock, the SDK still works as a standalone pre-flight check — but the consensus-level guarantee doesn't apply.
+
 ## Testnet
 
 The canonical testnet registry values are in [`docs/deployments/testnet.registry.json`](../../docs/deployments/testnet.registry.json). Use those for `registryScript` against `https://testnet.ckb.dev`.
