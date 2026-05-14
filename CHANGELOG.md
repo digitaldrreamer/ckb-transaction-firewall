@@ -2,6 +2,11 @@
 
 ## 2026-05-14
 
+### Published `@ckb-firewall/cli@0.1.0` to npm
+
+- https://www.npmjs.com/package/@ckb-firewall/cli
+- Install: `npm install -g @ckb-firewall/cli`
+
 ### CLI (`@ckb-firewall/cli` v0.1.0)
 
 - Scaffolded `sdk/cli/` as a standalone npm package (`@ckb-firewall/cli`) with commander, chalk, ora, cli-table3, inquirer, log-symbols, and cfonts.

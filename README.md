@@ -1,6 +1,7 @@
 # CKB Transaction Firewall
 
-[![npm](https://img.shields.io/npm/v/@ckb-firewall/sdk)](https://www.npmjs.com/package/@ckb-firewall/sdk)
+[![npm sdk](https://img.shields.io/npm/v/@ckb-firewall/sdk?label=%40ckb-firewall%2Fsdk)](https://www.npmjs.com/package/@ckb-firewall/sdk)
+[![npm cli](https://img.shields.io/npm/v/@ckb-firewall/cli?label=%40ckb-firewall%2Fcli)](https://www.npmjs.com/package/@ckb-firewall/cli)
 [![Tests](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
