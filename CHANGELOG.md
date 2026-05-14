@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-14
+
+### CLI (`@ckb-firewall/cli` v0.1.0)
+
+- Scaffolded `sdk/cli/` as a standalone npm package (`@ckb-firewall/cli`) with commander, chalk, ora, cli-table3, inquirer, log-symbols, and cfonts.
+- Implemented eight commands covering inspect, quick-path add/remove (testnet/dev), and the full governance lifecycle: `propose`, `vote`, `proposals`, `sign`, `execute`.
+- **Governance flow**: propose → 72-hour review window → validator voting (3-of-5 threshold) → secp256k1 multisig signing → on-chain execution via `ckb-cli`. Proposals are stored under `~/.ckb-firewall/proposals/`.
+- **`sign` command**: uses `@noble/curves` v2 `format: 'recovered'` to produce correct secp256k1 65-byte signatures `[r(32)|s(32)|recovery_bit(1)]` matching the CKB secp256k1 convention.
+- **Hints system**: each command prints 2 contextual next-step hints. `inspect` and `proposals` additionally show a voting callout when open proposals are present.
+- **Interactive UX**: all commands prompt for missing arguments; `remove` shows a pick-list of current registry entries.
+- Added `sdk/cli/README.md`, `sdk/cli/LICENSE` (MIT), and `files` field in `package.json` for publish-ready tarball.
+- Updated root `README.md` CLI section with full governance flow examples.
+- Updated `docs/governance.md` with CLI tooling reference and command list.
+- Updated `docs/internal/scripts.md` with CLI commands section.
+
 ## 2026-05-13
 
 ### Release readiness

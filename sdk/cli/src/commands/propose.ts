@@ -1,0 +1,264 @@
+import chalk from "chalk";
+import logSymbols from "log-symbols";
+import inquirer from "inquirer";
+import {
+  computeProposalIdHash,
+  computeVoteDigestHash,
+  saveProposal,
+  getProposalsDir,
+  REVIEW_WINDOW_MS,
+  type ProposalAction,
+  type ThreatClass,
+  type Severity,
+} from "../lib/proposals.js";
+import { strip0x } from "../lib/blkl.js";
+import { printHints } from "../lib/hints.js";
+
+export interface ProposeOptions {
+  action?: string;
+  lockArgs?: string;
+  expiresAt?: string;
+  evidence?: string;
+  classification?: string;
+  severity?: string;
+  rationale?: string;
+  proposer?: string;
+}
+
+function isValidHex(v: string): boolean {
+  const c = strip0x(v);
+  return c.length > 0 && /^[0-9a-fA-F]+$/.test(c) && c.length % 2 === 0;
+}
+
+export async function proposeCommand(opts: ProposeOptions): Promise<void> {
+  console.log();
+  console.log(chalk.bold("New governance proposal"));
+  console.log(chalk.dim("All fields are required and become part of the proposal hash.\n"));
+
+  // ── action ───────────────────────────────────────────────────────────────
+
+  let action: ProposalAction;
+  if (opts.action === "add" || opts.action === "remove") {
+    action = opts.action;
+  } else {
+    const { chosen } = await inquirer.prompt<{ chosen: ProposalAction }>([
+      {
+        type: "list",
+        name: "chosen",
+        message: "Proposal type:",
+        choices: [
+          { name: "Add address to blacklist", value: "add" },
+          { name: "Remove address from blacklist", value: "remove" },
+        ],
+      },
+    ]);
+    action = chosen;
+  }
+
+  // ── lock args ────────────────────────────────────────────────────────────
+
+  let lockArgs: string;
+  if (opts.lockArgs && isValidHex(opts.lockArgs)) {
+    lockArgs = `0x${strip0x(opts.lockArgs).toLowerCase()}`;
+  } else {
+    const { hex } = await inquirer.prompt<{ hex: string }>([
+      {
+        type: "input",
+        name: "hex",
+        message: `Lock args to ${action} (0x-prefixed hex):`,
+        validate: (v: string) => {
+          if (!v.trim()) return "Required.";
+          if (!isValidHex(v.trim())) return "Must be valid even-length hex.";
+          return true;
+        },
+      },
+    ]);
+    lockArgs = `0x${strip0x(hex.trim()).toLowerCase()}`;
+  }
+
+  // ── expires at (add only) ────────────────────────────────────────────────
+
+  let expiresAt = "0";
+  if (action === "add") {
+    if (opts.expiresAt !== undefined && opts.expiresAt !== "0") {
+      expiresAt = opts.expiresAt;
+    } else if (!opts.lockArgs) {
+      const { choice } = await inquirer.prompt<{ choice: string }>([
+        {
+          type: "list",
+          name: "choice",
+          message: "Expiry:",
+          choices: [
+            { name: "Never (permanent)", value: "never" },
+            { name: "Temporary — set expiry timestamp", value: "custom" },
+          ],
+        },
+      ]);
+      if (choice === "custom") {
+        const { ts } = await inquirer.prompt<{ ts: string }>([
+          {
+            type: "input",
+            name: "ts",
+            message: "Expiry (unix timestamp in seconds):",
+            validate: (v: string) => (Number.isFinite(Number(v)) && Number(v) > 0) || "Enter a positive integer.",
+          },
+        ]);
+        expiresAt = ts.trim();
+      }
+    }
+  }
+
+  // ── evidence ─────────────────────────────────────────────────────────────
+
+  let evidence: string;
+  if (opts.evidence?.trim()) {
+    evidence = opts.evidence.trim();
+  } else {
+    const { ev } = await inquirer.prompt<{ ev: string }>([
+      {
+        type: "input",
+        name: "ev",
+        message: "Evidence (URL, tx hash, or description):",
+        validate: (v: string) => v.trim().length >= 10 || "Provide at least 10 characters of evidence.",
+      },
+    ]);
+    evidence = ev.trim();
+  }
+
+  // ── classification ───────────────────────────────────────────────────────
+
+  let classification: ThreatClass;
+  if (["theft", "scam", "hack", "sanctions", "other"].includes(opts.classification ?? "")) {
+    classification = opts.classification as ThreatClass;
+  } else {
+    const { cls } = await inquirer.prompt<{ cls: ThreatClass }>([
+      {
+        type: "list",
+        name: "cls",
+        message: "Threat classification:",
+        choices: [
+          { name: "Theft — direct fund theft", value: "theft" },
+          { name: "Scam — fraudulent scheme", value: "scam" },
+          { name: "Hack — exploit / contract breach", value: "hack" },
+          { name: "Sanctions — regulatory / OFAC", value: "sanctions" },
+          { name: "Other", value: "other" },
+        ],
+      },
+    ]);
+    classification = cls;
+  }
+
+  // ── severity ─────────────────────────────────────────────────────────────
+
+  let severity: Severity;
+  if (["critical", "high", "medium", "low"].includes(opts.severity ?? "")) {
+    severity = opts.severity as Severity;
+  } else {
+    const { sev } = await inquirer.prompt<{ sev: Severity }>([
+      {
+        type: "list",
+        name: "sev",
+        message: "Severity:",
+        choices: [
+          { name: "Critical — active, ongoing, large-scale", value: "critical" },
+          { name: "High — confirmed, significant impact", value: "high" },
+          { name: "Medium — suspected or moderate impact", value: "medium" },
+          { name: "Low — minor or historic", value: "low" },
+        ],
+      },
+    ]);
+    severity = sev;
+  }
+
+  // ── rationale ────────────────────────────────────────────────────────────
+
+  let rationale: string;
+  if (opts.rationale && opts.rationale.trim().length >= 20) {
+    rationale = opts.rationale.trim();
+  } else {
+    const { rat } = await inquirer.prompt<{ rat: string }>([
+      {
+        type: "input",
+        name: "rat",
+        message: "Rationale and impact statement:",
+        validate: (v: string) => v.trim().length >= 20 || "Provide at least 20 characters.",
+      },
+    ]);
+    rationale = rat.trim();
+  }
+
+  // ── proposer ─────────────────────────────────────────────────────────────
+
+  let proposer: string;
+  if (opts.proposer?.trim()) {
+    proposer = opts.proposer.trim();
+  } else {
+    const { prop } = await inquirer.prompt<{ prop: string }>([
+      {
+        type: "input",
+        name: "prop",
+        message: "Your name / identifier (proposer):",
+        validate: (v: string) => v.trim().length > 0 || "Required.",
+      },
+    ]);
+    proposer = prop.trim();
+  }
+
+  // ── create proposal ──────────────────────────────────────────────────────
+
+  const submittedAt = new Date().toISOString();
+  const reviewWindowEndsAt = new Date(Date.now() + REVIEW_WINDOW_MS).toISOString();
+
+  const proposalIdHash = computeProposalIdHash({
+    action,
+    lockArgs,
+    expiresAt,
+    evidence,
+    classification,
+    severity,
+    rationale,
+    proposer,
+    submittedAt,
+  });
+
+  const proposal = {
+    id: proposalIdHash.slice(2, 14),
+    proposalIdHash,
+    action,
+    lockArgs,
+    expiresAt,
+    evidence,
+    classification,
+    severity,
+    rationale,
+    proposer,
+    submittedAt,
+    reviewWindowEndsAt,
+    status: "pending-review" as const,
+    votes: [],
+    voteDigestHash: computeVoteDigestHash([]),
+    signatures: [],
+  };
+
+  saveProposal(proposal);
+
+  // ── output ───────────────────────────────────────────────────────────────
+
+  console.log();
+  console.log(logSymbols.success, chalk.green("Proposal created"));
+  console.log();
+  console.log(`  ID:           ${chalk.bold(proposal.id)}`);
+  console.log(`  Hash:         ${chalk.dim(proposalIdHash)}`);
+  console.log(`  Action:       ${action === "add" ? chalk.green("add") : chalk.red("remove")}  ${lockArgs}`);
+  console.log(`  Class:        ${classification} / ${severity}`);
+  console.log(`  Review ends:  ${reviewWindowEndsAt}`);
+  console.log(`  Stored at:    ${getProposalsDir()}`);
+  console.log();
+  console.log(chalk.bold("Next steps:"));
+  console.log(`  1. Share the proposal ID ${chalk.bold(proposal.id)} with validators for the 72-hour review.`);
+  console.log(`  2. Collect votes:   ${chalk.dim(`ckb-firewall vote --proposal ${proposal.id}`)}`);
+  console.log(`  3. Sign (3-of-5):   ${chalk.dim(`ckb-firewall sign --proposal ${proposal.id}`)}`);
+  console.log(`  4. Execute:         ${chalk.dim(`ckb-firewall execute --proposal ${proposal.id}`)}`);
+  console.log();
+  printHints("propose");
+}

@@ -52,6 +52,49 @@ For deeper CKB rationale (cell model, lock scripts, oracle-free design): [docs/a
 
 ## Quick start
 
+### CLI
+
+Install and inspect the live testnet blacklist:
+
+```bash
+npm install -g @ckb-firewall/cli
+ckb-firewall inspect
+```
+
+Or use the one-line installer (handles Node version checks and PATH setup):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/digitaldrreamer/ckb-transaction-firewall/main/scripts/install-cli.sh | bash
+```
+
+**Quick path** (testnet/dev — placeholder governance, immediate tx output):
+
+```bash
+ckb-firewall add --lock-args 0xabc123...
+ckb-firewall remove --lock-args 0xabc123...
+```
+
+**Full governance flow** (community review + voting + multisig):
+
+```bash
+# 1. Propose a change (prompted interactively)
+ckb-firewall propose
+
+# 2. Validators vote (72-hour review window, 3 yes required)
+ckb-firewall vote --proposal <id> --vote yes --validator alice
+
+# 3. Track status
+ckb-firewall proposals
+
+# 4. Sign after threshold met (3-of-5 multisig)
+ckb-firewall sign --proposal <id> --signer-index 0
+
+# 5. Execute on-chain
+ckb-firewall execute --proposal <id>
+```
+
+All commands are interactive when flags are omitted. See [`sdk/cli/`](./sdk/cli/) for source and `ckb-firewall --help` for all options.
+
 ### TypeScript SDK
 
 ```bash
@@ -156,6 +199,7 @@ The Transaction Firewall is the enforcement floor for the [CKB Agent Control Hub
 | Architecture and trust model | [docs/architecture.md](./docs/architecture.md) |
 | Lock script spec (args, error codes) | [docs/lock-script-spec.md](./docs/lock-script-spec.md) |
 | Governance | [docs/governance.md](./docs/governance.md) |
+| CLI (`@ckb-firewall/cli`) | [sdk/cli/README.md](./sdk/cli/README.md) |
 | Testnet deployment | [docs/deployments/testnet.md](./docs/deployments/testnet.md) |
 | Canonical registry values | [docs/deployments/testnet.registry.json](./docs/deployments/testnet.registry.json) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
