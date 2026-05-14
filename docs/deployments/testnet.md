@@ -53,7 +53,7 @@ ckb-cli --url https://testnet.ckb.dev rpc get_live_cell --tx-hash "$TX" --index 
   | jq '.cell.output.type'
 ```
 
-Copy `code_hash`, `hash_type`, and `args` into your app (hex strings with `0x` prefix for the SDK). See [`sdk/typescript/README.md`](../../sdk/typescript/README.md) and [`testnet.registry.example.json`](testnet.registry.example.json).
+Copy `code_hash`, `hash_type`, and `args` into your app (hex strings with `0x` prefix for the SDK). See [`sdk/typescript/README.md`](../../sdk/typescript/README.md) and [`testnet.registry.json`](testnet.registry.json).
 
 ## 3. Build `cellDeps` for `checkTransaction`
 
@@ -61,7 +61,7 @@ The SDK does not perform RPC by itself in the current build: your runtime should
 
 **TYPE_ID deploy cell vs BLKL:** the `blacklist_registry` row in `deploy/info.json` is the **type script binary** cell created by `ckb-cli deploy` (`enable_type_id = true`). Its **cell data** is the RISC-V program (ELF), not a `BLKL` v1 payload. The on-chain firewall lock and the TS SDK both parse **registry dep data** as `BLKL`.
 
-For the current canonical testnet registry, use [`testnet.registry.example.json`](testnet.registry.example.json):
+For the current canonical testnet registry, use [`testnet.registry.json`](testnet.registry.json):
 
 - `registryScript`: pass this to `new TransactionFirewall({ registryScript })`.
 - `canonicalRegistryCell`: fetch this outpoint from testnet and pass `{ type: registryScript, data }` in `unsignedTx.cellDeps`.
@@ -69,13 +69,13 @@ For the current canonical testnet registry, use [`testnet.registry.example.json`
 
 ## 4. Optional: publish canonical constants
 
-Because `deploy/` is gitignored, teams usually add a **checked-in** small JSON (for example under `docs/deployments/`) once you agree on a **canonical** community testnet deployment, or publish hashes in release notes. [`testnet.registry.example.json`](testnet.registry.example.json) records the current canonical testnet registry script and BLKL cell outpoint.
+Because `deploy/` is gitignored, teams usually add a **checked-in** small JSON (for example under `docs/deployments/`) once you agree on a **canonical** community testnet deployment, or publish hashes in release notes. [`testnet.registry.json`](testnet.registry.json) records the current canonical testnet registry script and BLKL cell outpoint.
 
 ## 5. Use the canonical registry in the SDK
 
 Use this for real testnet pre-flight checks:
 
-1. Open [`testnet.registry.example.json`](testnet.registry.example.json).
+1. Open [`testnet.registry.json`](testnet.registry.json).
 2. In your app, set `FirewallConfig.registryScript` to the `registryScript` object (camelCase: `codeHash`, `hashType`, `args`).
 3. Fetch `canonicalRegistryCell` with `ckb-cli --url https://testnet.ckb.dev rpc get_live_cell --tx-hash <txHash> --index <index> --with-data --output-format json`.
 4. When you call `checkTransaction`, set `unsignedTx.cellDeps` to **one** entry: `type` = that same `registryScript`, `data` = the live cell data.

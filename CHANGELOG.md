@@ -5,7 +5,7 @@
 ### Release readiness
 
 - Prepared `@ckb-firewall/sdk` for npm publishing: public scoped package config, package metadata, ESM build outputs, tarball validation, and type compatibility checks.
-- Published the canonical CKB testnet BLKL registry cell in [docs/deployments/testnet.registry.example.json](docs/deployments/testnet.registry.example.json) and aligned the SDK/testnet docs around caller-supplied `cellDeps`.
+- Published the canonical CKB testnet BLKL registry cell in [docs/deployments/testnet.registry.json](docs/deployments/testnet.registry.json) and aligned the SDK/testnet docs around caller-supplied `cellDeps`.
 - Hardened governance tx preparation for slow indexers and wallet top-ups: capacity filtering, committed top-up polling, merged tx outputs, explicit sender selection, and safer prompt handling.
 
 ## 2026-04-26

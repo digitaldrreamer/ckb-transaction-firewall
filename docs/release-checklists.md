@@ -34,7 +34,7 @@ Conditions or accepted risks:
 
 ## Rollout
 
-- Verify contract identities and registry cell outpoint against `docs/deployments/testnet.registry.example.json`.
+- Verify contract identities and registry cell outpoint against `docs/deployments/testnet.registry.json`.
 - Run SDK preflight (`TransactionFirewall.checkTransaction`) with safe and blocked destinations against the live registry cell.
 - Start with a canary wallet cohort.
 - Monitor rejection rates, cycle regressions, RPC failures, and governance tx status.

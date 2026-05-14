@@ -4,7 +4,7 @@ TypeScript implementation of Layer 1 pre-flight checks for CKB agent transaction
 
 ## CKB testnet (public devnet)
 
-Deploy `firewall-lock` and `blacklist-registry` to testnet, then copy the live registry **type script** into `FirewallConfig.registryScript`. Step-by-step commands, `ckb-cli` queries, and an example JSON shape: [docs/deployments/testnet.md](../../docs/deployments/testnet.md), [docs/deployments/testnet.registry.example.json](../../docs/deployments/testnet.registry.example.json).
+Deploy `firewall-lock` and `blacklist-registry` to testnet, then copy the live registry **type script** into `FirewallConfig.registryScript`. Step-by-step commands, `ckb-cli` queries, and an example JSON shape: [docs/deployments/testnet.md](../../docs/deployments/testnet.md), [docs/deployments/testnet.registry.json](../../docs/deployments/testnet.registry.json).
 
 ## Module and types
 
