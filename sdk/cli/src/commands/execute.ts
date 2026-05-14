@@ -101,10 +101,16 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
 
   // ── fetch current registry cell ──────────────────────────────────────────
 
+  const registryIndex = Number.parseInt(opts.registryIndex, 10);
+  if (!Number.isInteger(registryIndex) || registryIndex < 0) {
+    console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
+    process.exit(1);
+  }
+
   const spinner = ora("Fetching current registry cell").start();
   let cell: Awaited<ReturnType<typeof getLiveCell>>;
   try {
-    cell = await getLiveCell(opts.rpcUrl, opts.registryTx, Number.parseInt(opts.registryIndex, 10));
+    cell = await getLiveCell(opts.rpcUrl, opts.registryTx, registryIndex);
     spinner.succeed("Registry cell loaded");
   } catch (err) {
     spinner.fail("Could not fetch registry cell");

@@ -21,6 +21,10 @@ export async function inspectCommand(opts: InspectOptions): Promise<void> {
   const rpcUrl = opts.rpcUrl;
   const txHash = opts.registryTx;
   const index = Number.parseInt(opts.registryIndex, 10);
+  if (!Number.isInteger(index) || index < 0) {
+    console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
+    process.exit(1);
+  }
 
   const spinner = ora(`Fetching registry cell from ${rpcUrl}`).start();
 

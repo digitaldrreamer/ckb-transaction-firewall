@@ -98,6 +98,10 @@ export async function addCommand(opts: AddOptions): Promise<void> {
   const rpcUrl = opts.rpcUrl;
   const txHash = opts.registryTx;
   const index = Number.parseInt(opts.registryIndex, 10);
+  if (!Number.isInteger(index) || index < 0) {
+    console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
+    process.exit(1);
+  }
 
   // ── interactive prompts when args are missing ────────────────────────────
 
@@ -121,7 +125,11 @@ export async function addCommand(opts: AddOptions): Promise<void> {
     expiresAtStr = await promptExpiresAt();
   }
 
-  const expiresAt = BigInt(expiresAtStr);
+  if (!/^\d+$/.test(expiresAtStr.trim())) {
+    console.error(logSymbols.error, chalk.red("--expires-at must be a non-negative integer (unix timestamp, or 0 for never)."));
+    process.exit(1);
+  }
+  const expiresAt = BigInt(expiresAtStr.trim());
 
   // ── fetch registry ───────────────────────────────────────────────────────
 
