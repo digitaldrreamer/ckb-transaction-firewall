@@ -14,6 +14,10 @@ PACKAGE="@ckb-firewall/cli"
 BIN="ckb-firewall"
 MIN_NODE_MAJOR=20
 
+# Unique temp file; cleaned up automatically on exit.
+_TMPFILE="$(mktemp)"
+trap 'rm -f "$_TMPFILE"' EXIT
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 red()    { printf '\033[31m%s\033[0m\n' "$*"; }
@@ -81,11 +85,10 @@ NPM_GLOBAL_BIN="$NPM_GLOBAL_PREFIX/bin"
 
 # Try a standard global install first. If it fails with a permission error,
 # fall back to a user-local prefix that never needs sudo.
-if npm install -g "$PACKAGE" 2>/tmp/ckb_install_err; then
+if npm install -g "$PACKAGE" 2>"$_TMPFILE"; then
   INSTALL_METHOD="global"
 else
-  ERR_OUTPUT="$(cat /tmp/ckb_install_err)"
-  rm -f /tmp/ckb_install_err
+  ERR_OUTPUT="$(cat "$_TMPFILE")"
 
   if echo "$ERR_OUTPUT" | grep -qiE "EACCES|permission denied"; then
     yellow "Global install needs elevated permissions — installing to ~/.local instead."
@@ -99,8 +102,6 @@ else
     die "npm install failed — see output above."
   fi
 fi
-
-rm -f /tmp/ckb_install_err 2>/dev/null || true
 
 # ── verify and fix PATH ───────────────────────────────────────────────────────
 
@@ -143,7 +144,11 @@ if [ "$PATH_OK" -eq 0 ]; then
   echo "  (Add to $PROFILE)"
   echo
   echo "Or reload now in this session:"
-  echo "  export PATH=\"$NPM_GLOBAL_BIN:\$PATH\""
+  if [ "$SHELL_NAME" = "fish" ]; then
+    echo "  fish_add_path $NPM_GLOBAL_BIN"
+  else
+    echo "  export PATH=\"$NPM_GLOBAL_BIN:\$PATH\""
+  fi
 
   # Offer to append automatically.
   if [ -t 0 ]; then

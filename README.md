@@ -80,7 +80,7 @@ ckb-firewall remove --lock-args 0xabc123...
 # 1. Propose a change (prompted interactively)
 ckb-firewall propose
 
-# 2. Validators vote (72-hour review window, 3 yes required)
+# 2. Validators vote (72-hour review window; testnet: 3 yes, production: 5-of-6)
 ckb-firewall vote --proposal <id> --vote yes --validator alice
 
 # 3. Track status

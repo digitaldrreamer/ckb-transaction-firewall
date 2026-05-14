@@ -100,7 +100,14 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
             type: "input",
             name: "ts",
             message: "Expiry (unix timestamp in seconds):",
-            validate: (v: string) => (Number.isFinite(Number(v)) && Number(v) > 0) || "Enter a positive integer.",
+            validate: (v: string) => {
+              const n = Number(v.trim());
+              if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) return "Enter a positive integer.";
+              const now = Math.floor(Date.now() / 1000);
+              if (n <= now) return "Expiry must be in the future.";
+              if (n > now + 100 * 365 * 24 * 60 * 60) return "Expiry too far in the future (max 100 years).";
+              return true;
+            },
           },
         ]);
         expiresAt = ts.trim();

@@ -33,7 +33,7 @@ export interface ProposalSignature {
 }
 
 export interface Proposal {
-  id: string;           // first 12 chars of proposalIdHash (display only)
+  id: string;           // 12-char hex (6 bytes) from proposalIdHash, excluding 0x prefix (display only)
   proposalIdHash: string;
   action: ProposalAction;
   lockArgs: string;

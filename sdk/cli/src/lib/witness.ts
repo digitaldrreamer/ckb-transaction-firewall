@@ -97,7 +97,7 @@ export function buildWitnessArgs(params: {
 export function placeholderSigners(count: 3 | 4 | 5 = 3): Array<{ index: number; sig: Uint8Array }> {
   return Array.from({ length: count }, (_, i) => ({
     index: i,
-    sig: new Uint8Array(65).fill(0x11), // non-zero, recovery id 0x11 will be stripped — see note below
+    sig: new Uint8Array(65).fill(0x11), // non-zero placeholder; recovery id corrected to 0x00 below
   })).map((s) => {
     // Recovery id must be 0-3. Set last byte to 0.
     const sig = new Uint8Array(s.sig);

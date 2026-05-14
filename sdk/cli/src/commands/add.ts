@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import chalk from "chalk";
 import logSymbols from "log-symbols";
 import ora from "ora";
@@ -274,10 +274,10 @@ export async function addCommand(opts: AddOptions): Promise<void> {
 
   const signSpinner = ora("Signing with ckb-cli").start();
   try {
-    execSync(`ckb-cli wallet sign-txs --tx-file ${txOut} --from-account ${fromAccount}`, { stdio: "inherit" });
+    execFileSync("ckb-cli", ["wallet", "sign-txs", "--tx-file", txOut, "--from-account", fromAccount], { stdio: "inherit" });
     signSpinner.succeed("Signed");
     const submitSpinner = ora("Submitting").start();
-    execSync(`ckb-cli wallet apply-txs --tx-file ${txOut}`, { stdio: "inherit" });
+    execFileSync("ckb-cli", ["wallet", "apply-txs", "--tx-file", txOut], { stdio: "inherit" });
     submitSpinner.succeed("Submitted");
     printHints("add");
   } catch (err) {

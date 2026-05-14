@@ -174,7 +174,7 @@ export async function signCommand(opts: SignOptions): Promise<void> {
   const recoveredSig = secp256k1.sign(msgHash, privateKeyBytes, { lowS: true, format: "recovered" });
   const sigBytes = new Uint8Array(65);
   sigBytes.set(recoveredSig.slice(1), 0); // r + s at bytes 0-63
-  sigBytes[64] = recoveredSig[0]!;         // recovery bit at byte 64
+  sigBytes[64] = recoveredSig[0] ?? 0;      // recovery bit at byte 64 (format:'recovered' always yields 65 bytes)
 
   proposal.signatures.push({
     signerIndex,

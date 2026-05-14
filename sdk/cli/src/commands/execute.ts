@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import chalk from "chalk";
 import logSymbols from "log-symbols";
 import ora from "ora";
@@ -249,11 +249,11 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
 
   const signSpinner = ora("Signing with ckb-cli").start();
   try {
-    execSync(`ckb-cli wallet sign-txs --tx-file ${txOut} --from-account ${fromAccount}`, { stdio: "inherit" });
+    execFileSync("ckb-cli", ["wallet", "sign-txs", "--tx-file", txOut, "--from-account", fromAccount], { stdio: "inherit" });
     signSpinner.succeed("Signed");
 
     const submitSpinner = ora("Submitting").start();
-    const output = execSync(`ckb-cli wallet apply-txs --tx-file ${txOut}`, { encoding: "utf8" });
+    const output = execFileSync("ckb-cli", ["wallet", "apply-txs", "--tx-file", txOut], { encoding: "utf8" });
     submitSpinner.succeed("Submitted");
 
     const txHash = output.match(/0x[a-fA-F0-9]{64}/)?.[0];
