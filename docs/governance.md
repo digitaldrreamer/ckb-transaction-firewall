@@ -33,8 +33,6 @@ Every proposal should include:
 - reproducible evidence links,
 - proposer rationale and impact statement.
 
-Schema is tracked in `governance/proposal-schema.json`.
-
 ## Lifecycle
 
 1. **Submission**: proposal is published and indexed.
@@ -80,11 +78,6 @@ All commands are interactive when run without flags. See [`sdk/cli/README.md`](.
 - Approved ordinary proposals are executed by 3-of-5 signer threshold.
 - Execution transaction replaces registry cell atomically.
 - Witness payload references approved proposal id and vote result digest.
-
-### Phase 4 chain verification (CI and operators)
-
-Merged changes to `main` (and pull requests targeting `main`) run `scripts/phase3_closeout_check.sh` with `REAL_GOV_EVIDENCE_REQUIRED=1`, which invokes `scripts/phase4_governance_evidence_check.sh`. That check requires every governance drill scenario transaction hash in `tests/integration/governance_drill/latest.json` to resolve as **committed** on the configured testnet RPC.
-
 
 At consensus, the type script enforces:
 
