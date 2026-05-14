@@ -7,3 +7,4 @@ deploy/
 **/*.rs.bk
 .llm/
 .codex
+docs/internal/

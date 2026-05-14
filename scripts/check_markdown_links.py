@@ -15,6 +15,7 @@ EXCLUDED_DIRS = {
     "node_modules",
     "target",
     "dist",
+    "internal",
 }
 
 
