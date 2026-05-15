@@ -48,7 +48,18 @@ if (!result.ok) {
 - `14` `InvalidInnerLockScript`
 - `15` `InnerLockRejected`
 - `16` `OutputScriptParseFailed`
-- `17` `AmbiguousRegistryCellDep`
+- 17 AmbiguousRegistryCellDep
+
+## Blacklist registry
+
+- 20 InvalidTypeArgsLayout
+- 21 InvalidRegistryCellTopology
+- 22 InvalidRegistryPayload
+- 23 UnsupportedRegistryVersion
+- 24 InvalidGovernanceWitness
+- 25 UnauthorizedGovernanceLock
+- 26 UnauthorizedSigners
+
 
 ## SDK mapping
 
