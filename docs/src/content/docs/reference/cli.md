@@ -3,7 +3,7 @@ title: CLI Reference
 description: Command and option reference for @ckb-firewall/cli.
 ---
 
-This is the command surface for `@ckb-firewall/cli`.
+This is the command surface for [@ckb-firewall/cli](https://www.npmjs.com/package/@ckb-firewall/cli).
 
 ## Global behavior
 
