@@ -18,10 +18,6 @@ npm run build
 npm run preview
 ```
 
-## Deployment (GitHub Pages)
-
-Pushes to `main` run [`.github/workflows/deploy-docs.yml`](../.github/workflows/deploy-docs.yml) and publish to **https://ckb-firewall.drreamer.digital** (see [`public/CNAME`](./public/CNAME)). In the repo **Settings → Pages**, set **Source** to **GitHub Actions**.
-
 ## Published routes
 
 | Topic | URL |

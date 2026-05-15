@@ -285,6 +285,6 @@
 
 ### Documentation site
 
-- Removed Docker deployment; docs deploy to GitHub Pages via `.github/workflows/deploy-docs.yml`.
-- Added `docs/public/CNAME` for custom domain `ckb-firewall.drreamer.digital`.
 - Favicon and apple-touch icon generated from project logo; Starlight `favicon` configured.
+
+- Removed GitHub Pages deployment workflow, `docs/public/CNAME`, and Pages setup docs.
