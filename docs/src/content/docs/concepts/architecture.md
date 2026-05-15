@@ -3,7 +3,7 @@ title: Architecture
 description: The firewall’s consensus layer, pre-flight layer, registry state, and governance flow.
 ---
 
-For motivation and scope, read [Why this exists](/concepts/why-this-exists/) first.
+For motivation and scope, read [Why this exists](./why-this-exists.mdx) first.
 
 The stack breaks down into four pieces:
 
@@ -42,6 +42,6 @@ The firewall is intentionally fail-closed:
 
 ## Next
 
-- [Firewall lock](/concepts/firewall-lock/)
-- [Blacklist registry](/concepts/blacklist-registry/)
-- [Governance](/concepts/governance/)
+- [Firewall lock](./firewall-lock.md)
+- [Blacklist registry](./blacklist-registry.md)
+- [Governance](./governance.md)

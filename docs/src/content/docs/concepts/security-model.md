@@ -24,7 +24,7 @@ The firewall is designed around a narrow security claim: if a wallet cell uses t
 - The governance workflow binds each update to proposal and vote context.
 - On-chain validation does not by itself guarantee broader policy outcomes beyond those checks.
 
-For the operational update path, see [How to Use](/getting-started/how-to-use/) and the [CLI reference](/reference/cli/).
+For the operational update path, see [How to Use](../getting-started/how-to-use.mdx) and the [CLI reference](../reference/cli.md).
 
 ## Operational assumption
 
