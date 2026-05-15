@@ -163,4 +163,4 @@ ckb-firewall execute --proposal abc123 --tx-out ./tx.json
 
 The public governance path is `propose` → `vote` → `sign` → `execute`.
 
-If you need the live cell data that backs these commands, read [How to Use](../getting-started/how-to-use.mdx).
+If you need the live cell data that backs these commands, read [How to Use](/getting-started/how-to-use/).

@@ -28,6 +28,6 @@ They are governance transactions that replace the registry cell while preserving
 
 ## What to read next
 
-- [BLKL registry format](../reference/blkl-format.md)
-- [GOV1 witness](../reference/gov1-witness.md)
-- [Governance](./governance.md)
+- [BLKL registry format](/reference/blkl-format/)
+- [GOV1 witness](/reference/gov1-witness/)
+- [Governance](/concepts/governance/)

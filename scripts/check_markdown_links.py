@@ -9,6 +9,7 @@ import sys
 from urllib.parse import unquote, urlparse
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+DOCS_CONTENT = ROOT / "docs" / "src" / "content" / "docs"
 LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 EXCLUDED_DIRS = {
     ".git",
@@ -43,6 +44,29 @@ def normalize_target(raw_target: str) -> str:
     return unquote(target)
 
 
+def resolve_starlight_route(target: str) -> pathlib.Path | None:
+    """Map a site-root path (e.g. /concepts/architecture/) to a content file."""
+    if not target.startswith("/"):
+        return None
+    slug = target.strip("/")
+    if not slug:
+        candidates = (
+            DOCS_CONTENT / "index.mdx",
+            DOCS_CONTENT / "index.md",
+        )
+    else:
+        candidates = (
+            DOCS_CONTENT / f"{slug}.md",
+            DOCS_CONTENT / f"{slug}.mdx",
+            DOCS_CONTENT / slug / "index.md",
+            DOCS_CONTENT / slug / "index.mdx",
+        )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def validate_file(path: pathlib.Path) -> list[str]:
     errors: list[str] = []
     text = path.read_text(encoding="utf-8")
@@ -51,6 +75,15 @@ def validate_file(path: pathlib.Path) -> list[str]:
             target = normalize_target(match.group(1))
             if not target or not is_local_link(target):
                 continue
+
+            if target.startswith("/") and DOCS_CONTENT in path.parents:
+                route = resolve_starlight_route(target)
+                if route is None:
+                    errors.append(
+                        f"{path.relative_to(ROOT)}:{line_no}: missing docs route: {target}"
+                    )
+                continue
+
             resolved = (path.parent / target).resolve()
             try:
                 resolved.relative_to(ROOT)

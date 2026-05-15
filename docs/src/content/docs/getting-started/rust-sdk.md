@@ -75,4 +75,4 @@ That keeps the SDK easy to embed in tools or services that already have transact
 
 Use the Rust SDK if your transaction builder, wallet tooling, or service is already Rust-based and you want the same pre-flight check that the TypeScript package provides.
 
-If you need the live registry cell wiring first, start with [How to Use](./how-to-use.mdx).
+If you need the live registry cell wiring first, start with [How to Use](/getting-started/how-to-use/).
