@@ -288,3 +288,11 @@
 - Favicon and apple-touch icon generated from project logo; Starlight `favicon` configured.
 
 - Removed GitHub Pages deployment workflow, `docs/public/CNAME`, and Pages setup docs.
+
+## 2026-05-15
+
+### Version bump and docs npm links
+
+- Bump `@ckb-firewall/cli` to 0.1.2 and `@ckb-firewall/sdk` to 0.2.5.
+- Add npm package links to Starlight getting-started and CLI reference pages.
+

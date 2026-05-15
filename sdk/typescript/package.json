@@ -1,6 +1,6 @@
 {
   "name": "@ckb-firewall/sdk",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "TypeScript pre-flight checks for CKB transaction firewall blacklist enforcement (Layer 1 agent and wallet flows).",
   "type": "module",
   "license": "MIT",
