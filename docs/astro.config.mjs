@@ -6,10 +6,18 @@ import starlightSidebarTopics from 'starlight-sidebar-topics';
 
 // https://astro.build/config
 export default defineConfig({
+	site: 'https://ckb-firewall.drreamer.digital',
 	integrations: [
 		starlight({
 			title: 'CKB Transaction Firewall',
-			description: 'Public documentation for the CKB Transaction Firewall contracts, SDKs, CLI, and governance process.',
+			description: 'Documentation for the CKB Transaction Firewall contracts, SDKs, CLI, and governance process.',
+			favicon: '/favicon.ico',
+			head: [
+				{
+					tag: 'link',
+					attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+				},
+			],
 			logo: {
 				src: '../assets/logo.png',
 				alt: 'CKB Transaction Firewall',

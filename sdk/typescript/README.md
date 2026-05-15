@@ -88,5 +88,7 @@ import {
 ## More
 
 - [CKB Transaction Firewall](https://github.com/digitaldrreamer/ckb-transaction-firewall) — contracts, Rust SDK, governance, testnet deployment
-- [Testnet deployment guide](../../notes/deployments/testnet.md)
-- [Architecture and trust model](../../notes/architecture.md)
+- [Documentation](https://ckb-firewall.drreamer.digital/)
+- [How to use](https://ckb-firewall.drreamer.digital/getting-started/how-to-use/)
+- [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/)
+- [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/)

@@ -274,9 +274,17 @@
 
 ## 2026-05-15
 
-### Public documentation site (`docs/`)
+### Documentation site (`docs/`)
 
 - Added Astro Starlight site with sidebar topics (Getting Started, Concepts, Reference, Operations), Rapide theme, and topic schema for section landing pages.
 - Published reader-facing guides aligned to v1 testnet contracts, fixtures, SDK, and CLI behavior, including **Why this exists** and MDX pages for integration walkthroughs.
 - Moved prior internal markdown under `notes/` so `docs/` is reserved for the public site; updated repository links and phase-3 scripts accordingly.
 
+
+## 2026-05-15
+
+### Documentation site
+
+- Removed Docker deployment; docs deploy to GitHub Pages via `.github/workflows/deploy-docs.yml`.
+- Added `docs/public/CNAME` for custom domain `ckb-firewall.drreamer.digital`.
+- Favicon and apple-touch icon generated from project logo; Starlight `favicon` configured.

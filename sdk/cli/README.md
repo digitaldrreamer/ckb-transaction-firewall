@@ -112,5 +112,8 @@ All commands default to the canonical testnet registry cell. See [`notes/deploym
 ## More
 
 - [CKB Transaction Firewall](https://github.com/digitaldrreamer/ckb-transaction-firewall) — contracts, TypeScript SDK, Rust SDK, governance docs, testnet deployment
-- [Governance model](https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/notes/governance.md)
-- [Architecture and trust model](https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/notes/architecture.md)
+- [Documentation](https://ckb-firewall.drreamer.digital/)
+- [CLI quickstart](https://ckb-firewall.drreamer.digital/getting-started/cli/)
+- [CLI reference](https://ckb-firewall.drreamer.digital/reference/cli/)
+- [Governance](https://ckb-firewall.drreamer.digital/concepts/governance/)
+- [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/)

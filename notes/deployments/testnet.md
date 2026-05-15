@@ -91,5 +91,7 @@ To rotate or replace the canonical BLKL cell, run the governance bootstrap/updat
 
 ## Related
 
-- [Governance](../governance.md)
-- [Architecture](../architecture.md)
+- [Governance](https://ckb-firewall.drreamer.digital/concepts/governance/)
+- [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/)
+- [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/)
+- [Internal governance notes](../governance.md)
