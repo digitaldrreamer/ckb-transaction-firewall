@@ -1,0 +1,20 @@
+---
+title: Concepts
+description: Read this when you need the rules behind the firewall lock and registry flow.
+topic: concepts
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+These pages describe the moving parts the code relies on.
+
+## Pages
+
+<CardGrid>
+	<LinkCard href="/concepts/why-this-exists/" title="Why this exists" description="The problem the firewall addresses and why on-chain enforcement matters." />
+	<LinkCard href="/concepts/architecture/" title="Architecture" description="How the lock, registry, SDKs, and governance fit together." />
+	<LinkCard href="/concepts/firewall-lock/" title="Firewall lock" description="The consensus-layer lock script and its checks." />
+	<LinkCard href="/concepts/blacklist-registry/" title="Blacklist registry" description="The on-chain cell that stores blacklist entries." />
+	<LinkCard href="/concepts/governance/" title="Governance" description="How registry updates move through review, vote, sign, and execute." />
+	<LinkCard href="/concepts/security-model/" title="Security model" description="What the firewall does and does not protect." />
+</CardGrid>

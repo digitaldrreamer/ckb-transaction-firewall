@@ -1,0 +1,69 @@
+---
+title: CLI Quickstart
+description: Install and use the @ckb-firewall/cli package for registry inspection and governance flows.
+---
+
+import cliScreenshot from '../../../../../assets/cli-screenshot.png';
+import { Steps } from '@astrojs/starlight/components';
+
+`@ckb-firewall/cli` is the operator-facing entry point for the registry. It supports inspection, quick testnet/dev changes, and the full governance lifecycle.
+
+## Install
+
+```bash
+npm install -g @ckb-firewall/cli
+```
+
+Or use the installer script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/digitaldrreamer/ckb-transaction-firewall/main/scripts/install-cli.sh | bash
+```
+
+## Inspect the live registry
+
+```bash
+ckb-firewall inspect
+```
+
+This reads the canonical testnet registry cell by default.
+
+If you want to see the live cell that powers the default output, use the same outpoint with `ckb-cli rpc get_live_cell --with-data`. The registry payload is the cell data, not the contract binary.
+
+<figure>
+	<img src={cliScreenshot.src} alt="Screenshot of the ckb-firewall CLI" />
+</figure>
+
+## Quick testnet/dev path
+
+Use these commands when you want a fast local or testnet-oriented transaction file:
+
+```bash
+ckb-firewall add --lock-args 0xabc123...
+ckb-firewall remove --lock-args 0xabc123...
+```
+
+Both commands prompt for missing values. Both can write a transaction file and optionally submit it through `ckb-cli`.
+
+For the exact data source and a minimal transaction-check example, see [How to Use](/getting-started/how-to-use/).
+
+## Governance flow
+
+<Steps>
+1. `ckb-firewall propose`
+2. `ckb-firewall vote`
+3. `ckb-firewall proposals`
+4. `ckb-firewall sign`
+5. `ckb-firewall execute`
+</Steps>
+
+That flow is the auditable path for blacklist changes. It is meant to be reviewed, signed, and executed as a governance transaction, not as an ad hoc registry edit.
+
+The implementation is in [`sdk/cli/src/commands/`](https://github.com/digitaldrreamer/ckb-transaction-firewall/tree/main/sdk/cli/src/commands). If you need to understand how a command behaves, the source is the fastest reference.
+
+## When to use it
+
+- Inspect the live registry
+- Prepare blacklist updates
+- Review proposal state
+- Sign or execute approved registry changes

@@ -1,0 +1,77 @@
+---
+title: Overview
+description: What the CKB Transaction Firewall does and where each component fits.
+---
+
+import { Aside, LinkButton, Tabs, TabItem } from '@astrojs/starlight/components';
+
+If you are wiring this into a wallet, bot, or service, the shape is:
+
+- SDKs do the fast local check before signing.
+- The firewall lock enforces the same rule on-chain.
+- The registry cell holds the blacklist.
+- The CLI is for inspection and update workflows.
+
+If a wallet cell uses the firewall lock, a blacklisted destination should fail whether the application checks it or not.
+
+<Aside type="tip" title="Design rule">
+The lock is the guarantee. The SDK is the fast feedback path. Don’t treat them as substitutes.
+</Aside>
+
+If you want the practical walk-through, start with [How to Use](/getting-started/how-to-use/).
+
+## Typical flow
+
+1. Build the unsigned transaction.
+2. Read the live registry cell data.
+3. Run the SDK check.
+4. Sign and broadcast if it passes.
+5. Let the firewall lock enforce the same rule again on-chain.
+
+## What is enforced
+
+- Blacklisted `lock_args`
+- Blacklisted `type_args` when that flag is on
+- Exact registry dependency matching
+- Fail-closed behavior on missing, invalid, or ambiguous registry data
+
+## What is not enforced
+
+- Non-address exploit classes
+- Addresses that are not in the registry yet
+- Governance policy itself outside the update workflow
+
+## Where to read next
+
+- [Architecture](/concepts/architecture/)
+- [CLI quickstart](/getting-started/cli/)
+- [TypeScript SDK](/getting-started/typescript-sdk/)
+
+## Common entry points
+
+<Tabs>
+<TabItem label="CLI">
+
+```bash
+ckb-firewall inspect
+ckb-firewall propose
+```
+
+</TabItem>
+<TabItem label="TypeScript">
+
+```ts
+import { TransactionFirewall } from "@ckb-firewall/sdk";
+```
+
+</TabItem>
+<TabItem label="Rust">
+
+```rust
+use ckb_transaction_firewall_sdk::check_transaction;
+```
+
+</TabItem>
+</Tabs>
+
+<LinkButton href="/getting-started/cli/">Read the CLI quickstart</LinkButton>

@@ -107,10 +107,13 @@ Builds and writes a governance transaction JSON file. Add `--sign` to sign and s
 
 ## Testnet defaults
 
-All commands default to the canonical testnet registry cell. See [`docs/deployments/testnet.registry.json`](https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/docs/deployments/testnet.registry.json) for the exact cell outpoint and script identity.
+All commands default to the canonical testnet registry cell. See [`notes/deployments/testnet.registry.json`](https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/notes/deployments/testnet.registry.json) for the exact cell outpoint and script identity.
 
 ## More
 
 - [CKB Transaction Firewall](https://github.com/digitaldrreamer/ckb-transaction-firewall) — contracts, TypeScript SDK, Rust SDK, governance docs, testnet deployment
-- [Governance model](https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/docs/governance.md)
-- [Architecture and trust model](https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/docs/architecture.md)
+- [Documentation](https://ckb-firewall.drreamer.digital/)
+- [CLI quickstart](https://ckb-firewall.drreamer.digital/getting-started/cli/)
+- [CLI reference](https://ckb-firewall.drreamer.digital/reference/cli/)
+- [Governance](https://ckb-firewall.drreamer.digital/concepts/governance/)
+- [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/)

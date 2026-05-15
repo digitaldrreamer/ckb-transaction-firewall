@@ -71,7 +71,7 @@ For the current canonical testnet registry, use [`testnet.registry.json`](testne
 
 ## 4. Optional: publish canonical constants
 
-Because `deploy/` is gitignored, teams usually add a **checked-in** small JSON (for example under `docs/deployments/`) once you agree on a **canonical** community testnet deployment, or publish hashes in release notes. [`testnet.registry.json`](testnet.registry.json) records the current canonical testnet registry script and BLKL cell outpoint.
+Because `deploy/` is gitignored, teams usually add a **checked-in** small JSON (for example under `notes/deployments/`) once you agree on a **canonical** community testnet deployment, or publish hashes in release notes. [`testnet.registry.json`](testnet.registry.json) records the current canonical testnet registry script and BLKL cell outpoint.
 
 ## 5. Use the canonical registry in the SDK
 
@@ -91,5 +91,7 @@ To rotate or replace the canonical BLKL cell, run the governance bootstrap/updat
 
 ## Related
 
-- [Governance](../governance.md)
-- [Architecture](../architecture.md)
+- [Governance](https://ckb-firewall.drreamer.digital/concepts/governance/)
+- [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/)
+- [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/)
+- [Internal governance notes](../governance.md)

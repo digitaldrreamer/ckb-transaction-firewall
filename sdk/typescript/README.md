@@ -56,7 +56,7 @@ If your cells don't use the Firewall lock, the SDK still works as a standalone p
 
 ## Testnet
 
-The canonical testnet registry values are in [`docs/deployments/testnet.registry.json`](../../docs/deployments/testnet.registry.json). Use those for `registryScript` against `https://testnet.ckb.dev`.
+The canonical testnet registry values are in [`notes/deployments/testnet.registry.json`](../../notes/deployments/testnet.registry.json). Use those for `registryScript` against `https://testnet.ckb.dev`.
 
 ## Result codes
 
@@ -88,5 +88,7 @@ import {
 ## More
 
 - [CKB Transaction Firewall](https://github.com/digitaldrreamer/ckb-transaction-firewall) — contracts, Rust SDK, governance, testnet deployment
-- [Testnet deployment guide](../../docs/deployments/testnet.md)
-- [Architecture and trust model](../../docs/architecture.md)
+- [Documentation](https://ckb-firewall.drreamer.digital/)
+- [How to use](https://ckb-firewall.drreamer.digital/getting-started/how-to-use/)
+- [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/)
+- [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/)

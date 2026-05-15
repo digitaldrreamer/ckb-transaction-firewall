@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIREWALL_SRC="$ROOT_DIR/contracts/firewall-lock/src/main.rs"
 REGISTRY_SRC="$ROOT_DIR/contracts/blacklist-registry/src/main.rs"
-LOCK_SPEC="$ROOT_DIR/docs/lock-script-spec.md"
-GOV_DOC="$ROOT_DIR/docs/governance.md"
+LOCK_SPEC="$ROOT_DIR/notes/lock-script-spec.md"
+GOV_DOC="$ROOT_DIR/notes/governance.md"
 
 echo "Running Phase 3 compatibility/spec consistency checks..."
 
@@ -61,7 +61,7 @@ awk '
 ' "$LOCK_SPEC" | sort -n > "$tmp_doc"
 
 if ! diff -u "$tmp_expected_norm" "$tmp_doc" > /dev/null; then
-  echo "Firewall error code map drift detected between contract and docs/lock-script-spec.md" >&2
+  echo "Firewall error code map drift detected between contract and notes/lock-script-spec.md" >&2
   diff -u "$tmp_expected_norm" "$tmp_doc" || true
   exit 1
 fi

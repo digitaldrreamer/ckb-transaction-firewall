@@ -12,7 +12,7 @@
 > AI agents can be hijacked into sending funds to malicious addresses.  
 > CKB Transaction Firewall enforces a **community-governed blacklist** at **consensus** — inside the lock script — so no compromised or injected agent code can bypass the check. A TypeScript SDK adds a fast **pre-flight** layer before you sign.
 
-**Contracts live on CKB testnet.** Cell tx [`0x11b0397c`](https://testnet.explorer.nervos.org/transaction/0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed) committed at block `0x141be3d`. Registry values: [`docs/deployments/testnet.registry.json`](./docs/deployments/testnet.registry.json).
+**Contracts live on CKB testnet.** Cell tx [`0x11b0397c`](https://testnet.explorer.nervos.org/transaction/0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed) committed at block `0x141be3d`. Registry values: [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
 
 ---
 
@@ -20,7 +20,7 @@
 
 Autonomous agents construct, sign, and broadcast transactions without a human in the loop. That autonomy is valuable — but **application-only safety checks are not enough**: compromised agent code, prompt injection (including [on-chain payload tricks](https://arxiv.org/abs/2503.16248)), bad tool outputs, and multi-agent cascades can all route funds to attacker-controlled addresses. Simulation can be skipped; monitoring is too late once a transaction is final.
 
-The Firewall adds a **protocol-layer floor**: the same blacklist rules the SDK checks are enforced by **every CKB node** when the wallet cell uses the Firewall lock. Governance (quorum, multisig, review windows) is documented in [docs/governance.md](./docs/governance.md).
+The Firewall adds a **protocol-layer floor**: the same blacklist rules the SDK checks are enforced by **every CKB node** when the wallet cell uses the Firewall lock. Governance (quorum, multisig, review windows) is documented in [Governance](https://ckb-firewall.drreamer.digital/concepts/governance/).
 
 **Not only for agents.** Any software that builds CKB transactions — wallets, dapps, custodial batch jobs — can run the SDK pre-flight before signing, and the on-chain enforcement applies to any cell using the Firewall lock regardless of whether an LLM was involved.
 
@@ -51,7 +51,7 @@ The Firewall adds a **protocol-layer floor**: the same blacklist rules the SDK c
 
 **Why both?** If the SDK is never called, a standard lock offers no consensus blacklist. If only the SDK existed, a compromised runtime could skip the check entirely. Together: **SDK = fast path for the agent; lock = guarantee for everyone else.**
 
-For deeper CKB rationale (cell model, lock scripts, oracle-free design): [docs/architecture.md](./docs/architecture.md).
+For motivation and stack layout, see [Why this exists](https://ckb-firewall.drreamer.digital/concepts/why-this-exists/) and [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/).
 
 ---
 
@@ -129,7 +129,7 @@ if (!result.ok) {
 }
 ```
 
-Real testnet values for `registryScript` and `canonicalRegistryCell` are in [`docs/deployments/testnet.registry.json`](./docs/deployments/testnet.registry.json).
+Real testnet values for `registryScript` and `canonicalRegistryCell` are in [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
 
 ### Rust SDK
 
@@ -152,9 +152,9 @@ The Firewall lock and blacklist registry contracts are deployed to CKB testnet. 
   --from-address <YOUR_CKT1_ADDRESS>
 ```
 
-Full deployment walkthrough: [docs/deployments/testnet.md](./docs/deployments/testnet.md).
+Full deployment walkthrough: [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/).
 
-To use the Firewall lock on a cell, encode the registry type script identity into the lock args (see [docs/lock-script-spec.md](./docs/lock-script-spec.md)). The lock requires exactly one live registry `cell_dep` whose type script matches; it fails closed otherwise.
+To use the Firewall lock on a cell, encode the registry type script identity into the lock args (see [Firewall lock args](https://ckb-firewall.drreamer.digital/reference/firewall-lock-args/) and [Error codes](https://ckb-firewall.drreamer.digital/reference/error-codes/)). The lock requires exactly one live registry `cell_dep` whose type script matches; it fails closed otherwise.
 
 ---
 
@@ -187,7 +187,7 @@ npm ci && npm test
 
 **Does not protect against:** addresses not yet on the list; non-address exploit classes; governance key compromise (mitigated by multisig and process); cells that do not use the Firewall lock.
 
-**Fail-safe:** missing, invalid, or ambiguous registry deps → **reject**. See [docs/architecture.md](./docs/architecture.md#failure-semantics).
+**Fail-safe:** missing, invalid, or ambiguous registry deps → **reject**. See [Failure behavior](https://ckb-firewall.drreamer.digital/concepts/architecture/#failure-behavior).
 
 ---
 
@@ -199,21 +199,30 @@ The Transaction Firewall is the enforcement floor for the [CKB Agent Control Hub
 
 ## Documentation
 
+**https://ckb-firewall.drreamer.digital** — documentation for integrators and operators. Source and local dev: [`docs/`](./docs/README.md).
+
 | Topic | Link |
 |-------|------|
-| Architecture and trust model | [docs/architecture.md](./docs/architecture.md) |
-| Lock script spec (args, error codes) | [docs/lock-script-spec.md](./docs/lock-script-spec.md) |
-| Governance | [docs/governance.md](./docs/governance.md) |
-| CLI (`@ckb-firewall/cli`) | [sdk/cli/README.md](./sdk/cli/README.md) |
-| Testnet deployment | [docs/deployments/testnet.md](./docs/deployments/testnet.md) |
-| Canonical registry values | [docs/deployments/testnet.registry.json](./docs/deployments/testnet.registry.json) |
+| Why this exists | https://ckb-firewall.drreamer.digital/concepts/why-this-exists/ |
+| Architecture | https://ckb-firewall.drreamer.digital/concepts/architecture/ |
+| Security model | https://ckb-firewall.drreamer.digital/concepts/security-model/ |
+| Governance | https://ckb-firewall.drreamer.digital/concepts/governance/ |
+| How to use | https://ckb-firewall.drreamer.digital/getting-started/how-to-use/ |
+| Testnet deployment | https://ckb-firewall.drreamer.digital/operations/testnet-deployment/ |
+| Firewall lock args | https://ckb-firewall.drreamer.digital/reference/firewall-lock-args/ |
+| Error codes | https://ckb-firewall.drreamer.digital/reference/error-codes/ |
+| BLKL format | https://ckb-firewall.drreamer.digital/reference/blkl-format/ |
+| CLI reference | https://ckb-firewall.drreamer.digital/reference/cli/ |
+| CLI package (`@ckb-firewall/cli`) | [sdk/cli/README.md](./sdk/cli/README.md) |
+| Canonical registry values | [notes/deployments/testnet.registry.json](./notes/deployments/testnet.registry.json) |
+| Extended lock spec (internal) | [notes/lock-script-spec.md](./notes/lock-script-spec.md) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 
 ---
 
 ## Contributing
 
-Open an issue for larger changes before a PR. For blacklist governance, follow [docs/governance.md](./docs/governance.md) rather than ordinary PRs. Security reports: use GitHub Security Advisories.
+Open an issue for larger changes before a PR. For blacklist governance, follow [Governance](https://ckb-firewall.drreamer.digital/concepts/governance/) and [`notes/governance.md`](./notes/governance.md) rather than ordinary PRs. Security reports: use GitHub Security Advisories.
 
 ---
 
