@@ -17,15 +17,15 @@
 - **Interactive UX**: all commands prompt for missing arguments; `remove` shows a pick-list of current registry entries.
 - Added `sdk/cli/README.md`, `sdk/cli/LICENSE` (MIT), and `files` field in `package.json` for publish-ready tarball.
 - Updated root `README.md` CLI section with full governance flow examples.
-- Updated `docs/governance.md` with CLI tooling reference and command list.
-- Updated `docs/internal/scripts.md` with CLI commands section.
+- Updated `notes/governance.md` with CLI tooling reference and command list.
+- Updated `notes/internal/scripts.md` with CLI commands section.
 
 ## 2026-05-13
 
 ### Release readiness
 
 - Prepared `@ckb-firewall/sdk` for npm publishing: public scoped package config, package metadata, ESM build outputs, tarball validation, and type compatibility checks.
-- Published the canonical CKB testnet BLKL registry cell in [docs/deployments/testnet.registry.json](docs/deployments/testnet.registry.json) and aligned the SDK/testnet docs around caller-supplied `cellDeps`.
+- Published the canonical CKB testnet BLKL registry cell in [notes/deployments/testnet.registry.json](notes/deployments/testnet.registry.json) and aligned the SDK/testnet docs around caller-supplied `cellDeps`.
 - Hardened governance tx preparation for slow indexers and wallet top-ups: capacity filtering, committed top-up polling, merged tx outputs, explicit sender selection, and safer prompt handling.
 
 ## 2026-04-26
@@ -117,11 +117,11 @@
 
 ### CodeRabbit nitpick pass
 
-- README: normative governance tables moved to `governance/voting.md` / `docs/governance.md` only.
+- README: normative governance tables moved to `governance/voting.md` / `notes/governance.md` only.
 - Integration tests: local devnet as default for CI; testnet for periodic smoke.
 - Module READMEs: emergency scope + registry dep-selection invariants; pinned public error codes in unit test doc.
 - `CHANGELOG` consolidated under one date; scripts README wording tweak.
-- `docs/governance.md`: split frozen lifecycle vs v2 refinement items to avoid contradictory “open decisions” list.
+- `notes/governance.md`: split frozen lifecycle vs v2 refinement items to avoid contradictory “open decisions” list.
 
 ### CI
 
@@ -163,7 +163,7 @@
 - Extended integration coverage:
   - `tests/unit/tests/blacklist_registry_tests.rs` now signs governance payloads with deterministic keys and validates strict signature paths (12 passing tests, including bootstrap and stricter signer failure paths).
 - Applied PR #3 documentation consistency fixes:
-  - Unified firewall binary naming to `firewall-lock` in build docs/snippets.
+  - Unified firewall binary naming to `firewall-lock` in build notes/snippets.
   - Removed developer-specific absolute paths in setup docs.
   - Aligned capsule-free build instructions (`cargo build --release --target=...`) with current workflow.
 
@@ -226,9 +226,9 @@
 - Enforced chain-backed governance evidence on `main` and PRs to `main`: `REAL_GOV_EVIDENCE_REQUIRED=1` in `phase3_closeout_check.sh` CI step; pinned `ckb-cli` via `scripts/ci/install_ckb_cli.sh` in `.github/workflows/tests.yml`.
 - Hardened `phase4_governance_tx_status.sh` to poll until `committed` or `rejected`; closeout requires all `chain_status_latest.json` scenarios `committed` when Phase 4 gate is on.
 - Refreshed `tests/integration/governance_drill/chain_status_latest.json` against testnet.
-- Added Phase 4 milestone artifacts under `phase4_artifacts/`, ADR `docs/phase4/adr/ADR-Phase4-Governance-Verification.md`, runbook `docs/phase4/runbooks/governance-drill-live-execution.md`, Phase 4 security tracker, go/no-go record, and `docs/phase4/verification-status.md` linked from the verification matrix.
+- Added Phase 4 milestone artifacts under `phase4_artifacts/`, ADR `notes/internal/phase4/adr/ADR-Phase4-Governance-Verification.md`, runbook `notes/internal/phase4/runbooks/governance-drill-live-execution.md`, Phase 4 security tracker, go/no-go record, and `notes/internal/phase4/verification-status.md` linked from the verification matrix.
 - Added `contracts/blacklist-registry/CYCLE_REPORT.md` for registry governance cycle posture.
-- Updated `scripts/README.md`, `docs/governance.md`, and governance incident playbook cross-links.
+- Updated `scripts/README.md`, `notes/governance.md`, and governance incident playbook cross-links.
 
 ### CI
 
@@ -265,3 +265,9 @@
 - CI: build, tarball checks for `dist/index.js` and `dist/index.d.ts`, Node ESM smoke import, `@arethetypeswrong/cli` with `--profile esm-only`.
 - Documented npm install, Node 20+, and ESM-only usage in README files.
 - Simplified root README TypeScript section (install-first, no publish-metadata framing); aligned `sdk/typescript/README.md` module/types section.
+
+## 2026-05-15
+
+### Repository layout
+
+- Renamed `docs/` to `notes/` and updated scripts, SDK READMEs, tests, and cross-links to the new path.

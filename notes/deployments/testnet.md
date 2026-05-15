@@ -71,7 +71,7 @@ For the current canonical testnet registry, use [`testnet.registry.json`](testne
 
 ## 4. Optional: publish canonical constants
 
-Because `deploy/` is gitignored, teams usually add a **checked-in** small JSON (for example under `docs/deployments/`) once you agree on a **canonical** community testnet deployment, or publish hashes in release notes. [`testnet.registry.json`](testnet.registry.json) records the current canonical testnet registry script and BLKL cell outpoint.
+Because `deploy/` is gitignored, teams usually add a **checked-in** small JSON (for example under `notes/deployments/`) once you agree on a **canonical** community testnet deployment, or publish hashes in release notes. [`testnet.registry.json`](testnet.registry.json) records the current canonical testnet registry script and BLKL cell outpoint.
 
 ## 5. Use the canonical registry in the SDK
 

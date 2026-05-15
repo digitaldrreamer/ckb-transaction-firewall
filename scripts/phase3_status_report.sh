@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="$ROOT_DIR/docs/internal/phase3_artifacts"
+OUT_DIR="$ROOT_DIR/notes/internal/phase3_artifacts"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 REPORT="$OUT_DIR/PHASE3_STATUS_${STAMP}.md"
 LATEST="$OUT_DIR/PHASE3_STATUS_LATEST.md"

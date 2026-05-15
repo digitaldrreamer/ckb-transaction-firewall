@@ -24,9 +24,9 @@ check_file() {
 }
 
 check_security_tracker_zeroes() {
-  local file="$ROOT_DIR/docs/internal/phase3/security/findings-tracker.md"
+  local file="$ROOT_DIR/notes/internal/phase3/security/findings-tracker.md"
   if [[ ! -f "$file" ]]; then
-    skip "Security findings tracker (docs/internal — not present in CI)"
+    skip "Security findings tracker (notes/internal — not present in CI)"
     return
   fi
 
@@ -47,7 +47,7 @@ check_security_tracker_zeroes() {
 }
 
 check_manifest_dev_signer_keys_policy() {
-  local manifest_json="$ROOT_DIR/docs/internal/phase3_artifacts/artifact_manifest_latest.json"
+  local manifest_json="$ROOT_DIR/notes/internal/phase3_artifacts/artifact_manifest_latest.json"
   if [[ ! -f "$manifest_json" ]]; then
     fail "Deterministic manifest JSON missing for feature-policy check ($manifest_json)"
     return
@@ -110,33 +110,33 @@ if [[ "$REAL_GOV_EVIDENCE_REQUIRED" == "1" ]]; then
 fi
 
 # G3/G5 evidence artifacts
-check_file "docs/internal/phase3_artifacts/PHASE3_EVIDENCE_LATEST.md" "Phase 3 evidence report"
-check_file "docs/internal/phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md" "Deterministic build manifest"
+check_file "notes/internal/phase3_artifacts/PHASE3_EVIDENCE_LATEST.md" "Phase 3 evidence report"
+check_file "notes/internal/phase3_artifacts/ARTIFACT_MANIFEST_LATEST.md" "Deterministic build manifest"
 check_manifest_dev_signer_keys_policy
 
 # G1 security docs (internal — gitignored, verified locally before release)
-if [[ -f "$ROOT_DIR/docs/internal/phase3/security/findings-tracker.md" ]]; then
-  check_file "docs/internal/phase3/security/findings-tracker.md" "Security findings tracker"
-  check_file "docs/internal/phase3/security/waiver-register.md" "Security waiver register"
+if [[ -f "$ROOT_DIR/notes/internal/phase3/security/findings-tracker.md" ]]; then
+  check_file "notes/internal/phase3/security/findings-tracker.md" "Security findings tracker"
+  check_file "notes/internal/phase3/security/waiver-register.md" "Security waiver register"
   check_security_tracker_zeroes
 else
-  skip "G1 security docs (docs/internal/phase3/security — not tracked in CI)"
+  skip "G1 security docs (notes/internal/phase3/security — not tracked in CI)"
 fi
 
 # G4 runbooks (internal — gitignored, verified locally before release)
-if [[ -f "$ROOT_DIR/docs/internal/phase3/runbooks/deployment-runbook.md" ]]; then
-  check_file "docs/internal/phase3/runbooks/deployment-runbook.md" "Deployment runbook"
-  check_file "docs/internal/phase3/runbooks/key-rotation-runbook.md" "Key rotation runbook"
-  check_file "docs/internal/phase3/runbooks/governance-incident-playbook.md" "Governance incident playbook"
+if [[ -f "$ROOT_DIR/notes/internal/phase3/runbooks/deployment-runbook.md" ]]; then
+  check_file "notes/internal/phase3/runbooks/deployment-runbook.md" "Deployment runbook"
+  check_file "notes/internal/phase3/runbooks/key-rotation-runbook.md" "Key rotation runbook"
+  check_file "notes/internal/phase3/runbooks/governance-incident-playbook.md" "Governance incident playbook"
 else
-  skip "G4 runbooks (docs/internal/phase3/runbooks — not tracked in CI)"
+  skip "G4 runbooks (notes/internal/phase3/runbooks — not tracked in CI)"
 fi
 
 # Release readiness checklist (internal — gitignored, verified locally before release)
-if [[ -f "$ROOT_DIR/docs/internal/release-checklists.md" ]]; then
-  check_file "docs/internal/release-checklists.md" "Release checklist"
+if [[ -f "$ROOT_DIR/notes/internal/release-checklists.md" ]]; then
+  check_file "notes/internal/release-checklists.md" "Release checklist"
 else
-  skip "Release checklist (docs/internal — not tracked in CI)"
+  skip "Release checklist (notes/internal — not tracked in CI)"
 fi
 
 echo ""

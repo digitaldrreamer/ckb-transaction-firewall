@@ -146,7 +146,7 @@ describe("transaction firewall", () => {
   test("checks the canonical testnet registry fixture", () => {
     const fixture = JSON.parse(
       readFileSync(
-        new URL("../../../docs/deployments/testnet.registry.json", import.meta.url),
+        new URL("../../../notes/deployments/testnet.registry.json", import.meta.url),
         "utf8",
       ),
     ) as TestnetRegistryFixture;
