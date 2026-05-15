@@ -1,0 +1,22 @@
+---
+title: CKB Transaction Firewall
+description: Public documentation for the firewall lock, registry contract, SDKs, CLI, and governance process.
+template: splash
+banner:
+  content: |
+    Currently deployed on Testnet, not mainnet.
+hero:
+  tagline: A CKB lock script and governed blacklist registry, with SDKs and a CLI to check transactions before signing and to manage registry updates on-chain.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<CardGrid>
+	<LinkCard href="/getting-started/how-to-use/" title="How to use" description="Wire the live registry, run pre-flight checks, and walk governance updates." />
+	<LinkCard href="/getting-started/overview/" title="Overview" description="What the firewall does and how the lock, registry, SDKs, and CLI fit together." />
+	<LinkCard href="/concepts/why-this-exists/" title="Why this exists" description="Why blacklist enforcement belongs in the lock script, not only in app code." />
+	<LinkCard href="/concepts/architecture/" title="Architecture" description="How consensus enforcement, pre-flight checks, and registry state connect." />
+	<LinkCard href="/getting-started/cli/" title="CLI quickstart" description="Inspect the registry and prepare governance transactions from the terminal." />
+	<LinkCard href="/operations/testnet-deployment/" title="Testnet deployment" description="Canonical script IDs, registry cell data, and how tools consume them." />
+	<LinkCard href="/reference/error-codes/" title="Error codes" description="Stable codes returned by the contracts and SDKs." />
+</CardGrid>

@@ -1,0 +1,77 @@
+---
+title: Why This Exists
+description: The problem the firewall addresses and why enforcement belongs in the lock script, not only in application code.
+---
+
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+CKB transactions are final once nodes accept them. There is no undo, no clawback, and no “we meant to call the checker” flag on chain.
+
+If your only defense is a function you hope runs before `sign`, you are betting that every build, every code path, and every compromised dependency will always call it. The firewall exists so that bet is not entirely on application discipline.
+
+## One bad transfer
+
+Picture a service that moves CKB for users, whether that is an agent, a wallet backend, or a payout worker.
+
+Something upstream hands your builder a destination `lock_args`. It came from a tool result, a parsed invoice, or text that rode in through a prompt. It points at an attacker, but the address still looks plausible in logs and in whatever your operator sees on screen.
+
+Your code assembles an unsigned transaction with that output. The path that actually runs in production never calls the SDK: a dead feature flag, an old binary, a forked payout path, or a compromised process that skips the check on purpose. The transaction is signed and broadcast. CKB nodes validate the locks and signatures **they** enforce, not your internal checklist.
+
+If the spent cell does **not** use the firewall lock, the blacklist never enters validation. The transfer confirms. You find out from an explorer, an accounting mismatch, or an angry user. The CKB is gone.
+
+If the spent cell **does** use the firewall lock and the destination is on the registry, nodes reject the transaction during validation, even though your runtime skipped the SDK. The spend never becomes final.
+
+That gap between “we intended to check” and “the chain enforced a check” is what this project closes.
+
+<Aside type="danger" title="Confirmed spends are final">
+CKB does not roll back accepted transactions because application logic failed to run. Recovery is operational and legal, not a chain revert.
+</Aside>
+
+## Where the trust boundary actually is
+
+Developers often picture safety like this:
+
+```text
+[ Your app ]  →  SDK check  →  sign  →  broadcast  →  CKB nodes
+                  ^^^^^^^^
+                  "we're safe here"
+```
+
+In practice, everything left of `sign` sits in the same trust zone as the bug or the attacker: the process that builds the transaction, the libraries on that machine, agent or CI code that can rewrite outputs after your main path ran, and config that turns checks off in production.
+
+Once the transaction is signed, nodes only enforce what the lock scripts require.
+
+| Layer | Who runs it | What it can guarantee |
+| --- | --- | --- |
+| SDK pre-flight | Your process | Fast feedback **if** that process is honest and actually called |
+| Firewall lock | Every CKB node | The same blacklist rule at consensus **for cells that use this lock** |
+
+The SDK is still worth running: you get a clear error before broadcast instead of a rejected transaction. It is not a substitute for the lock when the threat model includes “our code might not run the check.”
+
+## Other ways the same story ends badly
+
+These all assume the destination is already on the community registry. The firewall does not discover brand-new scam addresses until governance lists them.
+
+**Funds never behind the firewall lock.** The SDK is in the repo and in the docs, but user cells still use a standard lock. The bad transfer in the walkthrough confirms with no consensus backstop.
+
+**Only the happy path is guarded.** A manual admin send, a migration script, or an emergency payout tool builds transactions without the same check. One unguarded path is enough.
+
+**The registry dep is wrong.** The transaction points at the wrong live cell, omits the registry dependency, or carries malformed `BLKL` data. Application code may not catch it before sign; the lock is meant to fail closed rather than accept an ambiguous registry.
+
+**Monitoring is the last line.** An alert fires after confirmation. By then you are documenting loss, not preventing it.
+
+## What it does not solve
+
+- Addresses not yet on the registry
+- Attacks that do not boil down to “send to this `lock_args`”
+- Compromised governance keys or registry updates that pass on-chain validation
+
+See [Security model](/concepts/security-model/) for the full boundary.
+
+## Read next
+
+<CardGrid>
+	<LinkCard href="/concepts/architecture/" title="Architecture" description="How the lock, registry, SDKs, and governance connect." />
+	<LinkCard href="/getting-started/how-to-use/" title="How to use" description="Wire the live registry, run pre-flight checks, and walk updates." />
+	<LinkCard href="/getting-started/overview/" title="Overview" description="What each component does in a typical integration." />
+</CardGrid>

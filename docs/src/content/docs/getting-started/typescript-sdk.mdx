@@ -1,0 +1,81 @@
+---
+title: TypeScript SDK
+description: Use the TypeScript SDK to pre-flight check unsigned CKB transactions against the live registry.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+The TypeScript SDK is the application-layer check. It parses a `BLKL` registry payload from a matching registry cell dep and rejects outputs that target blacklisted destinations.
+
+## Install
+
+<Tabs>
+<TabItem label="npm">
+
+```bash
+npm install @ckb-firewall/sdk
+```
+
+</TabItem>
+<TabItem label="pnpm">
+
+```bash
+pnpm add @ckb-firewall/sdk
+```
+
+</TabItem>
+<TabItem label="yarn">
+
+```bash
+yarn add @ckb-firewall/sdk
+```
+
+</TabItem>
+</Tabs>
+
+## Basic usage
+
+```ts
+import { TransactionFirewall } from "@ckb-firewall/sdk";
+
+const firewall = new TransactionFirewall({
+  registryScript: {
+    codeHash: "0x...",
+    hashType: "type",
+    args: "0x...",
+  },
+});
+
+const result = firewall.checkTransaction({
+  cellDeps: [{ type: registryScript, data: registryData }],
+  outputs: [{ lockArgs: "0x..." }],
+});
+
+if (!result.ok) {
+  console.error(result.code, result.reason);
+}
+```
+
+## Important rules
+
+- The SDK is synchronous.
+- It does not fetch RPC data for you.
+- You must provide the live registry cell data yourself.
+- The registry dep must match the configured `registryScript` exactly.
+
+<Aside type="caution" title="Live data required">
+If you point the SDK at the wrong registry cell outpoint, you are no longer checking the canonical registry. The SDK will happily parse any valid `BLKL` payload you hand it.
+</Aside>
+
+## Result codes
+
+The SDK returns a structured `ok: true` or `ok: false` decision.
+
+- `8` `MissingRegistryCellDep`
+- `9` `InvalidRegistryData`
+- `10` `RegistryNotSorted`
+- `11` `BlacklistedLockArgs`
+- `12` `BlacklistedTypeArgs`
+- `17` `AmbiguousRegistryCellDep`
+
+See [Error codes](/reference/error-codes/) for the contract-side mapping.
