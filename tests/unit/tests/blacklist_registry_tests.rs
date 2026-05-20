@@ -133,7 +133,7 @@ fn test_pass_bootstrap_registry_creation_with_5_of_5_signers() {
     let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     // Create the funding cell first so we can derive the Type ID from its outpoint.
@@ -190,7 +190,7 @@ fn test_pass_bootstrap_registry_creation_with_partial_signers() {
     let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     let funding_cell = context.create_cell(
@@ -245,7 +245,7 @@ fn test_pass_valid_registry_update_with_gov1_witness() {
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
 
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
@@ -306,7 +306,7 @@ fn test_reject_invalid_type_args_layout() {
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
 
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     // Too short — triggers ERROR_INVALID_TYPE_ARGS_LAYOUT before anything else.
@@ -358,7 +358,7 @@ fn test_reject_invalid_registry_payload() {
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
 
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
@@ -411,7 +411,7 @@ fn test_reject_invalid_governance_witness_root_mismatch() {
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
 
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
@@ -535,7 +535,7 @@ fn test_reject_topology_multiple_registry_inputs() {
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
 
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
@@ -602,7 +602,7 @@ fn test_reject_bootstrap_type_id_mismatch() {
     let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     let funding_cell = context.create_cell(
@@ -661,7 +661,7 @@ fn test_reject_zero_proposal_hash_in_gov1_witness() {
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
 
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
@@ -723,7 +723,7 @@ fn test_pass_update_with_insufficient_signers_at_registry_level() {
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
 
     let governance_lock = context
-        .build_script(&always_success_out_point, Bytes::from(vec![0x42]))
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
         .expect("build governance lock");
 
     let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
