@@ -523,7 +523,7 @@ fn delegate_to_inner_lock(args: &FirewallLockArgs) -> Result<(), SysError> {
         .to_opt()
         .ok_or(error::to_sys_error(error::INNER_LOCK_REJECTED))?
         .unpack();
-    if sig_opt.is_empty() {
+    if sig_opt.len() != 65 {
         return Err(error::to_sys_error(error::INNER_LOCK_REJECTED));
     }
 
