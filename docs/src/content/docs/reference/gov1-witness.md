@@ -71,10 +71,10 @@ Each signer entry is 66 bytes:
 The governance-lock computes the message each signer must have signed as:
 
 ```
-signing_message = blake2b(proposal_id_hash || vote_digest_hash)
+signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root)
 ```
 
-Signature recovery uses this 32-byte hash directly as the ECDSA prehash. The `execute` CLI command verifies each stored signature against the corresponding on-chain pubkey (from the governance header) before building the witness.
+Signature recovery uses this 32-byte hash directly as the ECDSA prehash. By including `old_root` and `new_root` in the preimage, each signer explicitly commits to the exact registry state transition they are authorising — making it impossible to reuse signatures from one proposal's execution against a different or malicious registry output. The `execute` CLI command verifies each stored signature against the corresponding on-chain pubkey (from the governance header) before building the witness.
 
 ## Vote digest
 
