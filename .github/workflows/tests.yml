@@ -96,7 +96,7 @@ jobs:
       - name: Verify TypeScript SDK npm tarball
         working-directory: sdk/typescript
         run: |
-          npm pack || test -n "$(ls ckb-firewall-sdk-*.tgz 2>/dev/null)"
+          npm pack > /dev/null
           TAR=$(ls -1 ckb-firewall-sdk-*.tgz | head -1)
           tar -tzf "$TAR" | grep -q 'package/dist/index.js'
           tar -tzf "$TAR" | grep -q 'package/dist/index.d.ts'
