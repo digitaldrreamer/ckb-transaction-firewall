@@ -149,6 +149,11 @@ impl RegistryPayload {
             data[entries_start + 3],
         ]) as usize;
         let mut offset = entries_start + 4;
+        let remaining = data.len().saturating_sub(offset);
+        let max_possible_entries = remaining / 9;
+        if entry_count > max_possible_entries {
+            return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
+        }
         let mut entries = Vec::with_capacity(entry_count);
         for _ in 0..entry_count {
             if offset >= data.len() {
