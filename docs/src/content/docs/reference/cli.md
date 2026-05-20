@@ -9,158 +9,164 @@ This is the command surface for [@ckb-firewall/cli](https://www.npmjs.com/packag
 
 - Node 20+ required
 - ESM only
-- Defaults point to the canonical testnet registry cell
-- The registry-touching commands read live registry cell data through RPC before they build or inspect anything
+- Defaults point to the canonical testnet registry cell and contracts
+- Registry-touching commands fetch live cell data through the CKB RPC before building anything
+- `inspect`, `check`, and `execute` auto-discover the current registry cell outpoint via the CKB indexer (`get_cells`) when using testnet defaults, so they keep working after governance updates without requiring `--registry-tx` overrides. Falls back silently to the configured outpoint if the indexer is unavailable.
 
 ## Commands
 
 ### `inspect`
 
-Show the current registry entries.
-
-Options:
-
-- `--rpc-url <url>`
-- `--registry-tx <hash>`
-- `--registry-index <n>`
-
-Example:
+Show the current registry entries with their expiry status.
 
 ```bash
+ckb-firewall inspect
 ckb-firewall inspect --rpc-url https://testnet.ckb.dev
 ```
 
-### `add`
+Options: `--rpc-url`, `--registry-tx`, `--registry-index`
 
-Quickly append a lock args entry to the registry for testnet/dev use.
+---
 
-Options:
+### `check`
 
-- `--lock-args <hex>`
-- `--expires-at <timestamp>`
-- `--rpc-url <url>`
-- `--registry-tx <hash>`
-- `--registry-index <n>`
-- `--tx-out <file>`
-- `--sign`
-- `--from-account <address>`
-
-Example:
+Test whether a specific lock args is currently blacklisted.
 
 ```bash
-ckb-firewall add \
-  --lock-args 0xabc123... \
-  --expires-at 0 \
-  --tx-out ./tx.json
+ckb-firewall check --lock-args 0xabc123...
 ```
 
-### `remove`
+Options: `--lock-args` (required), `--rpc-url`, `--registry-tx`, `--registry-index`
 
-Quickly remove a lock args entry for testnet/dev use.
-
-Options:
-
-- `--lock-args <hex>`
-- `--rpc-url <url>`
-- `--registry-tx <hash>`
-- `--registry-index <n>`
-- `--tx-out <file>`
-- `--sign`
-- `--from-account <address>`
-
-Example:
-
-```bash
-ckb-firewall remove \
-  --lock-args 0xabc123... \
-  --tx-out ./tx.json
-```
+---
 
 ### `propose`
 
-Create a governance proposal.
-
-Options:
-
-- `--action <add|remove>`
-- `--lock-args <hex>`
-- `--expires-at <timestamp>`
-- `--evidence <text>`
-- `--classification <type>`
-- `--severity <level>`
-- `--rationale <text>`
-- `--proposer <name>`
-
-Example:
+Create a governance proposal. All fields are hashed together into a canonical `proposalIdHash` — every field is immutable after creation.
 
 ```bash
-ckb-firewall propose --action add --lock-args 0xabc123... --proposer alice
+ckb-firewall propose \
+  --action add \
+  --lock-args 0xabc123... \
+  --evidence https://evidence.example/... \
+  --classification theft \
+  --severity high \
+  --rationale "Drained 50k CKB from multiple wallets in a single transaction." \
+  --proposer alice
 ```
+
+Options: `--action`, `--lock-args`, `--expires-at`, `--evidence`, `--classification`, `--severity`, `--rationale`, `--proposer`
+
+Classifications: `theft`, `scam`, `hack`, `sanctions`, `other`  
+Severities: `critical`, `high`, `medium`, `low`
+
+After creation the CLI prints an export command. Share the exported JSON with other governance participants via `export` / `import`.
+
+---
 
 ### `proposals`
 
-List proposals and filter by status.
+List proposals and their current status.
 
-Options:
+```bash
+ckb-firewall proposals
+ckb-firewall proposals --status voting
+```
 
-- `--status <status>`
+Options: `--status` (`pending-review`, `voting`, `approved`, `executed`, `rejected`)
+
+---
 
 ### `vote`
 
-Record a validator vote.
-
-Options:
-
-- `--proposal <id>`
-- `--vote <choice>`
-- `--validator <id>`
-
-Example:
+Record a cryptographically signed validator vote on a proposal.
 
 ```bash
-ckb-firewall vote --proposal abc123 --vote yes --validator alice
+ckb-firewall vote --proposal abc123 --vote yes
+# prompts for private key
 ```
+
+Options: `--proposal`, `--vote` (`yes`, `no`, `abstain`), `--key <32-byte-hex>`
+
+If `--key` is omitted, the CLI prompts with masked input.
+
+**What this command does:**
+1. Derives the compressed public key from the provided private key
+2. Checks the pubkey is in the authorized validator set (Merkle membership proof against the on-chain `validatorMerkleRoot` in the BLKL governance header)
+3. Rejects the vote if the key is not an authorized validator
+4. Signs the vote: `blake2b({domain:"ckb-firewall:vote", proposalIdHash, vote, timestamp, pubkey})`
+5. Stores the vote locally with signature and Merkle proof
+6. Updates the `voteDigestHash` — a commitment to the full set of votes cast so far
+
+Votes are local until `execute`. Export and share the updated proposal so other participants can import your vote.
+
+---
 
 ### `sign`
 
-Add a governance signer signature.
-
-Options:
-
-- `--proposal <id>`
-- `--signer-index <0-4>`
-- `--key <hex>`
-
-Example:
+Add a governance signer signature after the vote threshold is met and the 72-hour review window has passed.
 
 ```bash
 ckb-firewall sign --proposal abc123 --signer-index 0
+# prompts for private key
 ```
+
+Options: `--proposal`, `--signer-index` (`0`–`4`), `--key <32-byte-hex>`
+
+---
 
 ### `execute`
 
-Build and submit the registry update transaction.
-
-Options:
-
-- `--proposal <id>`
-- `--rpc-url <url>`
-- `--registry-tx <hash>`
-- `--registry-index <n>`
-- `--tx-out <file>`
-- `--sign`
-- `--from-account <address>`
-
-Example:
+Build the registry update transaction from an approved, fully-signed proposal. Verifies all vote signatures and Merkle proofs against the on-chain validator set before building the witness.
 
 ```bash
-ckb-firewall execute --proposal abc123 --tx-out ./tx.json
+ckb-firewall execute --proposal abc123 --tx-out ./gov_tx.json
 ```
 
-## Practical note
+Options: `--proposal`, `--rpc-url`, `--registry-tx`, `--registry-index`, `--tx-out`, `--sign`, `--from-account`
 
-`add` and `remove` are convenience flows for testnet and development.
+---
 
-The public governance path is `propose` → `vote` → `sign` → `execute`.
+### `export`
 
-If you need the live cell data that backs these commands, read [How to Use](/getting-started/how-to-use/).
+Export a proposal to a shareable JSON file for multi-party governance coordination.
+
+```bash
+ckb-firewall export --proposal abc123 --out proposal-abc123.json
+ckb-firewall export --proposal abc123   # prints to stdout
+```
+
+Options: `--proposal`, `--out`
+
+---
+
+### `import`
+
+Import a proposal shared by another governance participant. Validates `proposalIdHash` and `voteDigestHash` integrity before saving. If the proposal already exists locally, votes and signatures are merged rather than overwritten.
+
+```bash
+ckb-firewall import proposal-abc123.json
+ckb-firewall import proposal-abc123.json --force
+```
+
+Arguments: `<file>` (required)  
+Options: `--force` (skip overwrite confirmation)
+
+---
+
+## Full governance flow
+
+All registry changes go through governance. The proposal is a local JSON file until `execute` submits it on-chain.
+
+```
+propose → export → [share] → import → vote → export → [share] → import → sign → execute
+```
+
+1. One participant runs `propose` and `export`
+2. The JSON is shared out-of-band (email, Signal, IPFS, etc.)
+3. Each participant runs `import` to receive it
+4. Each validator runs `vote` with their private key
+5. Each signer runs `sign` after the 72h review window and vote threshold are met
+6. Any participant runs `execute` to build and submit the transaction
+
+The minimum timeline is approximately 120 hours (72h review + voting + signing). The CLI warns if a temporary entry's `expiresAt` falls within this window.

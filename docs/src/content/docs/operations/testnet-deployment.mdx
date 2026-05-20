@@ -1,60 +1,81 @@
 ---
 title: Testnet Deployment
-description: How the canonical CKB testnet deployment is produced and consumed by the SDKs and CLI.
+description: Live contract and registry cell outpoints for the canonical CKB testnet deployment.
 ---
 
-import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-Use this page if you want the canonical testnet values the SDKs and CLI are built around.
-
-<Aside type="note" title="Two different outpoints">
-The contract binary outpoints are for deployment metadata. The canonical registry cell outpoint is the one your SDK and CLI use as live data.
+<Aside type="note" title="Two different kinds of outpoints">
+**Contract code cells** contain RISC-V binaries and are referenced by the firewall lock args. **The registry data cell** contains the live BLKL payload and is what the SDK and CLI read. They live at different outpoints.
 </Aside>
 
-## What is published
+## Deployed contracts
 
-- The registry type script identity
-- The canonical registry cell outpoint and data
-- The deployed contract binary outpoints
-- Deployment history for traceability
+All four contracts were deployed on 2026-05-20.
 
-## How to use it
+| Contract | Tx | Index | Type ID |
+|---|---|---|---|
+| `governance-lock` | `0xe2129b25...7aed` | 0 | `0x92fa5c01...4672` |
+| `firewall-lock` | `0x128193cc...8d2` | 0 | `0x8192c9df...c54` |
+| `blacklist-registry` | `0x128193cc...8d2` | 1 | `0xbbfbcf51...096` |
+| `spawn-aware-secp256k1` | `0x0fe5d476...9e` | 0 | `0x9be62e04...465` |
 
-1. Read `notes/deployments/testnet.registry.json` for the current canonical values.
-2. Use the `registryScript` in the TypeScript SDK.
-3. Fetch the live `canonicalRegistryCell` data and pass it as the registry cell dep.
-4. Use the CLI for inspection or governance transaction preparation.
+Full outpoints are in [`notes/deployments/testnet.registry.json`](https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/notes/deployments/testnet.registry.json).
 
-For the exact chain call, use:
+## Live registry cell
+
+```
+tx_hash: 0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3
+index:   0
+```
+
+This cell moves after each governance update. Always fetch the current outpoint before building spending transactions.
+
+Fetch the live payload:
 
 ```bash
 ckb-cli --url https://testnet.ckb.dev rpc get_live_cell \
-  --tx-hash 0x57edc162ddd476d970b8a65558466ca11bb1762be9366fd12c76d620fe695fb7 \
+  --tx-hash 0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3 \
   --index 0 \
   --with-data \
   --output-format json
 ```
 
-<Tabs>
-<TabItem label="SDK">
+Or via the SDK:
 
-Use `registryScript` plus `canonicalRegistryCell.data`.
+```ts
+import { fetchRegistryPayload } from "@ckb-firewall/sdk";
 
-</TabItem>
-<TabItem label="CLI">
+const registry = await fetchRegistryPayload(
+  "https://testnet.ckb.dev",
+  "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3",
+  0
+);
+```
 
-Use `ckb-firewall inspect` or the governance commands against the live registry outpoint.
+## Registry spec (for SDK config)
 
-</TabItem>
-</Tabs>
+```ts
+{
+  codeHash:    "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+  hashType:    "type",
+  typeIdValue: "0xcd5d844661356e465c27b7d693e84f20e884da63153d2f6f40381ceb0807761c",
+  required:    true,
+}
+```
 
-## Important distinction
+The `typeIdValue` is the stable identifier — it survives governance-lock upgrades and does not change when the registry cell is updated.
 
-The deployment outpoints for the contract binaries are not the same thing as the live registry payload.
+## Governance committee
 
-- Contract binary cells contain the RISC-V program
-- Registry cell data contains the `BLKL` payload
+The governance committee is 5 members with a 3-of-5 signing threshold. Committee private keys are `[0x01 × 32]` through `[0x05 × 32]`.
 
-That is the bit developers usually miss on the first read.
+The committee pubkeys and the validator Merkle root are embedded in the BLKL v2 governance header of the registry cell.
 
-That distinction matters when you wire up the SDK or inspect chain state.
+## Inspect
+
+```bash
+ckb-firewall inspect
+```
+
+Uses the canonical testnet registry cell by default.

@@ -1,9 +1,15 @@
 ---
 title: Why This Exists
-description: The problem the firewall addresses and why enforcement belongs in the lock script, not only in application code.
+description: What the firewall does, what it does not do, and why enforcement belongs in the lock script.
 ---
 
 import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## The core function
+
+The firewall is an **outgoing payment filter**. It prevents a wallet cell from being spent in a transaction that creates outputs pointing to blacklisted addresses. It does not prevent blacklisted addresses from sending to you, does not filter other inputs in the same transaction, and does not affect contracts you interact with.
+
+If a blacklisted entity sends CKB to your wallet, you receive it. The firewall acts on the outputs *you* produce, not on who interacts with you.
 
 CKB transactions are final once nodes accept them. There is no undo, no clawback, and no “we meant to call the checker” flag on chain.
 

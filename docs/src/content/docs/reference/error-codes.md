@@ -58,7 +58,6 @@ if (!result.ok) {
 - 23 UnsupportedRegistryVersion
 - 24 InvalidGovernanceWitness
 - 25 UnauthorizedGovernanceLock
-- 26 UnauthorizedSigners
 
 
 ## SDK mapping

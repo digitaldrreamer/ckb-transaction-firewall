@@ -1,0 +1,176 @@
+---
+title: Blacklisting an Address
+description: How to propose, vote on, and execute a blacklist addition — and what happens to the address after.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+This page explains the full lifecycle: what happens when you propose an address, what validators do when they vote, what gets written on-chain, and what happens when a temporary entry expires.
+
+## Proposals are local, not on-chain
+
+The proposal itself is a JSON file stored at `~/.ckb-firewall/proposals/<id>.json` on your machine. It is not on-chain until `execute` is called. Between `propose` and `execute`, all proposal state — votes, signatures, and metadata — lives in local files that participants share manually via `export` and `import`.
+
+The `proposalIdHash` is a cryptographic hash of the proposal fields and locks them in place. Any modification to the proposal fields produces a different hash, which invalidates all existing signatures.
+
+## Step 1: Propose
+
+```bash
+ckb-firewall propose \
+  --action add \
+  --lock-args 0xdeadbeef... \
+  --expires-at 0 \
+  --evidence "https://explorer.nervos.org/transaction/0x..." \
+  --classification theft \
+  --severity high \
+  --rationale "Address received proceeds from the Drainer exploit on 2026-05-15." \
+  --proposer alice
+```
+
+All flags are interactive if omitted. After this command:
+- A proposal JSON is saved locally with a unique `proposalIdHash`
+- A 72-hour review window starts
+- The address is **not yet blacklisted** — nothing has changed on-chain
+
+Export and share the proposal with other participants:
+
+```bash
+ckb-firewall export --proposal <id> --out proposal.json
+```
+
+## Step 2: Other participants import and review
+
+Each governance participant imports the proposal:
+
+```bash
+ckb-firewall import proposal.json
+```
+
+The import validates the `proposalIdHash` against the proposal fields — a tampered file is rejected before saving.
+
+## Step 3: Validators vote
+
+Each validator reviews the evidence and votes with their secp256k1 private key:
+
+```bash
+ckb-firewall vote --proposal <id> --vote yes
+# prompts: "Validator private key (32-byte hex):"
+```
+
+**What the vote command does:**
+1. Derives the validator's compressed public key from the private key
+2. Checks that this public key is in the authorized validator set (Merkle membership proof against the on-chain `validatorMerkleRoot` in the BLKL governance header)
+3. Rejects the vote if the key is not an authorized validator
+4. Signs the vote payload: `blake2b({domain: "ckb-firewall:vote", proposalIdHash, vote, timestamp, pubkey})`
+5. Stores the vote locally with the signature and Merkle proof
+6. Updates the `voteDigestHash` — a commitment to the full set of votes
+
+After voting, the validator exports their updated proposal and shares it back:
+
+```bash
+ckb-firewall export --proposal <id> --out proposal-voted.json
+```
+
+Other participants import this to merge the vote:
+
+```bash
+ckb-firewall import proposal-voted.json
+```
+
+<Aside type="note" title="Votes are off-chain until execute">
+Each vote is a cryptographic signature stored in the proposal JSON. The blockchain only sees the vote digest hash when the governance transaction is eventually submitted. Validators do not pay fees to vote.
+</Aside>
+
+## Step 4: Signers sign
+
+After the 72-hour review window passes and 3 of 5 validators have voted yes:
+
+```bash
+ckb-firewall sign --proposal <id> --signer-index 0
+# prompts: "Private key for signer 0 (32-byte hex):"
+```
+
+**What the sign command does:**
+1. Computes `signing_message = blake2b(proposalIdHash || voteDigestHash)`
+2. Signs it with the governance signer's secp256k1 private key
+3. Stores the 65-byte signature locally
+
+Three signers must sign (any three of the five governance signers). Each signer exports and shares their updated proposal so others can import the accumulated signatures.
+
+## Step 5: Execute on-chain
+
+Any participant with all three signatures runs:
+
+```bash
+ckb-firewall execute --proposal <id> --tx-out gov_tx.json
+```
+
+**What the execute command does:**
+1. Recomputes the `voteDigestHash` from stored votes — aborts if it doesn't match (tamper detection)
+2. Verifies every vote signature against the voter's claimed public key
+3. Verifies every vote pubkey has a valid Merkle proof against the on-chain validator set
+4. Verifies every governance signer signature against the on-chain committee pubkeys from the BLKL header
+5. Fetches the current registry cell from the RPC
+6. Builds the new BLKL v2 payload with the address added
+7. Constructs the GOV1 v2 witness binding the proposal and vote context to the state transition
+8. Writes the signed transaction to `gov_tx.json`
+
+The transaction is then submitted:
+
+```bash
+ckb-cli wallet sign-txs --tx-file gov_tx.json --from-account <governance-address>
+ckb-cli wallet apply-txs --tx-file gov_tx.json
+```
+
+Or pass `--sign` to `execute` to do this in one step.
+
+**After the transaction confirms:**
+- The old registry cell is consumed
+- A new registry cell exists with the address in the BLKL payload
+- The address is now blacklisted — any transaction spending a firewall-protected cell that sends to this address is rejected at consensus
+- The proposal status is updated to `executed`
+
+## Permanent vs. temporary entries
+
+**Permanent entry (`--expires-at 0`):** The address stays blacklisted until a governance proposal explicitly removes it.
+
+**Temporary entry (`--expires-at <unix-timestamp>`):** The firewall lock reads the chain's median block time and treats the entry as inactive once the chain time reaches `expiresAt`. The entry remains in the registry payload (takes up space), but spends to that address succeed.
+
+<Aside type="caution" title="Temporary entries require header_deps">
+For time-based entries to expire correctly, the spending transaction must include `header_deps` with a recent block hash. Without `header_deps`, the chain's median time evaluates to zero and all temporary entries are treated as permanent. The transaction does not fail with a clear error — it just silently enforces the wrong policy.
+</Aside>
+
+## What happens after an entry expires
+
+When a temporary entry's `expiresAt` timestamp passes:
+- The firewall lock treats it as inactive — spends to that address are allowed again
+- The entry still takes up space in the registry payload
+- **The address is not automatically re-listed** if it becomes active again — a new `add` proposal is required
+
+To re-blacklist an address after expiry, create a new proposal:
+
+```bash
+ckb-firewall propose \
+  --action add \
+  --lock-args <same-address> \
+  --expires-at <new-timestamp-or-0>
+```
+
+## Removing expired entries from the registry
+
+Expired entries accumulate in the payload indefinitely. To remove them and compact the registry, submit a `remove` proposal:
+
+```bash
+ckb-firewall propose --action remove --lock-args <expired-address>
+```
+
+This goes through the full governance flow just like an `add`. The result is a new registry cell with the entry absent.
+
+## Check the current status
+
+```bash
+ckb-firewall check --lock-args 0xdeadbeef...
+ckb-firewall inspect
+```
+
+`inspect` shows all entries with their status (`active` or `EXPIRED`) and expiry dates.

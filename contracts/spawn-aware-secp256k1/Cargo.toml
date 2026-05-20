@@ -1,0 +1,25 @@
+[package]
+name = "spawn-aware-secp256k1"
+version = "0.1.0"
+authors = ["digitaldrreamer"]
+edition = "2021"
+license = "MIT"
+description = "Spawn-aware secp256k1-blake160 lock for use as firewall-lock inner lock"
+
+[dependencies]
+ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator", "dummy-atomic"] }
+blake2b-ref = { version = "0.3.1", default-features = false }
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "alloc"] }
+
+[profile.release]
+overflow-checks = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[features]
+default = []
+std = []
+native-simulator = []
