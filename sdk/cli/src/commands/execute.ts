@@ -194,7 +194,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
 
   // C-4: verify governance signer signatures against on-chain pubkeys from governance header.
   if (govHeader && govHeader.pubkeys.length > 0) {
-    const msgHash = signingMessage(proposal);
+    const msgHash = signingMessage(proposal, oldRoot, newRoot);
     for (const s of proposal.signatures) {
       if (s.signerIndex >= govHeader.pubkeys.length) {
         console.error(logSymbols.error, chalk.red(`Signer index ${s.signerIndex} is out of range for the on-chain governance committee (${govHeader.pubkeys.length} signers).`));

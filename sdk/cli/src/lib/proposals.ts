@@ -201,12 +201,19 @@ export function isReadyToExecute(proposal: Proposal): boolean {
   );
 }
 
-// The message each governance signer signs (domain-separated, 64 bytes input).
-export function signingMessage(proposal: Proposal): Uint8Array {
+// The message each governance signer signs.
+// Preimage: blake2b(proposal_id_hash(32) || vote_digest_hash(32) || old_root(32) || new_root(32))
+// Binding signers to both proposal identity and the exact registry state transition prevents
+// reuse of signatures from one proposal's execution in a different malicious transaction.
+export function signingMessage(proposal: Proposal, oldRoot: Uint8Array, newRoot: Uint8Array): Uint8Array {
+  if (oldRoot.length !== 32) throw new Error(`oldRoot must be 32 bytes, got ${oldRoot.length}`);
+  if (newRoot.length !== 32) throw new Error(`newRoot must be 32 bytes, got ${newRoot.length}`);
   const proposalBytes = hexToBytes(proposal.proposalIdHash);
   const voteBytes = hexToBytes(proposal.voteDigestHash);
-  const combined = new Uint8Array(proposalBytes.length + voteBytes.length);
+  const combined = new Uint8Array(128);
   combined.set(proposalBytes, 0);
-  combined.set(voteBytes, proposalBytes.length);
+  combined.set(voteBytes, 32);
+  combined.set(oldRoot, 64);
+  combined.set(newRoot, 96);
   return ckbBlake2b(combined);
 }

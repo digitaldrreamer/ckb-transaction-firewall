@@ -230,8 +230,8 @@ fn load_witness_fields(index: usize, source: Source) -> Result<WitnessFields, i8
     Ok(WitnessFields { signers, gov1_payload })
 }
 
-/// Parses GOV1 v2 and returns (proposal_id_hash, vote_digest_hash).
-fn parse_gov1_hashes(payload: &[u8]) -> Result<([u8; 32], [u8; 32]), i8> {
+/// Parses GOV1 v2 and returns (proposal_id_hash, vote_digest_hash, old_root, new_root).
+fn parse_gov1_hashes(payload: &[u8]) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32]), i8> {
     // GOV1(4) | version=0x02(1) | proposal_id_hash(32) | vote_digest_hash(32) | old_root(32) | new_root(32) = 133 bytes
     if payload.len() != 133 {
         return Err(ERR_INVALID_WITNESS);
@@ -243,7 +243,11 @@ fn parse_gov1_hashes(payload: &[u8]) -> Result<([u8; 32], [u8; 32]), i8> {
     proposal_id_hash.copy_from_slice(&payload[5..37]);
     let mut vote_digest_hash = [0u8; 32];
     vote_digest_hash.copy_from_slice(&payload[37..69]);
-    Ok((proposal_id_hash, vote_digest_hash))
+    let mut old_root = [0u8; 32];
+    old_root.copy_from_slice(&payload[69..101]);
+    let mut new_root = [0u8; 32];
+    new_root.copy_from_slice(&payload[101..133]);
+    Ok((proposal_id_hash, vote_digest_hash, old_root, new_root))
 }
 
 /// Recovers the compressed secp256k1 public key from a prehash and 65-byte compact signature.
@@ -290,16 +294,18 @@ fn program_entry() -> Result<(), i8> {
     // Load witness and extract signer entries + GOV1 v2 payload.
     let witness = load_witness_fields(0, Source::GroupInput)?;
 
-    // Compute signing_message = blake2b(tx_hash || proposal_id_hash || vote_digest_hash).
-    let tx_hash = ckb_std::high_level::load_tx_hash().map_err(|_| ERR_INVALID_ARGS)?;
-    let (proposal_id_hash, vote_digest_hash) = parse_gov1_hashes(&witness.gov1_payload)?;
+    // Compute signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root).
+    // This binds each signer to the exact proposal identity AND the precise registry state transition,
+    // preventing reuse of signatures across different registry outputs.
+    let (proposal_id_hash, vote_digest_hash, old_root, new_root) = parse_gov1_hashes(&witness.gov1_payload)?;
     if proposal_id_hash == [0u8; 32] || vote_digest_hash == [0u8; 32] {
         return Err(ERR_INVALID_WITNESS);
     }
-    let mut signing_preimage = [0u8; 96];
-    signing_preimage[..32].copy_from_slice(&tx_hash);
-    signing_preimage[32..64].copy_from_slice(&proposal_id_hash);
-    signing_preimage[64..].copy_from_slice(&vote_digest_hash);
+    let mut signing_preimage = [0u8; 128];
+    signing_preimage[..32].copy_from_slice(&proposal_id_hash);
+    signing_preimage[32..64].copy_from_slice(&vote_digest_hash);
+    signing_preimage[64..96].copy_from_slice(&old_root);
+    signing_preimage[96..].copy_from_slice(&new_root);
     let signing_message = blake2b_256(&signing_preimage);
 
     // Verify each signer and count unique valid signatures.

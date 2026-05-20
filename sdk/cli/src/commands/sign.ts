@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import logSymbols from "log-symbols";
+import ora from "ora";
 import inquirer from "inquirer";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import {
@@ -11,13 +12,21 @@ import {
   signingMessage,
   SIG_THRESHOLD,
 } from "../lib/proposals.js";
-import { hexToBytes, bytesToHex, strip0x } from "../lib/blkl.js";
+import { hexToBytes, bytesToHex, strip0x, encodeRegistryPayload, extractGovernanceHeaderRaw, insertSorted, removeEntry } from "../lib/blkl.js";
+import { parseRegistryPayload } from "@ckb-firewall/sdk";
+import { getLiveCell } from "../lib/rpc.js";
+import { resolveRegistryOutpoint } from "../lib/registry.js";
+import { ckbBlake2b } from "../lib/witness.js";
 import { printHints } from "../lib/hints.js";
+import { TESTNET_RPC_URL, TESTNET_REGISTRY_CELL } from "../lib/defaults.js";
 
 export interface SignOptions {
   proposal?: string;
   signerIndex?: string;
   key?: string;
+  rpcUrl: string;
+  registryTx: string;
+  registryIndex: string;
 }
 
 
@@ -158,12 +167,47 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     }
   }
 
+  // ── compute old_root / new_root ──────────────────────────────────────────
+  // Signers must commit to the exact state transition (old_root → new_root)
+  // so that signatures cannot be replayed against a different registry output.
+
+  const registryIndexInt = Number.parseInt(opts.registryIndex, 10);
+  const spinner = ora("Fetching current registry cell to compute signing roots").start();
+  let oldRoot: Uint8Array;
+  let newRoot: Uint8Array;
+  try {
+    const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, registryIndexInt);
+    const cell = await getLiveCell(opts.rpcUrl, txHash, index);
+    const currentPayload = parseRegistryPayload(cell.data);
+    const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
+    const oldBlkl = hexToBytes(cell.data);
+
+    let newEntries;
+    if (proposal.action === "add") {
+      newEntries = insertSorted(currentPayload.entries, {
+        identifier: proposal.lockArgs,
+        expiresAt: BigInt(proposal.expiresAt),
+      });
+    } else {
+      newEntries = removeEntry(currentPayload.entries, proposal.lockArgs);
+    }
+    const newBlkl = encodeRegistryPayload({ version: currentPayload.version, entries: newEntries }, govHeaderRaw ?? undefined);
+
+    oldRoot = ckbBlake2b(oldBlkl);
+    newRoot = ckbBlake2b(newBlkl);
+    spinner.succeed("Registry roots computed");
+  } catch (err) {
+    spinner.fail("Could not fetch registry cell");
+    console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+    process.exit(1);
+  }
+
   // ── sign ─────────────────────────────────────────────────────────────────
 
   // Derive pubkey before zeroing key material.
   const pubKey = bytesToHex(new Uint8Array(secp256k1.getPublicKey(privateKeyBytes, true)));
 
-  const msgHash = signingMessage(proposal);
+  const msgHash = signingMessage(proposal, oldRoot!, newRoot!);
   // @noble/curves v2 'recovered' format: [recovery_bit(1), r(32), s(32)].
   // CKB secp256k1 expects: [r(32), s(32), recovery_bit(1)].
   const recoveredSig = secp256k1.sign(msgHash, privateKeyBytes, { lowS: true, format: "recovered" });
