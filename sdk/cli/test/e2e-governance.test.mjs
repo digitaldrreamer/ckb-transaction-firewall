@@ -223,11 +223,13 @@ test("P7-5: casting a second vote with the same pubkey is detected", () => {
   const proposal = makeProposal();
   const v1 = castVote(proposal, PRIV_KEYS[0], "yes");
   proposal.votes.push(v1);
+  const v2 = castVote(proposal, PRIV_KEYS[0], "no");
+  proposal.votes.push(v2);
 
-  const alreadyVoted = proposal.votes.some(
-    (v) => v.pubkey.toLowerCase() === v1.pubkey.toLowerCase()
-  );
-  assert.ok(alreadyVoted, "duplicate vote should be detected");
+  const dupCount = proposal.votes.filter(
+    (v) => v.pubkey.toLowerCase() === v1.pubkey.toLowerCase(),
+  ).length;
+  assert.ok(dupCount > 1, "duplicate vote should be detected");
 });
 
 // ── P7-6  Export → import round-trip preserves all fields ────────────────────

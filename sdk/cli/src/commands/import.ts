@@ -43,6 +43,27 @@ function validateAndRepair(raw: unknown): Proposal {
     throw new Error(`Invalid action: "${p.action}"`);
   }
 
+  const allowedStatuses = new Set(["pending-review", "voting", "approved", "rejected", "executed"]);
+  if (!allowedStatuses.has(p.status as string)) {
+    throw new Error(`Invalid status: "${p.status}"`);
+  }
+
+  for (const v of p.votes as unknown[]) {
+    if (typeof v !== "object" || v === null) throw new Error("Invalid vote entry: not an object.");
+    const vv = v as Record<string, unknown>;
+    if (typeof vv.pubkey !== "string" || typeof vv.vote !== "string" || typeof vv.signature !== "string" || typeof vv.timestamp !== "string") {
+      throw new Error("Vote entries must have string fields: pubkey, vote, signature, timestamp.");
+    }
+  }
+
+  for (const s of p.signatures as unknown[]) {
+    if (typeof s !== "object" || s === null) throw new Error("Invalid signature entry: not an object.");
+    const ss = s as Record<string, unknown>;
+    if (typeof ss.signerIndex !== "number" || typeof ss.signature !== "string") {
+      throw new Error("Signature entries must have signerIndex (number) and signature (string).");
+    }
+  }
+
   // Recompute proposalIdHash to verify integrity.
   const computed = computeProposalIdHash({
     action: p.action as "add" | "remove",
@@ -111,19 +132,23 @@ export async function importCommand(opts: ImportOptions): Promise<void> {
     }
 
     if (existing.proposalIdHash === proposal.proposalIdHash) {
-      // Same proposal. Merge votes and signatures (take union, prefer incoming if newer).
-      const mergedVotes = [...existing.votes];
+      // Same proposal. Merge votes and signatures, preferring the newer entry per participant.
+      const votesByPubkey = new Map(existing.votes.map((v) => [v.pubkey.toLowerCase(), v]));
       for (const v of proposal.votes) {
-        if (!mergedVotes.some((ev) => ev.pubkey.toLowerCase() === v.pubkey.toLowerCase())) {
-          mergedVotes.push(v);
+        const key = v.pubkey.toLowerCase();
+        const prev = votesByPubkey.get(key);
+        if (!prev || v.timestamp > prev.timestamp) {
+          votesByPubkey.set(key, v);
         }
       }
-      const mergedSigs = [...existing.signatures];
+      const mergedVotes = [...votesByPubkey.values()];
+
+      // Incoming signature always replaces existing for the same signer index.
+      const sigBySigner = new Map(existing.signatures.map((s) => [s.signerIndex, s]));
       for (const s of proposal.signatures) {
-        if (!mergedSigs.some((es) => es.signerIndex === s.signerIndex)) {
-          mergedSigs.push(s);
-        }
+        sigBySigner.set(s.signerIndex, s);
       }
+      const mergedSigs = [...sigBySigner.values()];
 
       const mergedVoteDigest = computeVoteDigestHash(mergedVotes);
       const merged: Proposal = {

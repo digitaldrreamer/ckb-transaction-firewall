@@ -16,6 +16,14 @@ export interface Gov1BindingParams {
 // GOV1 v2 — binding commitment only, no signers (133 bytes).
 // Signers go in WitnessArgs.lock as a separate governance-sig-witness.
 export function buildGov1WitnessV2(params: Gov1BindingParams): Uint8Array {
+  for (const [name, val] of [
+    ["proposalIdHash", params.proposalIdHash],
+    ["voteDigestHash", params.voteDigestHash],
+    ["oldRoot", params.oldRoot],
+    ["newRoot", params.newRoot],
+  ] as const) {
+    if (val.length !== 32) throw new Error(`${name} must be exactly 32 bytes, got ${val.length}`);
+  }
   // 4 magic + 1 version + 32*4 hashes = 133 bytes
   const buf = new Uint8Array(133);
   let off = 0;
@@ -31,6 +39,13 @@ export function buildGov1WitnessV2(params: Gov1BindingParams): Uint8Array {
 // Builds the WitnessArgs.lock content for governance transactions (v2).
 // Format: signer_count(1) | [signer_index(1) + r+s+v(65)] * N
 export function buildGovernanceSigWitness(signers: Array<{ index: number; sig: Uint8Array }>): Uint8Array {
+  if (signers.length > 255) throw new Error("signer_count must fit in 1 byte (max 255)");
+  for (const s of signers) {
+    if (!Number.isInteger(s.index) || s.index < 0 || s.index > 255) {
+      throw new Error(`signer index out of range: ${s.index}`);
+    }
+    if (s.sig.length !== 65) throw new Error(`signature must be 65 bytes, got ${s.sig.length}`);
+  }
   const buf = new Uint8Array(1 + signers.length * 66);
   buf[0] = signers.length;
   let off = 1;

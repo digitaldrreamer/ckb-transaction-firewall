@@ -41,7 +41,7 @@ The inner lock:
 
 ## Deployed location (testnet)
 
-```
+```text
 tx_hash: 0x0fe5d47662724a3620c002683d8c3f38103359c7e1ca697196b39442317c709e
 index:   0
 type_id: 0x9be62e0423d4278b15c071bb881a4ebf936f7e46b3df0f152de50ae416f54465

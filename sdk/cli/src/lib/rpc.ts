@@ -134,9 +134,12 @@ export async function findLiveRegistryCell(
   // type args: version(1 byte=2 hex) + gov_code_hash(32=64) + gov_hash_type(1=2) + type_id_value(32=64)
   // total 132 hex chars; type_id_value starts at offset 68
   const typeIdClean = spec.typeIdValue.replace(/^0x/, "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(typeIdClean)) {
+    throw new Error(`Invalid registry typeIdValue: expected 32 bytes hex, got "${spec.typeIdValue}"`);
+  }
   const cell = result.objects.find((obj) => {
     const args = (obj.output?.type?.args ?? "").replace(/^0x/, "").toLowerCase();
-    return args.length === 132 && args.slice(68) === typeIdClean;
+    return args.length === 132 && args.slice(68, 132) === typeIdClean;
   });
 
   if (!cell) {

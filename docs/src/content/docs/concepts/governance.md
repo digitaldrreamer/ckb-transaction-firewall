@@ -7,7 +7,7 @@ Every change to the blacklist goes through governance. The flow is auditable and
 
 ## Lifecycle
 
-```
+```text
 propose → export → [share] → import → vote → sign → execute
 ```
 

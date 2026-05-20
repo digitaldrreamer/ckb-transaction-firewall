@@ -34,6 +34,9 @@ const firewall = new TransactionFirewall({
   ],
 });
 
+// registryScriptType: the type script of the registry cell dep (code_hash, hash_type, args)
+// registryData: the hex-encoded BLKL v2 payload from the registry cell's data field
+// Both are available from fetchRegistryPayload or the live cell via get_live_cell.
 const result = firewall.checkTransaction({
   cellDeps: [{ type: registryScriptType, data: registryData }],
   outputs: [{ lockArgs: "0x..." }],
