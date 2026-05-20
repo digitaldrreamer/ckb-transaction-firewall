@@ -172,6 +172,10 @@ export async function signCommand(opts: SignOptions): Promise<void> {
   // so that signatures cannot be replayed against a different registry output.
 
   const registryIndexInt = Number.parseInt(opts.registryIndex, 10);
+  if (!Number.isInteger(registryIndexInt) || registryIndexInt < 0) {
+    console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
+    process.exit(1);
+  }
   const spinner = ora("Fetching current registry cell to compute signing roots").start();
   let oldRoot: Uint8Array;
   let newRoot: Uint8Array;

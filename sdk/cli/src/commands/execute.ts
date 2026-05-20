@@ -192,38 +192,6 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     }
   }
 
-  // C-4: verify governance signer signatures against on-chain pubkeys from governance header.
-  if (govHeader && govHeader.pubkeys.length > 0) {
-    const msgHash = signingMessage(proposal, oldRoot, newRoot);
-    for (const s of proposal.signatures) {
-      if (s.signerIndex >= govHeader.pubkeys.length) {
-        console.error(logSymbols.error, chalk.red(`Signer index ${s.signerIndex} is out of range for the on-chain governance committee (${govHeader.pubkeys.length} signers).`));
-        process.exit(1);
-      }
-      const sigBytes = hexToBytes(s.signature);
-      if (sigBytes.length !== 65) {
-        console.error(logSymbols.error, chalk.red(`Governance signature from signer ${s.signerIndex} has invalid length.`));
-        process.exit(1);
-      }
-      // Rebuild [recovery_id, r, s] from stored [r, s, recovery_id].
-      const sig65 = new Uint8Array(65);
-      sig65[0] = sigBytes[64] ?? 0;
-      sig65.set(sigBytes.slice(0, 64), 1);
-      let recoveredPubkey: string;
-      try {
-        recoveredPubkey = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash)));
-      } catch {
-        console.error(logSymbols.error, chalk.red(`Governance signature from signer ${s.signerIndex} is unrecoverable.`));
-        process.exit(1);
-      }
-      const expectedPubkey = bytesToHex(govHeader.pubkeys[s.signerIndex]!);
-      if (recoveredPubkey !== expectedPubkey) {
-        console.error(logSymbols.error, chalk.red(`Governance signature from signer ${s.signerIndex} does not match the on-chain pubkey — proposal may have been tampered.`));
-        process.exit(1);
-      }
-    }
-  }
-
   // ── build new BLKL payload ────────────────────────────────────────────────
   let newEntries;
 
@@ -262,6 +230,39 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   const voteDigestBytes = hexToBytes(proposal.voteDigestHash);
   const oldRoot = ckbBlake2b(oldBlkl);
   const newRoot = ckbBlake2b(newBlkl);
+
+  // C-4: verify governance signer signatures against on-chain pubkeys from governance header.
+  // Must run after oldRoot/newRoot are computed — signers committed to the full state transition.
+  if (govHeader && govHeader.pubkeys.length > 0) {
+    const msgHash = signingMessage(proposal, oldRoot, newRoot);
+    for (const s of proposal.signatures) {
+      if (s.signerIndex >= govHeader.pubkeys.length) {
+        console.error(logSymbols.error, chalk.red(`Signer index ${s.signerIndex} is out of range for the on-chain governance committee (${govHeader.pubkeys.length} signers).`));
+        process.exit(1);
+      }
+      const sigBytes = hexToBytes(s.signature);
+      if (sigBytes.length !== 65) {
+        console.error(logSymbols.error, chalk.red(`Governance signature from signer ${s.signerIndex} has invalid length.`));
+        process.exit(1);
+      }
+      // Rebuild [recovery_id, r, s] from stored [r, s, recovery_id].
+      const sig65 = new Uint8Array(65);
+      sig65[0] = sigBytes[64] ?? 0;
+      sig65.set(sigBytes.slice(0, 64), 1);
+      let recoveredPubkey: string;
+      try {
+        recoveredPubkey = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash)));
+      } catch {
+        console.error(logSymbols.error, chalk.red(`Governance signature from signer ${s.signerIndex} is unrecoverable.`));
+        process.exit(1);
+      }
+      const expectedPubkey = bytesToHex(govHeader.pubkeys[s.signerIndex]!);
+      if (recoveredPubkey !== expectedPubkey) {
+        console.error(logSymbols.error, chalk.red(`Governance signature from signer ${s.signerIndex} does not match the on-chain pubkey — proposal may have been tampered.`));
+        process.exit(1);
+      }
+    }
+  }
 
   const signers = proposal.signatures.slice(0, SIG_THRESHOLD).map((s) => ({
     index: s.signerIndex,
