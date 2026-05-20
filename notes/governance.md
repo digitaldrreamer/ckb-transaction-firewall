@@ -81,24 +81,20 @@ All commands are interactive when run without flags. See [`sdk/cli/README.md`](.
 
 At consensus, the type script enforces:
 
-- exactly one input + one output registry cell using the same registry type script identity,
-- both registry cells are locked by the configured governance lock script identity,
-- the registry data is well-formed (`BLKL` v1 format and sorted entries),
-- a `GOV1` governance witness payload is present in `WitnessArgs.input_type` (preferred; `lock` accepted for backward compatibility) for the registry input cell and binds:
-  - `proposal_id_hash` + `vote_digest_hash`
-  - the exact `old_registry_root` → `new_registry_root` transition, where each root is `blake2b_256` over the full registry cell data (personalization `ckb-default-hash`).
-- strict signer structure/threshold checks are verified in-script (this does not cryptographically verify signer pubkeys/signatures):
-  - witness includes `signer_count` plus repeated `{signer_index, signature[65]}` entries,
-  - signer indexes must be unique and in range `[0,4]`,
-  - at least 3 signer entries (or 5 for bootstrap) are required and validated structurally.
-- bootstrap support:
-  - first registry creation is allowed as `0 registry inputs -> 1 registry output`,
-  - bootstrap enforces `old_root = 0x00..00`,
-  - bootstrap requires 5 signer entries with valid structural constraints.
+- exactly one output registry cell; zero (bootstrap) or one (update) input registry cell,
+- input and output registry cells use the same `type_id_value` (bytes 34..66 of the 66-byte v2 type args),
+- both registry cells are locked by the configured governance lock script identity (args = `[0x01]`),
+- the registry data is well-formed (`BLKL` v2 format with governance header and sorted entries),
+- a `GOV1` v2 governance witness binding (133 bytes) is present in `WitnessArgs.input_type` for the registry input cell and contains:
+  - `proposal_id_hash` (non-zero 32 bytes) + `vote_digest_hash` (non-zero 32 bytes)
+  - the exact `old_registry_root` → `new_registry_root` transition, where each root is `blake2b_256` over the full registry cell data (personalization `ckb-default-hash`),
+  - for bootstrap: `old_root` MUST be `0x00..00`,
+- signer signature verification is delegated entirely to the governance-lock script, which reads signer entries from `WitnessArgs.lock` and verifies them against the committee pubkeys embedded in the `BLKL` v2 governance header.
+- bootstrap Type ID enforcement: for the first registry creation, `type_id_value` in the output type args MUST equal `blake2b_256(inputs[0].previous_output(36 bytes) || output_index(8 bytes LE))`.
 
-### Signer key rotation policy (v1)
+### Signer key rotation policy (v2)
 
-- Because signer pubkeys are compiled into the registry type script, key rotation requires deploying a new script binary (new code hash) and governance-led migration.
+- In v2, signer pubkeys are embedded in the `BLKL` governance header of the registry cell, not compiled into the contract binary. Key rotation is a governance update that produces a new registry cell with an updated governance header — no contract redeployment required.
 - Emergency compromise handling must include:
   - immediate governance notice and temporary execution freeze,
   - audited replacement binary with rotated signer set,
