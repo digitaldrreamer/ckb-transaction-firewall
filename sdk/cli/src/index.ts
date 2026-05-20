@@ -2,13 +2,14 @@
 import { program } from "commander";
 import cfonts from "cfonts";
 import { inspectCommand, inspectDefaults } from "./commands/inspect.js";
-import { addCommand, addDefaults } from "./commands/add.js";
-import { removeCommand, removeDefaults } from "./commands/remove.js";
 import { proposeCommand } from "./commands/propose.js";
 import { proposalsCommand } from "./commands/proposals.js";
 import { voteCommand } from "./commands/vote.js";
 import { signCommand } from "./commands/sign.js";
 import { executeCommand, executeDefaults } from "./commands/execute.js";
+import { exportCommand } from "./commands/export.js";
+import { importCommand } from "./commands/import.js";
+import { checkCommand, checkDefaults } from "./commands/check.js";
 
 function printBanner(): void {
   cfonts.say("CKB FIREWALL|CLI", {
@@ -26,7 +27,7 @@ function printBanner(): void {
 program
   .name("ckb-firewall")
   .description("Manage the CKB Transaction Firewall blacklist registry")
-  .version("0.1.2")
+  .version("0.2.0")
   .addHelpCommand(false);
 
 // ── inspect ──────────────────────────────────────────────────────────────────
@@ -43,65 +44,26 @@ program
     await inspectCommand(opts);
   });
 
-// ── add (quick path) ──────────────────────────────────────────────────────────
+// ── check ─────────────────────────────────────────────────────────────────────
 
-const addDefs = addDefaults();
-
-program
-  .command("add")
-  .description("Quick: add a lock-args to the blacklist with placeholder governance (testnet/dev)")
-  .option("--lock-args <hex>", "Lock args to blacklist (0x-prefixed hex)")
-  .option("--expires-at <timestamp>", "Unix timestamp when entry expires (0 = never)", addDefs.expiresAt)
-  .option("--rpc-url <url>", "CKB node RPC URL", addDefs.rpcUrl)
-  .option("--registry-tx <hash>", "Registry cell tx hash", addDefs.registryTx)
-  .option("--registry-index <n>", "Registry cell output index", addDefs.registryIndex)
-  .option("--tx-out <file>", "Write unsigned tx JSON to this file", addDefs.txOut)
-  .option("--sign", "Sign and submit via ckb-cli after generating the tx file")
-  .option("--from-account <address>", "Governance account address for ckb-cli signing", addDefs.fromAccount)
-  .action(async (opts: {
-    lockArgs?: string;
-    expiresAt: string;
-    rpcUrl: string;
-    registryTx: string;
-    registryIndex: string;
-    txOut: string;
-    sign: boolean;
-    fromAccount: string;
-  }) => {
-    await addCommand(opts);
-  });
-
-// ── remove (quick path) ───────────────────────────────────────────────────────
-
-const removeDefs = removeDefaults();
+const checkDefs = checkDefaults();
 
 program
-  .command("remove")
-  .description("Quick: remove a lock-args from the blacklist with placeholder governance (testnet/dev)")
-  .option("--lock-args <hex>", "Lock args to remove (0x-prefixed hex)")
-  .option("--rpc-url <url>", "CKB node RPC URL", removeDefs.rpcUrl)
-  .option("--registry-tx <hash>", "Registry cell tx hash", removeDefs.registryTx)
-  .option("--registry-index <n>", "Registry cell output index", removeDefs.registryIndex)
-  .option("--tx-out <file>", "Write unsigned tx JSON to this file", removeDefs.txOut)
-  .option("--sign", "Sign and submit via ckb-cli after generating the tx file")
-  .option("--from-account <address>", "Governance account address for ckb-cli signing", removeDefs.fromAccount)
-  .action(async (opts: {
-    lockArgs?: string;
-    rpcUrl: string;
-    registryTx: string;
-    registryIndex: string;
-    txOut: string;
-    sign: boolean;
-    fromAccount: string;
-  }) => {
-    await removeCommand(opts);
+  .command("check")
+  .description("Test whether a lock-args identifier is currently blacklisted")
+  .requiredOption("--lock-args <hex>", "Lock args to check (0x-prefixed hex)")
+  .option("--rpc-url <url>", "CKB node RPC URL", checkDefs.rpcUrl)
+  .option("--registry-tx <hash>", "Registry cell tx hash", checkDefs.registryTx)
+  .option("--registry-index <n>", "Registry cell output index", checkDefs.registryIndex)
+  .action(async (opts: { lockArgs: string; rpcUrl: string; registryTx: string; registryIndex: string }) => {
+    await checkCommand(opts);
   });
 
 // ── propose ───────────────────────────────────────────────────────────────────
 
 program
   .command("propose")
-  .description("Create a governance proposal (full flow with 72h review + voting + signing)")
+  .description("Create a governance proposal (72h review + voting + signing + on-chain execution)")
   .option("--action <add|remove>", "Proposal action")
   .option("--lock-args <hex>", "Lock args to add or remove")
   .option("--expires-at <timestamp>", "Expiry timestamp (add only, 0 = never)")
@@ -137,11 +99,11 @@ program
 
 program
   .command("vote")
-  .description("Record a validator vote on a governance proposal")
+  .description("Record a cryptographically signed validator vote on a governance proposal")
   .option("--proposal <id>", "Proposal ID or hash")
   .option("--vote <choice>", "Vote: yes|no|abstain")
-  .option("--validator <id>", "Your validator name or identifier")
-  .action(async (opts: { proposal?: string; vote?: string; validator?: string }) => {
+  .option("--key <hex>", "32-byte validator private key in hex (prompted if omitted)")
+  .action(async (opts: { proposal?: string; vote?: string; key?: string }) => {
     await voteCommand(opts);
   });
 
@@ -181,6 +143,28 @@ program
     fromAccount: string;
   }) => {
     await executeCommand(opts);
+  });
+
+// ── export ────────────────────────────────────────────────────────────────────
+
+program
+  .command("export")
+  .description("Export a proposal to a shareable JSON file")
+  .option("--proposal <id>", "Proposal ID or hash")
+  .option("--out <file>", "Output file path (prints to stdout if omitted)")
+  .action(async (opts: { proposal?: string; out?: string }) => {
+    await exportCommand(opts);
+  });
+
+// ── import ────────────────────────────────────────────────────────────────────
+
+program
+  .command("import")
+  .description("Import a proposal shared by another governance participant")
+  .argument("<file>", "Path to the exported proposal JSON")
+  .option("--force", "Overwrite an existing proposal without prompting")
+  .action(async (file: string, opts: { force?: boolean }) => {
+    await importCommand({ file, ...opts });
   });
 
 // Show banner on bare invocation before help prints.

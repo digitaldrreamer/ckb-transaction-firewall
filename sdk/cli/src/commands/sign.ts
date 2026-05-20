@@ -20,19 +20,6 @@ export interface SignOptions {
   key?: string;
 }
 
-// Deterministic dev key for testnet (NOT for production).
-function devKey(index: number): Uint8Array {
-  // Simple derivation: fixed prefix + index byte, then use it as-is.
-  // In practice users should supply real keys; this is a testnet convenience.
-  const seed = new Uint8Array(32);
-  seed[0] = 0x01; // non-zero
-  seed[31] = index;
-  // Ensure valid secp256k1 scalar (must be 1 <= key <= n-1).
-  seed[1] = 0x11;
-  seed[2] = 0x22;
-  seed[3] = 0x33;
-  return seed;
-}
 
 function isValidPrivKey(hex: string): boolean {
   try {
@@ -43,6 +30,11 @@ function isValidPrivKey(hex: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function parseSignerIndex(value: string): number | null {
+  if (!/^[0-4]$/.test(value.trim())) return null;
+  return Number.parseInt(value.trim(), 10);
 }
 
 export async function signCommand(opts: SignOptions): Promise<void> {
@@ -106,11 +98,12 @@ export async function signCommand(opts: SignOptions): Promise<void> {
 
   let signerIndex: number;
   if (opts.signerIndex !== undefined) {
-    signerIndex = Number.parseInt(opts.signerIndex, 10);
-    if (signerIndex < 0 || signerIndex > 4) {
+    const parsed = parseSignerIndex(opts.signerIndex);
+    if (parsed === null) {
       console.error(logSymbols.error, chalk.red("--signer-index must be 0–4."));
       process.exit(1);
     }
+    signerIndex = parsed;
   } else {
     const usedIndices = new Set(proposal.signatures.map((s) => s.signerIndex));
     const available = [0, 1, 2, 3, 4].filter((i) => !usedIndices.has(i));
@@ -146,20 +139,19 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     privateKeyBytes = hexToBytes(opts.key);
   } else {
     console.log();
-    console.log(chalk.dim("Tip: leave blank to use a deterministic testnet dev key for this signer index."));
     const { keyInput } = await inquirer.prompt<{ keyInput: string }>([
       {
         type: "password",
         name: "keyInput",
-        message: `Private key for signer ${signerIndex} (32-byte hex, or blank for dev key):`,
+        message: `Private key for signer ${signerIndex} (32-byte hex):`,
         mask: "*",
       },
     ]);
     if (!keyInput.trim()) {
-      privateKeyBytes = devKey(signerIndex);
-      console.log(chalk.yellow("  Using deterministic dev key — testnet only."));
+      console.error(logSymbols.error, chalk.red("A private key is required. Pass --key <hex> or enter it at the prompt."));
+      process.exit(1);
     } else if (!isValidPrivKey(keyInput.trim())) {
-      console.error(logSymbols.error, chalk.red("Invalid private key."));
+      console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
       process.exit(1);
     } else {
       privateKeyBytes = hexToBytes(keyInput.trim());
@@ -168,13 +160,17 @@ export async function signCommand(opts: SignOptions): Promise<void> {
 
   // ── sign ─────────────────────────────────────────────────────────────────
 
+  // Derive pubkey before zeroing key material.
+  const pubKey = bytesToHex(new Uint8Array(secp256k1.getPublicKey(privateKeyBytes, true)));
+
   const msgHash = signingMessage(proposal);
   // @noble/curves v2 'recovered' format: [recovery_bit(1), r(32), s(32)].
   // CKB secp256k1 expects: [r(32), s(32), recovery_bit(1)].
   const recoveredSig = secp256k1.sign(msgHash, privateKeyBytes, { lowS: true, format: "recovered" });
   const sigBytes = new Uint8Array(65);
   sigBytes.set(recoveredSig.slice(1), 0); // r + s at bytes 0-63
-  sigBytes[64] = recoveredSig[0] ?? 0;      // recovery bit at byte 64 (format:'recovered' always yields 65 bytes)
+  sigBytes[64] = recoveredSig[0] ?? 0;    // recovery bit at byte 64
+  privateKeyBytes.fill(0);                // zero key material immediately after use
 
   proposal.signatures.push({
     signerIndex,
@@ -189,7 +185,6 @@ export async function signCommand(opts: SignOptions): Promise<void> {
 
   saveProposal(proposal);
 
-  const pubKey = bytesToHex(new Uint8Array(secp256k1.getPublicKey(privateKeyBytes, true)));
   console.log();
   console.log(logSymbols.success, chalk.green(`Signed by signer ${signerIndex}`));
   console.log(`  Public key:  ${chalk.dim(pubKey)}`);

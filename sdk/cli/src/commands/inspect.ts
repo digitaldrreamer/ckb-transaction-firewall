@@ -4,6 +4,7 @@ import logSymbols from "log-symbols";
 import ora from "ora";
 import { parseRegistryPayload } from "@ckb-firewall/sdk";
 import { getLiveCell } from "../lib/rpc.js";
+import { resolveRegistryOutpoint } from "../lib/registry.js";
 import {
   TESTNET_REGISTRY_CELL,
   TESTNET_RPC_URL,
@@ -19,9 +20,9 @@ interface InspectOptions {
 
 export async function inspectCommand(opts: InspectOptions): Promise<void> {
   const rpcUrl = opts.rpcUrl;
-  const txHash = opts.registryTx;
-  const index = Number.parseInt(opts.registryIndex, 10);
-  if (!Number.isInteger(index) || index < 0) {
+  const configuredTx = opts.registryTx;
+  const configuredIndex = Number.parseInt(opts.registryIndex, 10);
+  if (!Number.isInteger(configuredIndex) || configuredIndex < 0) {
     console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
     process.exit(1);
   }
@@ -29,7 +30,10 @@ export async function inspectCommand(opts: InspectOptions): Promise<void> {
   const spinner = ora(`Fetching registry cell from ${rpcUrl}`).start();
 
   let cell: Awaited<ReturnType<typeof getLiveCell>>;
+  let txHash = configuredTx;
+  let index = configuredIndex;
   try {
+    ({ txHash, index } = await resolveRegistryOutpoint(rpcUrl, configuredTx, configuredIndex));
     cell = await getLiveCell(rpcUrl, txHash, index);
     spinner.succeed("Registry cell loaded");
   } catch (err) {
@@ -66,16 +70,37 @@ export async function inspectCommand(opts: InspectOptions): Promise<void> {
     head: [
       chalk.cyan("Lock Args (identifier)"),
       chalk.cyan("Expires At"),
+      chalk.cyan("Status"),
     ],
     style: { head: [], border: [] },
   });
 
+  const nowSec = BigInt(Math.floor(Date.now() / 1000));
+  let expiredCount = 0;
+
   for (const entry of payload.entries) {
-    const expires =
-      entry.expiresAt === 0n
-        ? chalk.dim("never")
-        : new Date(Number(entry.expiresAt) * 1000).toISOString();
-    table.push([entry.identifier, expires]);
+    let expires: string;
+    let status: string;
+    if (entry.expiresAt === 0n) {
+      expires = chalk.dim("never");
+      status = chalk.green("active");
+    } else if (entry.expiresAt <= nowSec) {
+      expires = chalk.dim(new Date(Number(entry.expiresAt) * 1000).toISOString());
+      status = chalk.red("EXPIRED");
+      expiredCount++;
+    } else {
+      expires = new Date(Number(entry.expiresAt) * 1000).toISOString();
+      status = chalk.green("active");
+    }
+    table.push([entry.identifier, expires, status]);
+  }
+
+  if (expiredCount > 0) {
+    console.log(
+      logSymbols.warning,
+      chalk.yellow(`${expiredCount} expired ${expiredCount === 1 ? "entry" : "entries"} — submit a removal proposal to compact the registry.`),
+    );
+    console.log();
   }
 
   console.log(table.toString());

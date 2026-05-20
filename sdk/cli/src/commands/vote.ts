@@ -1,22 +1,38 @@
 import chalk from "chalk";
 import logSymbols from "log-symbols";
 import inquirer from "inquirer";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
 import {
   loadProposal,
   saveProposal,
   listProposals,
   computeVoteDigestHash,
+  voteSigningMessage,
   isVoteApproved,
   countYes,
   VOTE_THRESHOLD,
   type VoteChoice,
 } from "../lib/proposals.js";
+import { hexToBytes, bytesToHex } from "../lib/blkl.js";
+import { computeMerkleProof } from "../lib/validator-set.js";
+import { TESTNET_GOVERNANCE_PUBKEYS } from "../lib/defaults.js";
 import { printHints } from "../lib/hints.js";
 
 export interface VoteOptions {
   proposal?: string;
   vote?: string;
-  validator?: string;
+  key?: string;
+}
+
+function isValidPrivKey(hex: string): boolean {
+  try {
+    const bytes = hexToBytes(hex);
+    if (bytes.length !== 32) return false;
+    secp256k1.getPublicKey(bytes);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function voteCommand(opts: VoteOptions): Promise<void> {
@@ -57,24 +73,54 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
     process.exit(1);
   }
 
-  // ── validator id ─────────────────────────────────────────────────────────
+  // ── private key → pubkey ─────────────────────────────────────────────────
 
-  let validatorId = opts.validator?.trim() ?? "";
-  if (!validatorId) {
-    const { vid } = await inquirer.prompt<{ vid: string }>([
+  let privateKeyBytes: Uint8Array;
+  if (opts.key) {
+    if (!isValidPrivKey(opts.key)) {
+      console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
+      process.exit(1);
+    }
+    privateKeyBytes = hexToBytes(opts.key);
+  } else {
+    console.log();
+    const { keyInput } = await inquirer.prompt<{ keyInput: string }>([
       {
-        type: "input",
-        name: "vid",
-        message: "Your validator ID (name or identifier):",
-        validate: (v: string) => v.trim().length > 0 || "Required.",
+        type: "password",
+        name: "keyInput",
+        message: "Validator private key (32-byte hex):",
+        mask: "*",
       },
     ]);
-    validatorId = vid.trim();
+    if (!keyInput.trim()) {
+      console.error(logSymbols.error, chalk.red("A private key is required. Pass --key <hex> or enter it at the prompt."));
+      process.exit(1);
+    }
+    if (!isValidPrivKey(keyInput.trim())) {
+      console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
+      process.exit(1);
+    }
+    privateKeyBytes = hexToBytes(keyInput.trim());
   }
 
-  // Check duplicate vote.
-  if (proposal.votes.some((v) => v.validatorId.toLowerCase() === validatorId.toLowerCase())) {
-    console.log(logSymbols.warning, chalk.yellow(`Validator "${validatorId}" has already voted on this proposal.`));
+  const pubkeyBytes = secp256k1.getPublicKey(privateKeyBytes, true); // 33 bytes compressed
+  const pubkey = bytesToHex(new Uint8Array(pubkeyBytes));
+
+  // Verify this pubkey is in the authorized validator set.
+  const validatorSet = TESTNET_GOVERNANCE_PUBKEYS.map(bytesToHex);
+  const merkleResult = computeMerkleProof(validatorSet, pubkey);
+  if (merkleResult === null) {
+    console.error(logSymbols.error, chalk.red("This key is not an authorized validator."));
+    console.error(chalk.dim(`  Pubkey: ${pubkey}`));
+    privateKeyBytes.fill(0);
+    process.exit(1);
+  }
+  const { proof: merkleProof, leafIndex: merkleLeafIndex } = merkleResult;
+
+  // Duplicate check by pubkey.
+  if (proposal.votes.some((v) => v.pubkey.toLowerCase() === pubkey.toLowerCase())) {
+    console.log(logSymbols.warning, chalk.yellow(`Validator pubkey ${pubkey.slice(0, 14)}… has already voted on this proposal.`));
+    privateKeyBytes.fill(0);
     process.exit(0);
   }
 
@@ -107,9 +153,24 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
     vote = chosen;
   }
 
+  // ── sign vote ────────────────────────────────────────────────────────────
+
+  const timestamp = new Date().toISOString();
+  const msgHash = voteSigningMessage(proposal.proposalIdHash, vote, timestamp, pubkey);
+
+  // format:"recovered" returns Uint8Array[recovery_id(1), r(32), s(32)]
+  const sigRaw = secp256k1.sign(msgHash, privateKeyBytes, { lowS: true, format: "recovered" });
+  // Store as [r(32), s(32), recovery_id(1)] — matches ProposalSignature convention
+  const sigBytes = new Uint8Array(65);
+  sigBytes.set(sigRaw.slice(1), 0);
+  sigBytes[64] = sigRaw[0] ?? 0;
+  privateKeyBytes.fill(0); // zero key material immediately after use
+
+  const signature = bytesToHex(sigBytes);
+
   // ── record vote ──────────────────────────────────────────────────────────
 
-  proposal.votes.push({ validatorId, vote, timestamp: new Date().toISOString() });
+  proposal.votes.push({ pubkey, vote, timestamp, signature, merkleLeafIndex, merkleProof });
   proposal.voteDigestHash = computeVoteDigestHash(proposal.votes);
 
   const yesCount = countYes(proposal.votes);
@@ -122,7 +183,7 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
   saveProposal(proposal);
 
   console.log();
-  console.log(logSymbols.success, `Vote recorded: ${chalk.bold(vote)} by ${validatorId}`);
+  console.log(logSymbols.success, `Vote recorded: ${chalk.bold(vote)} by ${pubkey.slice(0, 14)}…`);
   console.log(`  Yes votes: ${yesCount}/${VOTE_THRESHOLD} required`);
 
   if (approved) {

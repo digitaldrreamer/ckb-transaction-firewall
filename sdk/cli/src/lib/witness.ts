@@ -6,45 +6,39 @@ export function ckbBlake2b(data: Uint8Array): Uint8Array {
   return blake2b(data, { personalization: CKB_PERSONALIZATION, dkLen: 32 });
 }
 
-export interface Gov1Params {
+export interface Gov1BindingParams {
   proposalIdHash: Uint8Array;
   voteDigestHash: Uint8Array;
   oldRoot: Uint8Array;
   newRoot: Uint8Array;
-  // Each signer: index (0-4) + 65-byte signature (64 bytes + 1 byte recovery id).
-  signers: Array<{ index: number; sig: Uint8Array }>;
 }
 
-export function buildGov1Witness(params: Gov1Params): Uint8Array {
-  const signerCount = params.signers.length;
-  // 4 magic + 1 version + 32*4 hashes + 1 count + signerCount * (1 index + 65 sig)
-  const size = 4 + 1 + 32 + 32 + 32 + 32 + 1 + signerCount * 66;
-  const buf = new Uint8Array(size);
+// GOV1 v2 — binding commitment only, no signers (133 bytes).
+// Signers go in WitnessArgs.lock as a separate governance-sig-witness.
+export function buildGov1WitnessV2(params: Gov1BindingParams): Uint8Array {
+  // 4 magic + 1 version + 32*4 hashes = 133 bytes
+  const buf = new Uint8Array(133);
   let off = 0;
+  buf[off++] = 0x47; buf[off++] = 0x4f; buf[off++] = 0x56; buf[off++] = 0x31; // GOV1
+  buf[off++] = 0x02; // version 2
+  buf.set(params.proposalIdHash, off); off += 32;
+  buf.set(params.voteDigestHash, off); off += 32;
+  buf.set(params.oldRoot, off); off += 32;
+  buf.set(params.newRoot, off); off += 32;
+  return buf;
+}
 
-  // "GOV1"
-  buf[off++] = 0x47;
-  buf[off++] = 0x4f;
-  buf[off++] = 0x56;
-  buf[off++] = 0x31;
-  buf[off++] = 0x01; // version
-
-  buf.set(params.proposalIdHash, off);
-  off += 32;
-  buf.set(params.voteDigestHash, off);
-  off += 32;
-  buf.set(params.oldRoot, off);
-  off += 32;
-  buf.set(params.newRoot, off);
-  off += 32;
-
-  buf[off++] = signerCount;
-  for (const s of params.signers) {
+// Builds the WitnessArgs.lock content for governance transactions (v2).
+// Format: signer_count(1) | [signer_index(1) + r+s+v(65)] * N
+export function buildGovernanceSigWitness(signers: Array<{ index: number; sig: Uint8Array }>): Uint8Array {
+  const buf = new Uint8Array(1 + signers.length * 66);
+  buf[0] = signers.length;
+  let off = 1;
+  for (const s of signers) {
     buf[off++] = s.index;
     buf.set(s.sig, off);
     off += 65;
   }
-
   return buf;
 }
 

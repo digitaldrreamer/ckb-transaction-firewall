@@ -21,9 +21,12 @@ export type ThreatClass =
 export type Severity = "critical" | "high" | "medium" | "low";
 
 export interface ProposalVote {
-  validatorId: string;
+  pubkey: string;           // 0x-prefixed hex, 33 bytes compressed secp256k1
   vote: VoteChoice;
   timestamp: string;
+  signature: string;        // 0x-prefixed hex, 65 bytes (r[32] || s[32] || recovery_id[1])
+  merkleLeafIndex: number;  // position in the ordered validator set
+  merkleProof: string[];    // sibling hashes (32 bytes each) leaf→root in the validator Merkle tree
 }
 
 export interface ProposalSignature {
@@ -76,15 +79,39 @@ export function saveProposal(proposal: Proposal): void {
   );
 }
 
+function validateProposalSchema(data: unknown): Proposal {
+  if (typeof data !== "object" || data === null) {
+    throw new Error("Proposal file is not a valid object.");
+  }
+  const p = data as Record<string, unknown>;
+  const requiredStrings: (keyof Proposal)[] = [
+    "id", "proposalIdHash", "action", "lockArgs", "expiresAt",
+    "evidence", "classification", "severity", "rationale", "proposer",
+    "submittedAt", "reviewWindowEndsAt", "status", "voteDigestHash",
+  ];
+  for (const key of requiredStrings) {
+    if (typeof p[key] !== "string") {
+      throw new Error(`Proposal file is missing or has invalid field: "${key}"`);
+    }
+  }
+  if (!Array.isArray(p.votes) || !Array.isArray(p.signatures)) {
+    throw new Error("Proposal file: votes and signatures must be arrays.");
+  }
+  return data as Proposal;
+}
+
 export function loadProposal(id: string): Proposal {
   const dir = getProposalsDir();
   // Accept full hash (0x...) or short display id.
   const short = id.startsWith("0x") ? id.slice(2, 14) : id.slice(0, 12);
+  if (!/^[0-9a-f]{12}$/i.test(short)) {
+    throw new Error(`Invalid proposal ID "${id}": expected a 12-character hex string.`);
+  }
   const file = join(dir, `${short}.json`);
   if (!existsSync(file)) {
     throw new Error(`Proposal "${id}" not found in ${dir}`);
   }
-  return JSON.parse(readFileSync(file, "utf8")) as Proposal;
+  return validateProposalSchema(JSON.parse(readFileSync(file, "utf8")));
 }
 
 export function listProposals(): Proposal[] {
@@ -126,12 +153,29 @@ export function computeProposalIdHash(fields: Parameters<typeof proposalCanonica
   return bytesToHex(hash);
 }
 
+// The message each validator signs for their vote (domain-separated, prevents cross-proposal replay).
+export function voteSigningMessage(
+  proposalIdHash: string,
+  vote: VoteChoice,
+  timestamp: string,
+  pubkey: string,
+): Uint8Array {
+  const canonical = JSON.stringify({
+    domain: "ckb-firewall:vote",
+    proposalIdHash,
+    vote,
+    timestamp,
+    pubkey,
+  });
+  return ckbBlake2b(new TextEncoder().encode(canonical));
+}
+
 export function computeVoteDigestHash(votes: ProposalVote[]): string {
   const str = JSON.stringify(
     votes
       .slice()
-      .sort((a, b) => a.validatorId.localeCompare(b.validatorId))
-      .map((v) => ({ validatorId: v.validatorId, vote: v.vote, timestamp: v.timestamp })),
+      .sort((a, b) => a.pubkey.localeCompare(b.pubkey))
+      .map((v) => ({ pubkey: v.pubkey, vote: v.vote, timestamp: v.timestamp, signature: v.signature })),
   );
   const hash = ckbBlake2b(new TextEncoder().encode(str));
   return bytesToHex(hash);
