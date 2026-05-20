@@ -38,6 +38,7 @@ export default defineConfig({
 						icon: 'rocket',
 						items: [
 							'getting-started/overview',
+							'getting-started/tutorial',
 							'getting-started/how-to-use',
 							'getting-started/blacklist-guide',
 							'getting-started/cli',
