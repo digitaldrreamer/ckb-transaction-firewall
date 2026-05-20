@@ -13,6 +13,16 @@
 #![no_std]
 #![cfg_attr(not(test), no_main)]
 
+// Production build guard: the testnet governance committee uses deterministic
+// dev keys. Require an explicit opt-in so no-feature builds fail fast rather
+// than silently producing a binary with unknown signer constraints.
+// Remove this guard when the mainnet governance committee is finalized.
+#[cfg(not(any(feature = "dev-signer-keys", test)))]
+compile_error!(
+    "blacklist-registry: build requires --features dev-signer-keys for testnet. \
+     Remove this guard when the mainnet governance committee is finalized."
+);
+
 #[cfg(test)]
 extern crate alloc;
 
