@@ -37,8 +37,8 @@ export default defineConfig({
 						link: '/getting-started/',
 						icon: 'rocket',
 						items: [
-							'getting-started/overview',
 							'getting-started/tutorial',
+							'getting-started/overview',
 							'getting-started/how-to-use',
 							'getting-started/blacklist-guide',
 							'getting-started/cli',
@@ -68,6 +68,7 @@ export default defineConfig({
 						link: '/reference/',
 						icon: 'information',
 						items: [
+							'reference/sdk-api',
 							'reference/blkl-format',
 							'reference/firewall-lock-args',
 							'reference/gov1-witness',

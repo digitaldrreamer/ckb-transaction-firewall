@@ -60,6 +60,7 @@ pub mod error {
     pub const INVALID_GOVERNANCE_WITNESS: i8 = 24;
     pub const UNAUTHORIZED_GOVERNANCE_LOCK: i8 = 25;
     // 26 reserved (previously UNAUTHORIZED_SIGNERS)
+    pub const INVALID_TYPE_ID: i8 = 27;
 
     pub fn to_sys_error(code: i8) -> SysError {
         SysError::Unknown(code as u64)
@@ -477,7 +478,7 @@ fn program_entry() -> Result<(), SysError> {
         preimage[36..44].copy_from_slice(&(reg_out as u64).to_le_bytes());
         let expected_type_id = blake2b_256(&preimage);
         if expected_type_id != registry_type_args.type_id_value {
-            return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT)); // diagnostic: distinct from INVALID_TYPE_ARGS_LAYOUT(20)
+            return Err(error::to_sys_error(error::INVALID_TYPE_ID));
         }
     } else {
         // Update: input and output type_id_value must be identical.
@@ -486,7 +487,7 @@ fn program_entry() -> Result<(), SysError> {
         let in_script = parse_script(in_type_raw.as_slice())?;
         let in_type_args = RegistryTypeArgs::parse(in_script.args.as_slice())?;
         if in_type_args.type_id_value != registry_type_args.type_id_value {
-            return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT));
+            return Err(error::to_sys_error(error::INVALID_TYPE_ID));
         }
     }
 

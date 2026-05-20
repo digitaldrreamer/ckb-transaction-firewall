@@ -23,6 +23,12 @@ If a blacklisted entity sends CKB to your wallet, you receive it. If your wallet
 - Wallet cells that do not use the firewall lock
 - A compromised governance key producing an authorized blacklist update
 
+## Registry invariants
+
+- Entries are sorted strictly by identifier bytes; duplicates cause `RegistryNotSorted` and are rejected
+- `lock_args` and `type_args` are checked independently, controlled by the flags byte in the lock args
+- The registry cell outpoint moves after every governance update — always fetch a fresh outpoint before building a transaction
+
 ## Fail-closed behavior
 
 Missing registry dep → reject  

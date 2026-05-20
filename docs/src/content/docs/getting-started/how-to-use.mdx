@@ -123,13 +123,6 @@ ckb-firewall execute --proposal <id>
 
 The governance flow above is the path for all registry changes.
 
-## Key rules
-
-- Entries are sorted strictly by identifier bytes; duplicates are invalid
-- `lock_args` and `type_args` are checked independently (controlled by the flags byte)
-- Missing, invalid, or ambiguous registry dep → reject (fail-closed)
-- The registry cell outpoint moves after every governance update — always fetch fresh before building transactions
-
 ## Next pages
 
 <CardGrid>
