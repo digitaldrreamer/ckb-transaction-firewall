@@ -99,19 +99,19 @@ fn program_entry() -> Result<(), i8> {
 
     // argv[0]: hex-encoded pubkey_hash (20 bytes = 40 hex chars)
     let pubkey_hash_hex = argv[0].to_bytes();
-    let pubkey_hash_bytes = hex_decode(pubkey_hash_hex).ok_or(2i8)?;
-    if pubkey_hash_bytes.len() != 20 {
+    if pubkey_hash_hex.len() != 40 {
         return Err(2);
     }
+    let pubkey_hash_bytes = hex_decode(pubkey_hash_hex).ok_or(2i8)?;
     let mut pubkey_hash = [0u8; 20];
     pubkey_hash.copy_from_slice(&pubkey_hash_bytes);
 
     // argv[1]: hex-encoded signature (65 bytes = 130 hex chars)
     let sig_hex = argv[1].to_bytes();
-    let sig_bytes = hex_decode(sig_hex).ok_or(3i8)?;
-    if sig_bytes.len() != 65 {
+    if sig_hex.len() != 130 {
         return Err(3);
     }
+    let sig_bytes = hex_decode(sig_hex).ok_or(3i8)?;
 
     // signing_message = blake2b(tx_hash)
     let tx_hash = ckb_std::high_level::load_tx_hash().map_err(|_| 4i8)?;
