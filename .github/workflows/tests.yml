@@ -99,8 +99,9 @@ jobs:
           npm pack > /dev/null 2>&1 || true
           TAR=$(ls -1 ckb-firewall-sdk-*.tgz 2>/dev/null | head -1)
           [ -n "$TAR" ] || { echo "ERROR: npm pack did not produce a tarball"; exit 1; }
-          tar -tzf "$TAR" | grep -q 'package/dist/index.js'
-          tar -tzf "$TAR" | grep -q 'package/dist/index.d.ts'
+          CONTENTS=$(tar -tzf "$TAR")
+          echo "$CONTENTS" | grep -q 'package/dist/index.js'
+          echo "$CONTENTS" | grep -q 'package/dist/index.d.ts'
           rm -f "$TAR"
 
       - name: Are-the-types-wrong (TypeScript SDK, ESM profile)
