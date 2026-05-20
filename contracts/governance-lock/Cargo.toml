@@ -8,6 +8,8 @@ description = "CKB lock script for governance drills (non-secp, witness-lock com
 
 [dependencies]
 ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator", "dummy-atomic"] }
+blake2b-ref = { version = "0.3.1", default-features = false }
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "alloc"] }
 
 [profile.release]
 overflow-checks = true
