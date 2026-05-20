@@ -66,9 +66,9 @@ if ! diff -u "$tmp_expected_norm" "$tmp_doc" > /dev/null; then
   exit 1
 fi
 
-grep -q 'if version != 0x01' "$FIREWALL_SRC"
-grep -q 'if version != 0x01' "$REGISTRY_SRC"
-grep -q 'MUST be `0x01`' "$LOCK_SPEC"
+grep -q 'version != 0x02' "$FIREWALL_SRC"
+grep -q 'version != 0x02' "$REGISTRY_SRC"
+grep -q 'MUST be `0x02`' "$LOCK_SPEC"
 
 grep -q 'b"BLKL"' "$FIREWALL_SRC"
 grep -q 'b"BLKL"' "$REGISTRY_SRC"

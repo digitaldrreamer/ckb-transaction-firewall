@@ -6,154 +6,127 @@ topic: getting-started
 
 import { Aside, CardGrid, LinkCard, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-If you want the shortest accurate path through this system, read this page first.
-
 <Steps>
-1. Get the registry script identity.
-2. Fetch the live registry cell data.
-3. Feed that data into the SDK before signing.
-4. Use the CLI to inspect the live registry before you update anything.
-5. Use the governance flow when you need to change the registry.
+1. Fetch the live registry payload.
+2. Run the pre-flight check before signing.
+3. Include the correct cell deps when spending a firewall-protected cell.
+4. Use the governance flow when the registry needs to change.
 </Steps>
 
-<Aside type="caution" title="Do not mix up the two cell types">
-The registry script identity is what tells you which live cell to trust. The live registry cell data is the `BLKL` payload you actually parse. The registry contract binary cell is not the registry payload.
+<Aside type="caution" title="Two different cell types">
+The registry **code cell** contains the RISC-V contract binary. The registry **data cell** contains the BLKL v2 payload the firewall reads. They live at different outpoints. The SDK and CLI work with the data cell.
 </Aside>
 
-## What the runtime needs
+## 1. Fetch the live registry
 
-<CardGrid>
-	<LinkCard href="/getting-started/typescript-sdk/" title="TypeScript SDK" description="Pre-flight unsigned transactions in JavaScript or TypeScript." />
-	<LinkCard href="/getting-started/rust-sdk/" title="Rust SDK" description="Run the same policy from Rust code." />
-	<LinkCard href="/getting-started/cli/" title="CLI quickstart" description="Inspect the live registry and walk the governance flow." />
-	<LinkCard href="/reference/blkl-format/" title="BLKL format" description="Exact registry payload layout and rules." />
-</CardGrid>
-
-A wallet, bot, or service needs three things:
-
-- the exact `registryScript` identity
-- the live registry cell `data`
-- the unsigned transaction outputs you want to check
-
-## 1. Get the live registry data
-
-If you are using the checked-in testnet fixture, start with `notes/deployments/testnet.registry.json`. It contains the current canonical registry script and the matching live registry cell outpoint.
-
-```bash
-ckb-cli --url https://testnet.ckb.dev rpc get_live_cell \
-  --tx-hash 0x57edc162ddd476d970b8a65558466ca11bb1762be9366fd12c76d620fe695fb7 \
-  --index 0 \
-  --with-data \
-  --output-format json
-```
-
-If you are on another network, replace that outpoint with the live registry cell you want to trust. The important part is the cell `data`, not the contract binary cell.
-
-<Tabs>
-<TabItem label="Checked-in fixture">
-
-```json
-{
-  "registryScript": {
-    "codeHash": "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
-    "hashType": "type",
-    "args": "0x019bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce80114003f54dea35bcc7a0efef541d361799f77bd1b8581"
-  },
-  "canonicalRegistryCell": {
-    "txHash": "0x57edc162ddd476d970b8a65558466ca11bb1762be9366fd12c76d620fe695fb7",
-    "index": 0,
-    "data": "0x424c4b4c010100000020ec2cd50681d6b1b71fd762734c6b212c074ffa52fc6aed9aa6bf3566f58a9c150000000000000000"
-  }
-}
-```
-
-</TabItem>
-<TabItem label="From chain">
-
-```bash
-ckb-cli --url "$RPC_URL" rpc get_live_cell \
-  --tx-hash "$REGISTRY_TX" \
-  --index "$REGISTRY_INDEX" \
-  --with-data \
-  --output-format json
-```
-
-</TabItem>
-</Tabs>
-
-## 2. Pass the live data into the SDK
+The registry cell outpoint changes after every governance update. Use `findRegistryCell` to always get the current one:
 
 ```ts
-import { TransactionFirewall } from "@ckb-firewall/sdk";
+import { findRegistryCell, fetchRegistryPayload } from "@ckb-firewall/sdk";
 
-const firewall = new TransactionFirewall({
-  registryScript: {
-    codeHash: "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
-    hashType: "type",
-    args: "0x019bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce80114003f54dea35bcc7a0efef541d361799f77bd1b8581",
-  },
+const { txHash, index } = await findRegistryCell("https://testnet.ckb.dev", {
+  codeHash: "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+  hashType: "type",
+  typeIdValue: "0xcd5d844661356e465c27b7d693e84f20e884da63153d2f6f40381ceb0807761c",
+  required: true,
 });
 
-const result = firewall.checkTransaction({
-  cellDeps: [
-    {
-      type: {
-        codeHash: "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
-        hashType: "type",
-        args: "0x019bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce80114003f54dea35bcc7a0efef541d361799f77bd1b8581",
-      },
-      data: "0x424c4b4c010100000020ec2cd50681d6b1b71fd762734c6b212c074ffa52fc6aed9aa6bf3566f58a9c150000000000000000",
-    },
-  ],
-  outputs: [
-    { lockArgs: "0xabc123..." },
-    { lockArgs: "0xdef456...", typeArgs: "0x..." },
-  ],
-});
+const registry = await fetchRegistryPayload("https://testnet.ckb.dev", txHash, index);
+```
+
+Or if you already know the current outpoint:
+
+```ts
+import { fetchRegistryPayload } from "@ckb-firewall/sdk";
+
+const registry = await fetchRegistryPayload(
+  "https://testnet.ckb.dev",
+  "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3",
+  0
+);
+```
+
+Or via CLI (auto-discovers the current outpoint):
+
+```bash
+ckb-firewall inspect
+```
+
+The canonical `RegistrySpecLike` values are in [`notes/deployments/testnet.registry.json`](https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/notes/deployments/testnet.registry.json) under the `registrySpec` key.
+
+## 2. Pre-flight check before signing
+
+```ts
+import { fetchRegistryPayload, preflightCheck } from "@ckb-firewall/sdk";
+
+const registry = await fetchRegistryPayload("https://testnet.ckb.dev",
+  "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3", 0);
+
+const result = preflightCheck(
+  [{ lockArgs: "0xabc123..." }, { lockArgs: "0xdef456...", typeArgs: "0x..." }],
+  [registry]
+);
 
 if (!result.ok) {
   throw new Error(`${result.reason} (${result.code})`);
 }
 ```
 
-<Aside type="note" title="What the SDK does and does not do">
-The SDK does not fetch RPC data for you. It also does not guess which registry dep is correct. You provide the live registry cell data, and it checks the transaction against that payload.
-</Aside>
-
-## 3. Inspect before you change anything
+Check a single address:
 
 ```bash
-ckb-firewall inspect
+ckb-firewall check --lock-args 0xabc123...
 ```
 
-That command reads the current live registry cell and prints the sorted blacklist entries. Use it before you propose changes and before you trust a new network deployment.
+## 3. Cell deps when spending a firewall-protected cell
 
-## 4. Update through governance when the registry needs to change
+```ts
+import { buildFirewallSpendCellDeps } from "@ckb-firewall/sdk";
+
+const cellDeps = buildFirewallSpendCellDeps({
+  firewallLockOutPoint: {
+    txHash: "0x128193cc2d547b224ccf10a6e299cb0749c633c5f9354ff5a9a5fd3e894318d2",
+    index: 0,
+  },
+  innerLockOutPoint: {
+    txHash: "0x0fe5d47662724a3620c002683d8c3f38103359c7e1ca697196b39442317c709e",
+    index: 0,
+  },
+  registryOutPoints: [{
+    txHash: "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3",
+    index: 0,
+  }],
+});
+```
+
+<Aside type="caution" title="Time-based entries require header_deps">
+If the registry contains entries with an `expiresAt` timestamp, the spending transaction must include `header_deps` with a recent block hash. Without `header_deps`, the chain's median time evaluates to zero and all temporary entries behave as permanent — the transaction silently enforces the wrong policy.
+</Aside>
+
+## 4. Update through governance
 
 ```bash
+# Create and share a proposal
 ckb-firewall propose
-ckb-firewall vote --proposal <id> --vote yes --validator alice
+ckb-firewall export --proposal <id> --out proposal.json
+
+# Participants import, vote, and re-export
+ckb-firewall import proposal.json
+ckb-firewall vote --proposal <id> --vote yes
+
+# Sign after the 72h review window and vote threshold
 ckb-firewall sign --proposal <id> --signer-index 0
+
+# Execute on-chain
 ckb-firewall execute --proposal <id>
 ```
 
-<Aside type="note" title="Rule">
-The quick `add` and `remove` commands are for testnet and development. The public path is the governance flow above.
-</Aside>
-
-## Rules worth remembering
-
-- `BLKL` is versioned. Current payload version is `0x01`.
-- Entries should be sorted by identifier.
-- The TypeScript SDK currently accepts equal identifiers, but the Rust SDK rejects non-increasing order. If you want both SDKs to accept the same payload, keep entries strictly sorted.
-- `lock_args` and `type_args` are checked independently.
-- Missing, invalid, or ambiguous registry deps fail closed.
-- The lock is the consensus guarantee; the SDK is the fast pre-flight path.
+The governance flow above is the path for all registry changes.
 
 ## Next pages
 
 <CardGrid>
-	<LinkCard href="/reference/firewall-lock-args/" title="Firewall lock args" description="How the lock points at the registry and wrapped inner lock." />
-	<LinkCard href="/reference/gov1-witness/" title="GOV1 witness" description="How registry updates are bound to proposal and vote context." />
-	<LinkCard href="/reference/error-codes/" title="Error codes" description="Codes you should handle in wallets, bots, and CLIs." />
+  <LinkCard href="/getting-started/wallet-integration/" title="Wallet integration" description="Step-by-step for wrapping a wallet cell with the firewall lock." />
+  <LinkCard href="/reference/firewall-lock-args/" title="Firewall lock args" description="How the lock encodes the registry identity and inner lock." />
+  <LinkCard href="/reference/error-codes/" title="Error codes" description="Codes to handle in wallets, bots, and CLIs." />
 </CardGrid>

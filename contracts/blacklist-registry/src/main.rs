@@ -2,16 +2,26 @@
 //!
 //! This type script protects the canonical blacklist registry cell. It enforces:
 //! - Exactly-one input + exactly-one output registry cell per update transaction.
-//! - Registry payload format invariants (BLKL v1, sorted entries).
+//! - Registry payload format invariants (BLKL v2, sorted entries).
 //! - Governance authorization via a configured governance lock script identity.
-//! - Governance context binding via a witness payload (GOV1 v1) committed to by tx signatures.
+//! - Governance context binding via a GOV1 v2 witness payload committed to by tx signatures.
+//! - Type ID enforcement to preserve registry identity across updates.
 //!
-//! The registry cell itself is referenced by the firewall lock script using this type script
-//! identity (code_hash, hash_type, args). Therefore, registry updates must preserve the same
-//! type script args to avoid per-wallet lock migration.
+//! Signature verification is delegated entirely to the governance-lock script
+//! (WitnessArgs.lock). This type script only verifies the GOV1 binding (WitnessArgs.input_type).
 
 #![no_std]
 #![cfg_attr(not(test), no_main)]
+
+// Production build guard: the testnet governance committee uses deterministic
+// dev keys. Require an explicit opt-in so no-feature builds fail fast rather
+// than silently producing a binary with unknown signer constraints.
+// Remove this guard when the mainnet governance committee is finalized.
+#[cfg(not(any(feature = "dev-signer-keys", test)))]
+compile_error!(
+    "blacklist-registry: build requires --features dev-signer-keys for testnet. \
+     Remove this guard when the mainnet governance committee is finalized."
+);
 
 #[cfg(test)]
 extern crate alloc;
@@ -37,12 +47,11 @@ use blake2b_ref::{Blake2b, Blake2bBuilder};
 use ckb_std::{
     ckb_constants::{CellField, Source},
     error::SysError,
-    syscalls::{load_cell_by_field, load_cell_data, load_witness},
+    syscalls::{load_cell_by_field, load_cell_data, load_input, load_witness},
 };
 
 fn blake2b_256(data: &[u8]) -> [u8; 32] {
     let mut out = [0u8; 32];
-    // * Matches CKB's default personalization for blake2b
     let mut hasher: Blake2b = Blake2bBuilder::new(32)
         .personal(b"ckb-default-hash")
         .build();
@@ -51,7 +60,6 @@ fn blake2b_256(data: &[u8]) -> [u8; 32] {
     out
 }
 
-/// * Custom error codes for blacklist-registry type script (frozen v1)
 pub mod error {
     use ckb_std::error::SysError;
 
@@ -61,104 +69,49 @@ pub mod error {
     pub const UNSUPPORTED_REGISTRY_VERSION: i8 = 23;
     pub const INVALID_GOVERNANCE_WITNESS: i8 = 24;
     pub const UNAUTHORIZED_GOVERNANCE_LOCK: i8 = 25;
-    pub const UNAUTHORIZED_SIGNERS: i8 = 26;
+    // 26 reserved (previously UNAUTHORIZED_SIGNERS)
+    pub const INVALID_TYPE_ID: i8 = 27;
 
     pub fn to_sys_error(code: i8) -> SysError {
         SysError::Unknown(code as u64)
     }
 }
 
-const SIGNER_SET_SIZE: usize = 5;
-const SIG_LEN_WITH_RECOVERY_ID: usize = 65;
-const SIGNER_ENTRY_LEN: usize = 1 + SIG_LEN_WITH_RECOVERY_ID;
-
-#[cfg(all(not(test), not(feature = "dev-signer-keys")))]
-compile_error!(
-    "Placeholder governance signer keys are blocked for non-test builds. \
-Enable `dev-signer-keys` only for local/dev builds, or replace with production signer pubkeys."
-);
-
-/// * Type args structure for the registry type script (v1 frozen layout)
+/// Type args structure for the registry type script (v2).
 ///
-/// This allows the registry type script to be deployed once, but configured per-registry by args:
-/// - Governance lock script identity is provided by args, so the type script can require that
-///   registry updates are only possible when the transaction is authorized by that lock.
-///
-/// Layout (v1):
-/// - 1 byte: version (0x01)
-/// - 32 bytes: governance lock code_hash
-/// - 1 byte: governance lock hash_type
-/// - 2 bytes: governance lock args length (LE u16)
-/// - N bytes: governance lock args
+/// Layout: version(1) | governance_code_hash(32) | governance_hash_type(1) | type_id_value(32) = 66 bytes.
+/// Governance-lock args are always [0x01] (version byte only; keys live in BLKL header).
 #[derive(Debug, Clone)]
 pub struct RegistryTypeArgs {
     pub version: u8,
     pub governance_code_hash: [u8; 32],
     pub governance_hash_type: u8,
-    pub governance_args: Vec<u8>,
+    pub type_id_value: [u8; 32],
 }
 
 impl RegistryTypeArgs {
     pub fn parse(args: &[u8]) -> Result<Self, SysError> {
-        if args.len() < 36 {
-            return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT));
+        if args.len() != 66 {
+            return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT)); // diagnostic: len != 66
         }
-
         let version = args[0];
-
+        if version != 0x02 {
+            return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT)); // diagnostic: version != 0x02
+        }
         let mut governance_code_hash = [0u8; 32];
         governance_code_hash.copy_from_slice(&args[1..33]);
-
         let governance_hash_type = args[33];
-        let gov_args_len = u16::from_le_bytes([args[34], args[35]]) as usize;
-
-        if args.len() != 36 + gov_args_len {
-            return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT));
-        }
-
-        let governance_args = args[36..].to_vec();
-
-        Ok(Self {
-            version,
-            governance_code_hash,
-            governance_hash_type,
-            governance_args,
-        })
+        let mut type_id_value = [0u8; 32];
+        type_id_value.copy_from_slice(&args[34..66]);
+        Ok(Self { version, governance_code_hash, governance_hash_type, type_id_value })
     }
 }
 
-fn parse_registry_type_args_any(raw: &[u8]) -> Result<RegistryTypeArgs, SysError> {
-    if let Ok(v) = RegistryTypeArgs::parse(raw) {
-        return Ok(v);
-    }
-    if let Ok(unwrapped) = parse_molecule_bytes(raw) {
-        if let Ok(v) = RegistryTypeArgs::parse(unwrapped.as_slice()) {
-            return Ok(v);
-        }
-    }
-    // Fallback: locate v1 marker in small prefix window and parse from there.
-    // This tolerates wrapper prefixes used by some syscall return layouts.
-    let max_off = if raw.len() > 8 { 8 } else { raw.len() };
-    for off in 0..max_off {
-        if raw[off] != 0x01 {
-            continue;
-        }
-        if off + 36 > raw.len() {
-            continue;
-        }
-        let args_len = u16::from_le_bytes([raw[off + 34], raw[off + 35]]) as usize;
-        let total = 36 + args_len;
-        if off + total > raw.len() {
-            continue;
-        }
-        if let Ok(v) = RegistryTypeArgs::parse(&raw[off..off + total]) {
-            return Ok(v);
-        }
-    }
-    Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT))
+fn parse_registry_type_args(raw: &[u8]) -> Result<RegistryTypeArgs, SysError> {
+    RegistryTypeArgs::parse(raw)
 }
 
-/// * Registry payload structure (same as firewall-lock v1)
+/// Registry payload structure for BLKL v2.
 #[derive(Debug)]
 pub struct RegistryPayload {
     pub version: u8,
@@ -173,43 +126,41 @@ pub struct RegistryEntry {
 
 impl RegistryPayload {
     pub fn parse(data: &[u8]) -> Result<Self, SysError> {
-        if data.len() < 9 {
+        // Minimum: BLKL(4) + version(1) + gov_header_len(2) + entry_count(4) = 11 bytes
+        if data.len() < 11 {
             return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
         }
-
         if &data[0..4] != b"BLKL" {
             return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
         }
-
         let version = data[4];
-        if version != 0x01 {
+        if version != 0x02 {
             return Err(error::to_sys_error(error::UNSUPPORTED_REGISTRY_VERSION));
         }
-
-        let entry_count = u32::from_le_bytes([data[5], data[6], data[7], data[8]]) as usize;
-        let max_possible_entries = (data.len() - 9) / 9;
-        if entry_count > max_possible_entries {
+        let gov_header_len = u16::from_le_bytes([data[5], data[6]]) as usize;
+        let entries_start = 7 + gov_header_len;
+        if entries_start + 4 > data.len() {
             return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
         }
-
+        let entry_count = u32::from_le_bytes([
+            data[entries_start],
+            data[entries_start + 1],
+            data[entries_start + 2],
+            data[entries_start + 3],
+        ]) as usize;
+        let mut offset = entries_start + 4;
         let mut entries = Vec::with_capacity(entry_count);
-        let mut offset = 9;
-
         for _ in 0..entry_count {
             if offset >= data.len() {
                 return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
             }
-
             let id_len = data[offset] as usize;
             offset += 1;
-
             if offset + id_len + 8 > data.len() {
                 return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
             }
-
             let identifier = data[offset..offset + id_len].to_vec();
             offset += id_len;
-
             let expires_at = u64::from_le_bytes([
                 data[offset],
                 data[offset + 1],
@@ -221,35 +172,24 @@ impl RegistryPayload {
                 data[offset + 7],
             ]);
             offset += 8;
-
-            entries.push(RegistryEntry {
-                identifier,
-                expires_at,
-            });
+            entries.push(RegistryEntry { identifier, expires_at });
         }
-
         for i in 1..entries.len() {
             if entries[i].identifier.as_slice() <= entries[i - 1].identifier.as_slice() {
                 return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
             }
         }
-
         Ok(Self { version, entries })
     }
 }
 
-/// * Governance witness layout (GOV1 v1)
+/// Governance witness v2 — GOV1 binding placed in WitnessArgs.input_type.
 ///
-/// Placed in the `lock` field of the witness for the registry input cell.
-/// This payload is committed to by typical lock scripts that use sighash-all semantics.
+/// Layout: GOV1(4) | version=0x02(1) | proposal_id_hash(32) | vote_digest_hash(32) |
+///         old_root(32) | new_root(32) = 133 bytes total.
 ///
-/// Layout:
-/// - 4 bytes: magic "GOV1"
-/// - 1 byte: version (0x01)
-/// - 32 bytes: proposal_id_hash
-/// - 32 bytes: vote_digest_hash
-/// - 32 bytes: registry_old_root (blake2b_256 of input registry data)
-/// - 32 bytes: registry_new_root (blake2b_256 of output registry data)
+/// Signer entries live in WitnessArgs.lock for the governance-lock to verify.
+/// This type script does NOT touch the lock field.
 #[derive(Debug, Clone)]
 pub struct GovernanceWitness {
     pub version: u8,
@@ -257,129 +197,30 @@ pub struct GovernanceWitness {
     pub vote_digest_hash: [u8; 32],
     pub old_root: [u8; 32],
     pub new_root: [u8; 32],
-    pub signers: Vec<GovernanceSignerEntry>,
-}
-
-#[derive(Debug, Clone)]
-pub struct GovernanceSignerEntry {
-    pub signer_index: u8,
-    pub signature: [u8; SIG_LEN_WITH_RECOVERY_ID],
 }
 
 impl GovernanceWitness {
     pub fn parse(raw: &[u8]) -> Result<Self, SysError> {
-        const FIXED_LEN: usize = 4 + 1 + 32 + 32 + 32 + 32 + 1;
-        if raw.len() < FIXED_LEN {
+        if raw.len() != 133 {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
-
         if &raw[0..4] != b"GOV1" {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
-
         let version = raw[4];
-        if version != 0x01 {
+        if version != 0x02 {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
-
         let mut proposal_id_hash = [0u8; 32];
         proposal_id_hash.copy_from_slice(&raw[5..37]);
-
         let mut vote_digest_hash = [0u8; 32];
         vote_digest_hash.copy_from_slice(&raw[37..69]);
-
         let mut old_root = [0u8; 32];
         old_root.copy_from_slice(&raw[69..101]);
-
         let mut new_root = [0u8; 32];
         new_root.copy_from_slice(&raw[101..133]);
-
-        let signer_count = raw[133] as usize;
-        if signer_count < 3 || signer_count > SIGNER_SET_SIZE {
-            return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
-        }
-
-        let expected_len = FIXED_LEN + signer_count * SIGNER_ENTRY_LEN;
-        if raw.len() != expected_len {
-            return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
-        }
-
-        let mut signers = Vec::with_capacity(signer_count);
-        let mut offset = FIXED_LEN;
-        for _ in 0..signer_count {
-            let signer_index = raw[offset];
-            offset += 1;
-
-            let mut signature = [0u8; SIG_LEN_WITH_RECOVERY_ID];
-            signature.copy_from_slice(&raw[offset..offset + SIG_LEN_WITH_RECOVERY_ID]);
-            offset += SIG_LEN_WITH_RECOVERY_ID;
-
-            signers.push(GovernanceSignerEntry {
-                signer_index,
-                signature,
-            });
-        }
-
-        Ok(Self {
-            version,
-            proposal_id_hash,
-            vote_digest_hash,
-            old_root,
-            new_root,
-            signers,
-        })
+        Ok(Self { version, proposal_id_hash, vote_digest_hash, old_root, new_root })
     }
-}
-
-fn verify_governance_multisig(gov: &GovernanceWitness, required_signers: usize) -> Result<(), SysError> {
-    if required_signers < 3 || required_signers > SIGNER_SET_SIZE {
-        return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
-    }
-    if gov.signers.len() < required_signers || gov.signers.len() > SIGNER_SET_SIZE {
-        return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
-    }
-
-    let mut seen = [false; SIGNER_SET_SIZE];
-    let mut valid_count = 0usize;
-
-    for signer in &gov.signers {
-        let signer_idx = signer.signer_index as usize;
-        if signer_idx >= SIGNER_SET_SIZE {
-            return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
-        }
-        if seen[signer_idx] {
-            return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
-        }
-        seen[signer_idx] = true;
-
-        // * Recovery id is included in v1 witness layout and validated for canonical range.
-        if signer.signature[64] > 3 {
-            return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
-        }
-
-        // Lightweight v1 on-chain checks for compatibility with current CKB VM runtime:
-        // - signer index uniqueness/range
-        // - threshold enforcement
-        // - signature field shape + recovery-id range
-        //
-        // Full cryptographic signature verification is validated in off-chain governance
-        // orchestration and test flows until an on-chain verifier path with compatible
-        // VM/runtime characteristics is finalized.
-        if signer.signature[0..64].iter().all(|b| *b == 0) {
-            return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
-        }
-        valid_count += 1;
-    }
-
-    if valid_count < required_signers {
-        return Err(error::to_sys_error(error::UNAUTHORIZED_SIGNERS));
-    }
-
-    Ok(())
-}
-
-fn script_matches_identity(script: &Script, code_hash: &[u8; 32], hash_type: u8, args: &[u8]) -> bool {
-    script.code_hash == *code_hash && script.hash_type == hash_type && script.args.as_slice() == args
 }
 
 #[derive(Debug, Clone)]
@@ -387,6 +228,10 @@ struct Script {
     code_hash: [u8; 32],
     hash_type: u8,
     args: Vec<u8>,
+}
+
+fn script_matches_identity(script: &Script, code_hash: &[u8; 32], hash_type: u8, args: &[u8]) -> bool {
+    script.code_hash == *code_hash && script.hash_type == hash_type && script.args.as_slice() == args
 }
 
 fn load_var_bytes<F>(mut loader: F) -> Result<Vec<u8>, SysError>
@@ -430,60 +275,41 @@ fn load_witness_bytes(index: usize, source: Source) -> Result<Vec<u8>, SysError>
     read_exact_bytes(load_witness, index, source)
 }
 
+fn load_input_bytes(index: usize, source: Source) -> Result<Vec<u8>, SysError> {
+    read_exact_bytes(load_input, index, source)
+}
+
 fn load_script_field(index: usize, source: Source, field: CellField) -> Result<Vec<u8>, SysError> {
     load_var_bytes(|buf, offset| load_cell_by_field(buf, offset, index, source, field))
 }
 
-fn load_governance_witness_payload(input_index: usize) -> Result<Vec<u8>, SysError> {
-    let buf = load_witness_bytes(input_index, Source::Input)?;
-
-    // Manual WitnessArgs(table) decoding to avoid molecule object parsing overhead.
-    // table layout: full_size<u32>, offset_lock<u32>, offset_input_type<u32>, offset_output_type<u32>, fields...
-    if buf.len() < 16 {
-        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
+/// Loads the raw 36-byte outpoint (tx_hash(32) + index(4)) for an input.
+///
+/// CKB CellInput is a molecule STRUCT (no header): since(8) | OutPoint(36) = 44 bytes.
+/// OutPoint = tx_hash(32) + index(4) starts at byte 8.
+fn load_input_outpoint_raw(index: usize, source: Source) -> Result<[u8; 36], SysError> {
+    let raw = load_input_bytes(index, source)?;
+    if raw.len() < 44 {
+        return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT));
     }
-    let full_size = le_u32_at(&buf, 0)?;
-    if full_size != buf.len() {
-        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
-    }
-    let off_lock = le_u32_at(&buf, 4)?;
-    let off_input_type = le_u32_at(&buf, 8)?;
-    let off_output_type = le_u32_at(&buf, 12)?;
-    if !(off_lock <= off_input_type && off_input_type <= off_output_type && off_output_type <= buf.len()) {
-        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
-    }
-
-    let lock_field = &buf[off_lock..off_input_type];
-    let input_type_field = &buf[off_input_type..off_output_type];
-
-    // Prefer input_type for secp-lock compatibility; fallback to lock for old flows.
-    if let Some(data) = decode_bytesopt_field(input_type_field)? {
-        if !data.is_empty() {
-            return Ok(data);
-        }
-    }
-    if let Some(data) = decode_bytesopt_field(lock_field)? {
-        if !data.is_empty() {
-            return Ok(data);
-        }
-    }
-
-    Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS))
+    let mut out = [0u8; 36];
+    out.copy_from_slice(&raw[8..44]);
+    Ok(out)
 }
 
 fn parse_molecule_bytes(field: &[u8]) -> Result<Vec<u8>, SysError> {
     if field.len() < 4 {
-        return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT));
+        return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT)); // diagnostic: field too short
     }
     let count = u32::from_le_bytes([field[0], field[1], field[2], field[3]]) as usize;
     if field.len() != 4 + count {
-        return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT));
+        return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT)); // diagnostic: field.len != 4+count
     }
     Ok(field[4..(4 + count)].to_vec())
 }
 
 fn parse_script(raw: &[u8]) -> Result<Script, SysError> {
-    // Prefer molecule table decoding.
+    // Molecule table decoding.
     if raw.len() >= 16 {
         let total = u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]) as usize;
         if total == raw.len() {
@@ -500,22 +326,13 @@ fn parse_script(raw: &[u8]) -> Result<Script, SysError> {
                 code_hash.copy_from_slice(&raw[off_code_hash..off_hash_type]);
                 let hash_type = raw[off_hash_type];
                 let args = parse_molecule_bytes(&raw[off_args..])?;
-                return Ok(Script {
-                    code_hash,
-                    hash_type,
-                    args,
-                });
+                return Ok(Script { code_hash, hash_type, args });
             }
         }
     }
 
-    // Fallback: raw script payload `code_hash(32) | hash_type(1) | args`.
-    // Some syscall return paths may expose this layout directly.
-    let payload = if raw.len() >= 34 && raw[0] == 0x00 {
-        &raw[1..]
-    } else {
-        raw
-    };
+    // Fallback: raw script payload code_hash(32) | hash_type(1) | args.
+    let payload = if raw.len() >= 34 && raw[0] == 0x00 { &raw[1..] } else { raw };
     if payload.len() < 33 {
         return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT));
     }
@@ -523,12 +340,7 @@ fn parse_script(raw: &[u8]) -> Result<Script, SysError> {
     code_hash.copy_from_slice(&payload[0..32]);
     let hash_type = payload[32];
     let args = payload[33..].to_vec();
-
-    Ok(Script {
-        code_hash,
-        hash_type,
-        args,
-    })
+    Ok(Script { code_hash, hash_type, args })
 }
 
 fn load_cell_lock_script(index: usize, source: Source) -> Result<Script, SysError> {
@@ -564,13 +376,8 @@ fn find_registry_cells(source: Source, self_script: &Script) -> Result<Vec<usize
     loop {
         match load_cell_type_script_opt(i, source) {
             Ok(type_opt) => {
-                if let Some(type_script) = type_opt.as_ref() {
-                    if script_matches_identity(
-                        type_script,
-                        &self_code_hash,
-                        self_hash_type,
-                        self_args,
-                    ) {
+                if let Some(ts) = type_opt.as_ref() {
+                    if script_matches_identity(ts, &self_code_hash, self_hash_type, self_args) {
                         matches.push(i);
                     }
                 }
@@ -580,7 +387,6 @@ fn find_registry_cells(source: Source, self_script: &Script) -> Result<Vec<usize
             Err(e) => return Err(e),
         }
     }
-
     Ok(matches)
 }
 
@@ -605,49 +411,65 @@ fn decode_bytesopt_field(field: &[u8]) -> Result<Option<Vec<u8>>, SysError> {
     Ok(Some(field[4..(4 + count)].to_vec()))
 }
 
+/// Extracts the GOV1 v2 binding from WitnessArgs.input_type at the given input index.
+fn load_governance_witness_payload(input_index: usize) -> Result<Vec<u8>, SysError> {
+    let buf = load_witness_bytes(input_index, Source::Input)?;
+    if buf.len() < 16 {
+        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
+    }
+    let full_size = le_u32_at(&buf, 0)?;
+    if full_size != buf.len() {
+        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
+    }
+    let off_input_type = le_u32_at(&buf, 8)?;
+    let off_output_type = le_u32_at(&buf, 12)?;
+    if off_input_type < 16 || off_output_type < off_input_type || off_output_type > buf.len() {
+        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
+    }
+    let input_type_field = &buf[off_input_type..off_output_type];
+    match decode_bytesopt_field(input_type_field)? {
+        Some(data) if !data.is_empty() => Ok(data),
+        _ => Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS)),
+    }
+}
+
+/// Verifies that the registry cell's lock script matches the configured governance-lock.
+///
+/// Governance-lock args are always [0x01] for v2 (version byte only; keys are in BLKL header).
 fn verify_governance_lock_identity(
     input_index_opt: Option<usize>,
     output_index: usize,
     registry_type_args: &RegistryTypeArgs,
 ) -> Result<(), SysError> {
+    let gov_lock_args = [0x01u8];
     if let Some(input_index) = input_index_opt {
         let in_lock = load_cell_lock_script(input_index, Source::Input)?;
-
         if !script_matches_identity(
             &in_lock,
             &registry_type_args.governance_code_hash,
             registry_type_args.governance_hash_type,
-            registry_type_args.governance_args.as_slice(),
+            &gov_lock_args,
         ) {
             return Err(error::to_sys_error(error::UNAUTHORIZED_GOVERNANCE_LOCK));
         }
     }
-
     let out_lock = load_cell_lock_script(output_index, Source::Output)?;
-
     if !script_matches_identity(
         &out_lock,
         &registry_type_args.governance_code_hash,
         registry_type_args.governance_hash_type,
-        registry_type_args.governance_args.as_slice(),
+        &gov_lock_args,
     ) {
         return Err(error::to_sys_error(error::UNAUTHORIZED_GOVERNANCE_LOCK));
     }
-
     Ok(())
 }
 
 fn program_entry() -> Result<(), SysError> {
-    // * 1) Load self type script and parse its args (governance lock identity).
     let self_script = load_running_type_script()?;
-    let registry_type_args = parse_registry_type_args_any(self_script.args.as_slice())?;
-    if registry_type_args.version != 0x01 {
-        return Err(error::to_sys_error(error::INVALID_TYPE_ARGS_LAYOUT));
-    }
+    let registry_type_args = parse_registry_type_args(self_script.args.as_slice())?;
 
-    // * 2) Allow two topologies:
-    // *    - update flow: exactly 1 input + 1 output registry cell
-    // *    - bootstrap flow: exactly 0 input + 1 output registry cell
+    // Topology: exactly 1 output registry cell; 0 (bootstrap) or 1 (update) input.
     let reg_inputs = find_registry_cells(Source::Input, &self_script)?;
     let reg_outputs = find_registry_cells(Source::Output, &self_script)?;
     if reg_outputs.len() != 1 || reg_inputs.len() > 1 {
@@ -657,45 +479,56 @@ fn program_entry() -> Result<(), SysError> {
     let is_bootstrap = reg_inputs.is_empty();
     let reg_in_opt = if is_bootstrap { None } else { Some(reg_inputs[0]) };
 
-    // * 3) Enforce governance lock identity on applicable registry cells.
+    // Type ID enforcement.
+    if is_bootstrap {
+        // Expected Type ID = blake2b(inputs[0].previous_output(36) | output_index_u64_le(8))
+        let first_outpoint = load_input_outpoint_raw(0, Source::Input)?;
+        let mut preimage = [0u8; 44];
+        preimage[..36].copy_from_slice(&first_outpoint);
+        preimage[36..44].copy_from_slice(&(reg_out as u64).to_le_bytes());
+        let expected_type_id = blake2b_256(&preimage);
+        if expected_type_id != registry_type_args.type_id_value {
+            return Err(error::to_sys_error(error::INVALID_TYPE_ID));
+        }
+    } else {
+        // Update: input and output type_id_value must be identical.
+        let in_idx = reg_inputs[0];
+        let in_type_raw = load_script_field(in_idx, Source::Input, CellField::Type)?;
+        let in_script = parse_script(in_type_raw.as_slice())?;
+        let in_type_args = RegistryTypeArgs::parse(in_script.args.as_slice())?;
+        if in_type_args.type_id_value != registry_type_args.type_id_value {
+            return Err(error::to_sys_error(error::INVALID_TYPE_ID));
+        }
+    }
+
+    // Registry cells must be locked by the configured governance-lock (args = [0x01]).
     verify_governance_lock_identity(reg_in_opt, reg_out, &registry_type_args)?;
 
-    // * 4) Load registry payloads and enforce BLKL v1 invariants.
+    // BLKL v2 payload validation.
     let out_data = load_cell_data_bytes(reg_out, Source::Output)?;
     let _new_registry = RegistryPayload::parse(out_data.as_slice())?;
 
-    let (old_root, witness_index, required_signers) = if let Some(reg_in) = reg_in_opt {
+    let (old_root, witness_index) = if let Some(reg_in) = reg_in_opt {
         let in_data = load_cell_data_bytes(reg_in, Source::Input)?;
         let _old_registry = RegistryPayload::parse(in_data.as_slice())?;
-        (blake2b_256(in_data.as_slice()), reg_in, 3usize)
+        (blake2b_256(in_data.as_slice()), reg_in)
     } else {
-        // * Bootstrap creation has no previous state; bind to zero root and
-        // * require full signer participation.
-        // * Governance witness placement rule for bootstrap:
-        // * `GOV1` must be present in `WitnessArgs.input_type` (preferred) or
-        // * `WitnessArgs.lock` for input index 0.
-        ([0u8; 32], 0usize, SIGNER_SET_SIZE)
+        ([0u8; 32], 0usize)
     };
     let new_root = blake2b_256(out_data.as_slice());
 
-    // * 5) Bind a governance decision context to this update via witness payload.
+    // GOV1 v2 binding from WitnessArgs.input_type.
     let gov_payload = load_governance_witness_payload(witness_index)?;
     let gov = GovernanceWitness::parse(gov_payload.as_slice())?;
 
     if gov.old_root != old_root || gov.new_root != new_root {
         return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
     }
-
-    // * Basic non-zero checks to prevent empty placeholders from being accepted.
     if gov.proposal_id_hash == [0u8; 32] || gov.vote_digest_hash == [0u8; 32] {
         return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
     }
 
-    // * Strict plan compliance:
-    // * - updates: 3-of-5
-    // * - bootstrap: 5-of-5
-    verify_governance_multisig(&gov, required_signers)?;
-
+    // Signature verification is handled by governance-lock (WitnessArgs.lock).
     Ok(())
 }
 
@@ -705,21 +538,82 @@ mod tests {
     extern crate std;
     use std::vec;
 
+    fn minimal_gov_header() -> Vec<u8> {
+        // gh_version(1) | signer_count(1) | threshold(1) | pubkey(33) | validator_count(2 LE) | validator_merkle_root(32) = 70 bytes
+        let mut h = vec![0x01u8, 0x01, 0x01];
+        h.extend_from_slice(&[
+            0x03, 0x1b, 0x84, 0xc5, 0x56, 0x7b, 0x12, 0x64, 0x40, 0x99, 0x5d, 0x3e,
+            0xd5, 0xaa, 0xba, 0x05, 0x65, 0xd7, 0x1e, 0x18, 0x34, 0x60, 0x48, 0x19,
+            0xff, 0x9c, 0x17, 0xf5, 0xe9, 0xd5, 0xdd, 0x07, 0x8f,
+        ]);
+        h.extend_from_slice(&[0x00, 0x00]);
+        h.extend_from_slice(&[0u8; 32]);
+        h
+    }
+
+    fn make_blkl_v2(entries: &[(&[u8], u64)]) -> Vec<u8> {
+        let gov_header = minimal_gov_header();
+        let gov_header_len = gov_header.len() as u16;
+        let mut data = vec![];
+        data.extend_from_slice(b"BLKL");
+        data.push(0x02);
+        data.extend_from_slice(&gov_header_len.to_le_bytes());
+        data.extend_from_slice(&gov_header);
+        data.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+        for (id, expires_at) in entries {
+            data.push(id.len() as u8);
+            data.extend_from_slice(id);
+            data.extend_from_slice(&expires_at.to_le_bytes());
+        }
+        data
+    }
+
     #[test]
-    fn test_parse_registry_type_args_valid_empty_gov_args() {
-        let mut args = vec![0x01];
+    fn test_type_id_blake2b_matches_ckb_cli() {
+        // Verify blake2b_256(preimage) matches what ckb-cli util blake2b computes.
+        // preimage = 0xdd23d6b3292103354a6a40abc36f1501397668c61157a96467891de383d5e9e2 02000000 0000000000000000
+        let preimage: [u8; 44] = [
+            0xdd, 0x23, 0xd6, 0xb3, 0x29, 0x21, 0x03, 0x35,
+            0x4a, 0x6a, 0x40, 0xab, 0xc3, 0x6f, 0x15, 0x01,
+            0x39, 0x76, 0x68, 0xc6, 0x11, 0x57, 0xa9, 0x64,
+            0x67, 0x89, 0x1d, 0xe3, 0x83, 0xd5, 0xe9, 0xe2,
+            0x02, 0x00, 0x00, 0x00, // index=2 LE
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // reg_out=0 LE u64
+        ];
+        let expected: [u8; 32] = [
+            0x4f, 0x59, 0x64, 0xc6, 0x30, 0x74, 0x35, 0x97,
+            0xc9, 0x0f, 0xc4, 0x8b, 0x9d, 0x85, 0x5e, 0x35,
+            0xd3, 0x8e, 0xea, 0x9f, 0x69, 0x75, 0xb1, 0x0d,
+            0x88, 0x84, 0x2e, 0xab, 0x2d, 0x18, 0x14, 0xfe,
+        ];
+        let actual = blake2b_256(&preimage);
+        assert_eq!(actual, expected, "blake2b_256 does not match ckb-cli output");
+    }
+
+    #[test]
+    fn test_parse_registry_type_args_valid() {
+        let mut args = vec![0x02u8];
         args.extend_from_slice(&[1u8; 32]);
         args.push(0x01);
-        args.extend_from_slice(&0u16.to_le_bytes());
+        args.extend_from_slice(&[2u8; 32]);
         let parsed = RegistryTypeArgs::parse(&args).expect("should parse");
-        assert_eq!(parsed.version, 0x01);
+        assert_eq!(parsed.version, 0x02);
         assert_eq!(parsed.governance_hash_type, 0x01);
-        assert_eq!(parsed.governance_args.len(), 0);
+        assert_eq!(parsed.type_id_value, [2u8; 32]);
     }
 
     #[test]
     fn test_parse_registry_type_args_invalid_len() {
-        let args = vec![0x01, 0x02, 0x03];
+        let args = vec![0x02, 0x02, 0x03];
+        assert!(RegistryTypeArgs::parse(&args).is_err());
+    }
+
+    #[test]
+    fn test_parse_registry_type_args_wrong_version() {
+        let mut args = vec![0x01u8];
+        args.extend_from_slice(&[1u8; 32]);
+        args.push(0x01);
+        args.extend_from_slice(&[2u8; 32]);
         assert!(RegistryTypeArgs::parse(&args).is_err());
     }
 
@@ -727,62 +621,92 @@ mod tests {
     fn test_governance_witness_parse_valid() {
         let mut raw = vec![];
         raw.extend_from_slice(b"GOV1");
-        raw.push(0x01);
-        raw.extend_from_slice(&[1u8; 32]); // proposal
-        raw.extend_from_slice(&[2u8; 32]); // vote
-        raw.extend_from_slice(&[3u8; 32]); // old root
-        raw.extend_from_slice(&[4u8; 32]); // new root
-        raw.push(3); // signer_count
-        for i in 0..3u8 {
-            raw.push(i); // signer_index
-            raw.extend_from_slice(&[0x11; 65]); // signature bytes
-        }
-        let w = GovernanceWitness::parse(&raw).expect("should parse");
-        assert_eq!(w.version, 0x01);
-        assert_eq!(w.proposal_id_hash, [1u8; 32]);
-        assert_eq!(w.vote_digest_hash, [2u8; 32]);
-        assert_eq!(w.old_root, [3u8; 32]);
-        assert_eq!(w.new_root, [4u8; 32]);
-        assert_eq!(w.signers.len(), 3);
-    }
-
-    #[test]
-    fn test_governance_witness_parse_invalid_magic() {
-        let mut raw = vec![0u8; 134];
-        raw[0..4].copy_from_slice(b"NOPE");
-        raw[4] = 0x01;
-        raw[133] = 0;
-        assert!(GovernanceWitness::parse(&raw).is_err());
-    }
-
-    #[test]
-    fn test_governance_witness_rejects_invalid_signer_count() {
-        let mut raw = vec![];
-        raw.extend_from_slice(b"GOV1");
-        raw.push(0x01);
+        raw.push(0x02);
         raw.extend_from_slice(&[1u8; 32]);
         raw.extend_from_slice(&[2u8; 32]);
         raw.extend_from_slice(&[3u8; 32]);
         raw.extend_from_slice(&[4u8; 32]);
-        raw.push(2); // too few
+        assert_eq!(raw.len(), 133);
+        let w = GovernanceWitness::parse(&raw).expect("should parse");
+        assert_eq!(w.version, 0x02);
+        assert_eq!(w.proposal_id_hash, [1u8; 32]);
+        assert_eq!(w.vote_digest_hash, [2u8; 32]);
+        assert_eq!(w.old_root, [3u8; 32]);
+        assert_eq!(w.new_root, [4u8; 32]);
+    }
+
+    #[test]
+    fn test_governance_witness_wrong_length() {
+        let mut raw = vec![];
+        raw.extend_from_slice(b"GOV1");
+        raw.push(0x02);
+        raw.extend_from_slice(&[1u8; 32]);
+        raw.extend_from_slice(&[2u8; 32]);
+        raw.extend_from_slice(&[3u8; 32]);
+        // Missing new_root — only 101 bytes
         assert!(GovernanceWitness::parse(&raw).is_err());
     }
 
     #[test]
-    fn test_registry_payload_parse_rejects_unsorted() {
+    fn test_governance_witness_wrong_version() {
+        let mut raw = vec![0u8; 133];
+        raw[0..4].copy_from_slice(b"GOV1");
+        raw[4] = 0x01;
+        assert!(GovernanceWitness::parse(&raw).is_err());
+    }
+
+    #[test]
+    fn test_governance_witness_invalid_magic() {
+        let mut raw = vec![0u8; 133];
+        raw[0..4].copy_from_slice(b"NOPE");
+        raw[4] = 0x02;
+        assert!(GovernanceWitness::parse(&raw).is_err());
+    }
+
+    #[test]
+    fn test_registry_payload_parse_empty() {
+        let data = make_blkl_v2(&[]);
+        let payload = RegistryPayload::parse(&data).expect("should parse");
+        assert_eq!(payload.version, 0x02);
+        assert_eq!(payload.entries.len(), 0);
+    }
+
+    #[test]
+    fn test_registry_payload_parse_two_entries() {
+        let data = make_blkl_v2(&[(&[0xAA], 0), (&[0xBB], 100)]);
+        let payload = RegistryPayload::parse(&data).expect("should parse");
+        assert_eq!(payload.entries.len(), 2);
+        assert_eq!(payload.entries[0].identifier, vec![0xAA]);
+        assert_eq!(payload.entries[1].identifier, vec![0xBB]);
+        assert_eq!(payload.entries[1].expires_at, 100);
+    }
+
+    #[test]
+    fn test_registry_payload_rejects_v1() {
         let mut data = vec![];
         data.extend_from_slice(b"BLKL");
         data.push(0x01);
-        data.extend_from_slice(&2u32.to_le_bytes());
-        // Entry 1: [0xBB]
-        data.push(1);
-        data.push(0xBB);
-        data.extend_from_slice(&0u64.to_le_bytes());
-        // Entry 2: [0xAA] (unsorted)
-        data.push(1);
-        data.push(0xAA);
-        data.extend_from_slice(&0u64.to_le_bytes());
+        data.extend_from_slice(&0u32.to_le_bytes());
+        assert!(RegistryPayload::parse(&data).is_err());
+    }
 
+    #[test]
+    fn test_registry_payload_rejects_unsorted() {
+        let data = make_blkl_v2(&[(&[0xBB], 0), (&[0xAA], 0)]);
+        assert!(RegistryPayload::parse(&data).is_err());
+    }
+
+    #[test]
+    fn test_registry_payload_rejects_duplicate() {
+        let data = make_blkl_v2(&[(&[0xAA], 0), (&[0xAA], 100)]);
+        assert!(RegistryPayload::parse(&data).is_err());
+    }
+
+    #[test]
+    fn test_registry_payload_rejects_truncated() {
+        // Truncate in the middle of an entry
+        let mut data = make_blkl_v2(&[(&[0xAA, 0xBB], 0)]);
+        data.truncate(data.len() - 4);
         assert!(RegistryPayload::parse(&data).is_err());
     }
 }

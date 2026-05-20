@@ -1,0 +1,234 @@
+---
+title: Your First Firewall Integration
+description: A hands-on tutorial — inspect the live registry, pre-flight a transaction, and see the SDK block a blacklisted output.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+By the end of this tutorial you will have:
+
+- Installed the CLI and inspected the live testnet registry
+- Run a pre-flight check from TypeScript and seen it block a blacklisted output before signing
+- Understood how to swap in the live registry for production use
+
+No testnet CKB is required. All steps work against the public testnet node.
+
+## Prerequisites
+
+- Node.js 20 or later
+- A terminal
+
+## Part 1 — CLI inspection
+
+### 1. Install the CLI
+
+```bash
+npm install -g @ckb-firewall/cli
+```
+
+Verify it works:
+
+```bash
+ckb-firewall --version
+```
+
+### 2. Inspect the live registry
+
+```bash
+ckb-firewall inspect
+```
+
+The CLI discovers the current registry cell automatically and prints all blacklisted entries with their status and expiry dates. If the registry is empty, you will see:
+
+```
+No entries — blacklist is empty.
+```
+
+Either way, you have just read the live on-chain blacklist. The registry cell's outpoint is printed in the header — this is the value that changes after every governance update.
+
+### 3. Check a specific address
+
+```bash
+ckb-firewall check --lock-args 0xdeadbeef00000000000000000000000000000000
+```
+
+If the address is not on the blacklist you will see:
+
+```
+✔ Not blacklisted: 0xdeadbeef00000000000000000000000000000000
+  Registry: 0x0e96b7...  (0 entries)
+```
+
+If it is on the blacklist you will see a red `BLACKLISTED` status with the expiry date.
+
+## Part 2 — TypeScript pre-flight
+
+### 4. Create a project and install the SDK
+
+```bash
+mkdir firewall-tutorial && cd firewall-tutorial
+npm init -y
+npm install @ckb-firewall/sdk
+```
+
+Add `"type": "module"` to `package.json` (the SDK is ESM-only):
+
+```json
+{
+  "type": "module"
+}
+```
+
+### 5. Write a pre-flight check
+
+Create `check.mjs`:
+
+```js
+import {
+  TransactionFirewall,
+  fetchRegistryPayload,
+  findRegistryCell,
+} from "@ckb-firewall/sdk";
+
+// ── Part A: local registry (no network) ──────────────────────────────────────
+//
+// Build a synthetic registry in memory to see the SDK block a known address.
+// This demonstrates the behaviour even when the live registry is empty.
+
+const BLOCKED_ARGS = "0xdeadbeef00000000000000000000000000000000";
+
+// A minimal BLKL v2 payload with one entry for BLOCKED_ARGS.
+// In production you get this from fetchRegistryPayload; here we build it
+// in memory so the tutorial works without any governance state on testnet.
+function buildTestRegistry(lockedArgs) {
+  const id = lockedArgs.replace(/^0x/, "");
+  const idBytes = id.length / 2;
+  const idHex = id;
+  const expiresAt = "0000000000000000"; // permanent
+
+  const govHeaderLen = "4600"; // 70 bytes, minimal header (1+1+1+33+2+32)
+  const govHeader =
+    "01" +     // gh_version
+    "01" +     // signer_count
+    "01" +     // threshold
+    "03" + "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f" + // pubkey
+    "0000" +   // validator_count = 0
+    "00".repeat(32); // validator_merkle_root
+
+  const entryCount = "01000000"; // 1 entry, little-endian u32
+  const entry =
+    idBytes.toString(16).padStart(2, "0") + // identifier_len
+    idHex +                                  // identifier bytes
+    expiresAt;                               // expires_at
+
+  const hex = "0x" + "424c4b4c" + "02" + govHeaderLen + govHeader + entryCount + entry;
+  return hex;
+}
+
+// A RegistrySpecLike identifying our test registry by a dummy typeIdValue.
+const TEST_SPEC = {
+  codeHash: "0x" + "aa".repeat(32),
+  hashType: "type",
+  typeIdValue: "0x" + "bb".repeat(32),
+  required: true,
+};
+
+// 66-byte v2 type args: version(0x02) + gov_code_hash(32) + gov_hash_type(0x00) + type_id_value(32)
+const TEST_TYPE_ARGS = "0x02" + "00".repeat(32) + "00" + "bb".repeat(32);
+
+const firewall = new TransactionFirewall({ registries: [TEST_SPEC] });
+
+const testDep = {
+  type: { codeHash: TEST_SPEC.codeHash, hashType: "type", args: TEST_TYPE_ARGS },
+  data: buildTestRegistry(BLOCKED_ARGS),
+};
+
+// A transaction sending to the blocked address — should be rejected.
+const blocked = firewall.checkTransaction({
+  cellDeps: [testDep],
+  outputs: [{ lockArgs: BLOCKED_ARGS }],
+});
+
+console.log("Blocked output →", blocked);
+// Expected: { ok: false, code: 11, reason: 'BlacklistedLockArgs' }
+
+// A transaction sending to a clean address — should pass.
+const clean = firewall.checkTransaction({
+  cellDeps: [testDep],
+  outputs: [{ lockArgs: "0xcafe0000000000000000000000000000000000" }],
+});
+
+console.log("Clean output  →", clean);
+// Expected: { ok: true }
+
+// ── Part B: live registry (testnet) ──────────────────────────────────────────
+//
+// Replace the synthetic dep with the actual live registry from testnet.
+// Uncomment this block to run against real data.
+
+/*
+const REGISTRY_SPEC = {
+  codeHash: "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+  hashType: "type",
+  typeIdValue: "0xcd5d844661356e465c27b7d693e84f20e884da63153d2f6f40381ceb0807761c",
+  required: true,
+};
+
+const RPC = "https://testnet.ckb.dev";
+
+const { txHash, index } = await findRegistryCell(RPC, REGISTRY_SPEC);
+const payload = await fetchRegistryPayload(RPC, txHash, index);
+
+console.log(`Live registry: ${payload.entries.length} entries`);
+console.log("First entry:", payload.entries[0]);
+*/
+```
+
+### 6. Run it
+
+```bash
+node check.mjs
+```
+
+Expected output:
+
+```
+Blocked output → { ok: false, code: 11, reason: 'BlacklistedLockArgs' }
+Clean output   → { ok: true }
+```
+
+The SDK rejected the transaction before it was signed or broadcast. Code `11` is `BlacklistedLockArgs` — the output's lock args matched an entry in the registry.
+
+### 7. Plug in the live registry
+
+Uncomment the "Part B" block at the bottom of `check.mjs` and run again:
+
+```bash
+node check.mjs
+```
+
+`findRegistryCell` queries the CKB indexer and returns the current outpoint regardless of governance updates. `fetchRegistryPayload` fetches and parses the BLKL v2 payload. Any address in `payload.entries` would produce `BlacklistedLockArgs` if used as a transaction output.
+
+<Aside type="tip" title="The CLI does the same thing">
+`ckb-firewall inspect` and `ckb-firewall check` run equivalent logic against the live registry. The SDK gives you the same check in your own code path.
+</Aside>
+
+## What you just built
+
+- **Inspection**: you read the live on-chain blacklist using the CKB indexer
+- **Pre-flight**: you ran the same check the firewall lock runs at consensus, before signing
+- **Live wiring**: you saw how to swap a synthetic registry for the real one
+
+## The consensus layer
+
+The SDK check runs in your process. If something skips it, nothing stops the transaction at the application layer.
+
+The **firewall lock** runs on every CKB node during validation. If the spent cell uses the firewall lock and an output is blacklisted, the network rejects the transaction regardless of what your application code did. You do not need to trust every code path; the lock enforces the policy unconditionally.
+
+See [Why this exists](/concepts/why-this-exists/) for the full reasoning.
+
+## Next steps
+
+- [Wallet integration](/getting-started/wallet-integration/) — protect a real wallet cell with the firewall lock
+- [TypeScript SDK](/getting-started/typescript-sdk/) — all SDK patterns in one place
+- [Blacklisting an address](/getting-started/blacklist-guide/) — full governance flow for adding entries

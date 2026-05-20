@@ -1,39 +1,64 @@
 {
   "_comment": [
-    "Values read from CKB testnet.",
-    "registryScript: type script of the live BLKL registry cell — use as FirewallConfig.registryScript.",
-    "canonicalRegistryCell: live cell dep whose data is a BLKL v1 payload.",
-    "firewallLockDeployOutPoint: deployed firewall-lock contract binary cell (RISC-V ELF, not BLKL).",
-    "blacklistRegistryTypeScriptDeployOutPoint: deployed blacklist-registry contract binary cell (RISC-V ELF, not BLKL).",
-    "deploymentHistory: log of past deployments for upgrade traceability."
+    "Values read from CKB testnet (2026-05-20 deployment).",
+    "registrySpec: RegistrySpecLike for FirewallConfig.registries — matches by type_id_value (bytes 34..66 of v2 type args).",
+    "canonicalRegistryCell: live BLKL v2 registry cell bootstrapped with real governance-lock and testnet committee.",
+    "canonicalRegistryCell.typeArgs: 66-byte v2 type args (version=0x02 | gov_code_hash(32) | gov_hash_type(1) | type_id_value(32)).",
+    "The governance-lock Type ID is 0x92fa5c01... — survives future governance-lock upgrades.",
+    "firewallLockDeployOutPoint: firewall-lock v2 multi-registry binary (RISC-V ELF).",
+    "blacklistRegistryDeployOutPoint: blacklist-registry v2 binary with corrected CellInput offset (RISC-V ELF).",
+    "governanceLockDeployOutPoint: real secp256k1 multisig governance-lock reading committee keys from BLKL header."
   ],
   "rpcUrl": "https://testnet.ckb.dev",
-  "registryScript": {
+  "registrySpec": {
     "codeHash": "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
     "hashType": "type",
-    "args": "0x019bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce80114003f54dea35bcc7a0efef541d361799f77bd1b8581"
+    "typeIdValue": "0xcd5d844661356e465c27b7d693e84f20e884da63153d2f6f40381ceb0807761c",
+    "required": true
   },
   "canonicalRegistryCell": {
-    "txHash": "0x57edc162ddd476d970b8a65558466ca11bb1762be9366fd12c76d620fe695fb7",
+    "txHash": "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3",
     "index": 0,
-    "data": "0x424c4b4c010100000020ec2cd50681d6b1b71fd762734c6b212c074ffa52fc6aed9aa6bf3566f58a9c150000000000000000"
+    "typeArgs": "0x0292fa5c01b7e6da7f1eda00a7295042c20d84dcb8bc1aa31171ca02b7c82c467201cd5d844661356e465c27b7d693e84f20e884da63153d2f6f40381ceb0807761c",
+    "data": "0x424c4b4c02ca00010503031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f024d4b6cd1361032ca9bd2aeb9d900aa4d45d9ead80ac9423374c451a7254d076602531fe6068134503d2723133227c867ac8fa6c83c537e9a44c3c5bdbdcb1fe33703462779ad4aad39514614751a71085f2f10e1c7a593e4e030efb5b8721ce55b0b0362c0a046dacce86ddd0343c6d3c7c79c2208ba0d9c9cf24a6d046d21d21f90f70500abe419a5d3a5e3fa1c074ea03fc46955647325ebeed8f82c7f131c1b9191dd6000000000"
   },
   "firewallLockDeployOutPoint": {
-    "txHash": "0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed",
+    "txHash": "0x128193cc2d547b224ccf10a6e299cb0749c633c5f9354ff5a9a5fd3e894318d2",
     "index": 0
   },
-  "blacklistRegistryTypeScriptDeployOutPoint": {
-    "txHash": "0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed",
+  "blacklistRegistryDeployOutPoint": {
+    "txHash": "0x128193cc2d547b224ccf10a6e299cb0749c633c5f9354ff5a9a5fd3e894318d2",
     "index": 1
+  },
+  "governanceLockDeployOutPoint": {
+    "txHash": "0xe2129b256b7dd73606a33945000dcd7f1111bb9d1f8d58a21e4b8277d1187f8e",
+    "index": 0
+  },
+  "spawnAwareSecp256k1DeployOutPoint": {
+    "txHash": "0x0fe5d47662724a3620c002683d8c3f38103359c7e1ca697196b39442317c709e",
+    "index": 0
+  },
+  "typeIds": {
+    "firewallLock":          "0x8192c9df809976ae9b093dd0d6b072a96101be8cffe61a7e9ac87c04e1f4dc54",
+    "blacklistRegistry":     "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+    "governanceLock":        "0x92fa5c01b7e6da7f1eda00a7295042c20d84dcb8bc1aa31171ca02b7c82c4672",
+    "spawnAwareSecp256k1":   "0x9be62e0423d4278b15c071bb881a4ebf936f7e46b3df0f152de50ae416f54465"
   },
   "deploymentHistory": [
     {
       "txHash": "0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed",
-      "blockNumber": "0x141be3d",
-      "blockHash": "0x267832c57f3a37b36c29333ee5d48c1784a9e560f435a40af20bea3ff53e55f3",
       "date": "2026-05-14",
-      "note": "0.2.0 release — contract binary upgrade; TYPE_IDs and registryScript unchanged"
+      "note": "0.2.0 release — v1 contract upgrade; placeholder governance-lock"
+    },
+    {
+      "contracts": {
+        "governanceLock": "0xe2129b256b7dd73606a33945000dcd7f1111bb9d1f8d58a21e4b8277d1187f8e:0",
+        "firewallLock":   "0x128193cc2d547b224ccf10a6e299cb0749c633c5f9354ff5a9a5fd3e894318d2:0",
+        "blacklistRegistry": "0x128193cc2d547b224ccf10a6e299cb0749c633c5f9354ff5a9a5fd3e894318d2:1"
+      },
+      "registry": "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3:0",
+      "date": "2026-05-20",
+      "note": "v2 full deployment — real governance-lock with secp256k1 multisig; blacklist-registry with CellInput struct fix; BLKL v2 registry bootstrapped with testnet committee"
     }
-  ],
-  "exampleEmptyRegistryPayloadHex": "0x424c4b4c0100000000"
+  ]
 }

@@ -20,52 +20,61 @@ A type script identity is the triple:
 
 The Firewall lock args encode this triple so the script can locate the registry `cell_dep` without pinning a mutable outpoint. Wallet cells do not need lock-arg updates when the registry cell is replaced, as long as the registry’s type script identity is unchanged.
 
-## `args` layout (v1 frozen)
+## `args` layout (v2)
 
-All multi-byte integers are little-endian. Fields are parsed **in order**; variable-length segments use explicit length prefixes.
+All multi-byte integers are little-endian. Fields are parsed **in order**.
 
 | Offset | Size | Field | Rule |
 |---|---:|---|---|
-| 0 | 1 | `version` | MUST be `0x01` |
-| 1 | 1 | `flags` | bit0: check output `lock_args`; bit1: check output `type_args`; bits 2-7 reserved and MUST be `0` |
-| 2 | 32 | `registry_code_hash` | Expected registry cell **type script** `code_hash` |
-| 34 | 1 | `registry_hash_type` | Expected registry cell **type script** `hash_type` |
-| 35 | 2 | `registry_type_args_len_le` | LE `u16` byte length `N` of `registry_type_args` |
-| 37 | N | `registry_type_args` | Expected registry cell **type script** `args` (exact bytes) |
-| 37+N | 32 | `inner_code_hash` | Wrapped inner lock `code_hash` |
-| 69+N | 1 | `inner_hash_type` | `0x00=data`, `0x01=type`, `0x02=data1` |
-| 70+N | 2 | `inner_args_len_le` | LE `u16` byte length `M` of `inner_args` |
-| 72+N | M | `inner_args` | Raw inner lock `args` payload |
+| 0 | 1 | `version` | MUST be `0x02` |
+| 1 | 1 | `flags` | bit0: check output `lock_args`; bit1: check output `type_args`; bits 2-7 reserved and MUST be `0`; MUST have at least one bit set |
+| 2 | 1 | `registry_count` | Number of registry specs that follow (`0`–`255`) |
+| 3 | 66×N | `registry_specs` | N registry specs, each 66 bytes (see below) |
+| 3+66N | 32 | `inner_code_hash` | Wrapped inner lock `code_hash` |
+| 35+66N | 1 | `inner_hash_type` | `0x00=data`, `0x01=type`, `0x02=data1` |
+| 36+66N | 2 | `inner_args_len_le` | LE `u16` byte length `M` of `inner_args` |
+| 38+66N | M | `inner_args` | Raw inner lock `args` payload |
+
+**Registry spec (66 bytes each)**
+
+| Offset | Size | Field | Rule |
+|---|---:|---|---|
+| 0 | 32 | `code_hash` | Registry cell type script `code_hash` (blacklist-registry Type ID) |
+| 32 | 1 | `hash_type` | Registry cell type script `hash_type` |
+| 33 | 32 | `type_id_value` | Bytes 34..66 of the 66-byte v2 registry type args; stable across governance-lock upgrades |
+| 65 | 1 | `required` | `0x00` = optional, any non-zero = required |
 
 **Layout invariants**
 
-- Total `args` length MUST equal `72 + N + M` bytes.
-- `registry_type_args_len_le` MUST equal `N` and MUST match the following `registry_type_args` length.
-- `inner_args_len_le` MUST equal `M` and MUST match the following `inner_args` length.
+- Total `args` length MUST equal `38 + 66×N + M` bytes (minimum 38 when N=0, M=0).
 - Any violation is `InvalidArgsLayout`.
+- Registry cells are matched by `code_hash + hash_type + type_id_value`; the governance code hash (bytes 1..33 of the registry type args) is NOT part of the match, so wallet cells survive governance-lock upgrades without lock-arg changes.
 
 ## Required Dependencies
 
 Transactions spending firewall-protected inputs must include:
 
-- `cell_dep` set that contains **exactly one** live cell whose **type script** byte-matches `(registry_code_hash, registry_hash_type, registry_type_args)`.
+- For each required registry spec: **exactly one** live cell dep whose type script matches `(code_hash, hash_type, type_id_value)`.
 - `cell_dep` entries required by the wrapped inner lock (code references, etc.).
 
 If required deps are missing, the script returns a hard failure.
 
 ## Registry dep selection (normative)
 
+For each registry spec in the lock args:
+
 1. Iterate all transaction `cell_deps` that resolve to a **live cell** carrying a **type script**.
-2. A cell is a **registry candidate** if its type script satisfies:
-   - `type.code_hash == registry_code_hash`
-   - `type.hash_type == registry_hash_type`
-   - `type.args == registry_type_args` (byte equality)
+2. A cell is a **registry candidate** for spec S if its type script satisfies:
+   - `type.code_hash == S.code_hash`
+   - `type.hash_type == S.hash_type`
+   - `type.args` is 66 bytes AND `type.args[34..66] == S.type_id_value`
 3. Count candidates:
-   - **zero** → return `MissingRegistryCellDep`
-   - **one** → use that cell’s data as the registry payload
+   - **zero** and `S.required` → return `MissingRegistryCellDep`
+   - **zero** and not `S.required` → skip this registry
+   - **one** → use that cell’s data as a registry payload
    - **more than one** → return `AmbiguousRegistryCellDep`
 
-This rule eliminates arbitrary dep choice when multiple cells could otherwise satisfy a looser predicate.
+The effective blacklist is the **union** of all resolved registry payloads. This rule eliminates arbitrary dep choice while allowing multi-registry configurations.
 
 ## Validation Algorithm (high level)
 
@@ -89,7 +98,7 @@ Governance SHOULD still publish a registry replacement that drops expired tempor
 ## Registry Payload Expectations
 
 - Deterministic binary format with explicit version byte.
-- Magic MUST be `BLKL` (4 bytes) for v1 payload parsing.
+- Magic MUST be `BLKL` (4 bytes) for v2 payload parsing.
 - Sorted entries for stable lookup behavior (when the schema uses a sorted list).
 - Integrity guaranteed by registry type script, not by lock script signatures.
 

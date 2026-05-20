@@ -1,4 +1,4 @@
-import type { ScriptLike } from "@ckb-firewall/sdk";
+import type { RegistrySpecLike } from "@ckb-firewall/sdk";
 
 interface RpcResponse<T> {
   jsonrpc: string;
@@ -7,17 +7,50 @@ interface RpcResponse<T> {
   error?: { code: number; message: string };
 }
 
+const DEFAULT_RPC_TIMEOUT_MS = 15_000;
+
+function rpcTimeoutMs(): number {
+  const raw = process.env.CKB_FIREWALL_RPC_TIMEOUT_MS;
+  if (!raw) return DEFAULT_RPC_TIMEOUT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_RPC_TIMEOUT_MS;
+}
+
 async function call<T>(
   url: string,
   method: string,
   params: unknown[],
 ): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
-  });
-  const json = (await res.json()) as RpcResponse<T>;
+  const timeoutMs = rpcTimeoutMs();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`RPC ${method} timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!res.ok) {
+    throw new Error(`RPC ${method} HTTP ${res.status} ${res.statusText}`.trim());
+  }
+
+  let json: RpcResponse<T>;
+  try {
+    json = (await res.json()) as RpcResponse<T>;
+  } catch {
+    throw new Error(`RPC ${method} returned invalid JSON`);
+  }
   if (json.error) throw new Error(`RPC ${method}: ${json.error.message}`);
   if (json.result === undefined)
     throw new Error(`RPC ${method} returned no result`);
@@ -71,30 +104,50 @@ export async function getLiveCell(
 }
 
 // Finds the live registry cell by querying the indexer (requires CKB node with indexer enabled).
+//
+// Queries by codeHash + version prefix "0x02" so the result survives governance-lock
+// upgrades — the governance code hash (bytes 1..33 of the type args) can change without
+// affecting this lookup. Filters client-side by typeIdValue (bytes 34..66 of the 66-byte args).
 export async function findLiveRegistryCell(
   rpcUrl: string,
-  registryScript: ScriptLike,
+  spec: RegistrySpecLike,
 ): Promise<{ txHash: string; index: number; data: string }> {
   const result = await call<{
     objects: Array<{
       out_point: { tx_hash: string; index: string };
       output_data: string;
+      output: { type?: { args: string } | null };
     }>;
   }>(rpcUrl, "get_cells", [
     {
       script: {
-        code_hash: registryScript.codeHash,
-        hash_type: registryScript.hashType,
-        args: registryScript.args,
+        code_hash: spec.codeHash,
+        hash_type: spec.hashType,
+        args: "0x02",
       },
       script_type: "type",
     },
-    "asc",
-    "0x1",
+    "desc",
+    "0x10",
   ]);
 
-  const cell = result.objects[0];
-  if (!cell) throw new Error("No live registry cell found for the registry script.");
+  // type args: version(1 byte=2 hex) + gov_code_hash(32=64) + gov_hash_type(1=2) + type_id_value(32=64)
+  // total 132 hex chars; type_id_value starts at offset 68
+  const typeIdClean = spec.typeIdValue.replace(/^0x/, "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(typeIdClean)) {
+    throw new Error(`Invalid registry typeIdValue: expected 32 bytes hex, got "${spec.typeIdValue}"`);
+  }
+  const cell = result.objects.find((obj) => {
+    const args = (obj.output?.type?.args ?? "").replace(/^0x/, "").toLowerCase();
+    return args.length === 132 && args.slice(68, 132) === typeIdClean;
+  });
+
+  if (!cell) {
+    throw new Error(
+      `No live registry cell found for typeIdValue ${spec.typeIdValue}. ` +
+      "Ensure the CKB node has the built-in indexer enabled (required for get_cells).",
+    );
+  }
 
   return {
     txHash: cell.out_point.tx_hash,

@@ -1,4 +1,4 @@
-import { parseRegistryPayload, resolveRegistryDep } from "./blacklist.js";
+import { parseRegistryPayload, resolveRegistryDeps } from "./blacklist.js";
 import {
   AmbiguousRegistryCellDepError,
   InvalidRegistryDataError,
@@ -31,11 +31,15 @@ export class TransactionFirewall {
   constructor(private readonly config: FirewallConfig) {}
 
   checkTransaction(tx: UnsignedTxLike): FirewallDecision {
-    let registryIds: Set<string>;
+    const registryIds = new Set<string>();
     try {
-      const dep = resolveRegistryDep(tx.cellDeps, this.config.registryScript);
-      const payload = parseRegistryPayload(dep.data);
-      registryIds = new Set(payload.entries.map((e) => normalize(e.identifier)));
+      const deps = resolveRegistryDeps(tx.cellDeps, this.config.registries);
+      for (const dep of deps) {
+        const payload = parseRegistryPayload(dep.data);
+        for (const entry of payload.entries) {
+          registryIds.add(normalize(entry.identifier));
+        }
+      }
     } catch (err: unknown) {
       return mapUnknownToDecision(err);
     }

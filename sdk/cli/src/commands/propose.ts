@@ -249,6 +249,39 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
 
   saveProposal(proposal);
 
+  // ── timing warnings ──────────────────────────────────────────────────────
+
+  // Warn if a temporary entry would expire before the governance process can complete.
+  // Minimum realistic timeline: 72h review + ~24h voting + ~24h signing = ~120h.
+  const MIN_GOVERNANCE_SECONDS = 120 * 60 * 60;
+  if (expiresAt !== "0") {
+    const expiryUnix = Number(expiresAt);
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const timeUntilExpiry = expiryUnix - nowUnix;
+    if (timeUntilExpiry < MIN_GOVERNANCE_SECONDS) {
+      const hRemaining = Math.floor(timeUntilExpiry / 3600);
+      console.log();
+      console.log(logSymbols.warning, chalk.yellow(
+        `Expiry warning: this entry expires in ~${hRemaining}h, but the full governance ` +
+        `flow (72h review + voting + signing) takes at least 120h. ` +
+        `The entry may expire before it can be executed.`,
+      ));
+    }
+  }
+
+  // ── IPFS hint ────────────────────────────────────────────────────────────
+
+  const looksLikeUrl = /^https?:\/\//.test(evidence);
+  const looksLikeTxHash = /^0x[0-9a-fA-F]{64}$/.test(evidence);
+  if (!looksLikeUrl && !looksLikeTxHash) {
+    console.log();
+    console.log(chalk.dim(
+      "  Tip: consider pinning your evidence to IPFS for decentralized, " +
+      "tamper-evident archival:\n" +
+      "  ipfs add <evidence-file>  →  include the resulting CID as evidence in future proposals.",
+    ));
+  }
+
   // ── output ───────────────────────────────────────────────────────────────
 
   console.log();
@@ -262,10 +295,10 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
   console.log(`  Stored at:    ${getProposalsDir()}`);
   console.log();
   console.log(chalk.bold("Next steps:"));
-  console.log(`  1. Share the proposal ID ${chalk.bold(proposal.id)} with validators for the 72-hour review.`);
-  console.log(`  2. Collect votes:   ${chalk.dim(`ckb-firewall vote --proposal ${proposal.id}`)}`);
-  console.log(`  3. Sign (3-of-5):   ${chalk.dim(`ckb-firewall sign --proposal ${proposal.id}`)}`);
-  console.log(`  4. Execute:         ${chalk.dim(`ckb-firewall execute --proposal ${proposal.id}`)}`);
+  console.log(`  1. Export and share:  ${chalk.dim(`ckb-firewall export --proposal ${proposal.id} --out proposal-${proposal.id}.json`)}`);
+  console.log(`  2. Collect votes:     ${chalk.dim(`ckb-firewall vote --proposal ${proposal.id}`)}`);
+  console.log(`  3. Sign (3-of-5):     ${chalk.dim(`ckb-firewall sign --proposal ${proposal.id}`)}`);
+  console.log(`  4. Execute:           ${chalk.dim(`ckb-firewall execute --proposal ${proposal.id}`)}`);
   console.log();
   printHints("propose");
 }
