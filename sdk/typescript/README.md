@@ -24,15 +24,18 @@ Node 20+. ESM only (`import`; no `require`).
 import { TransactionFirewall } from "@ckb-firewall/sdk";
 
 const firewall = new TransactionFirewall({
-  registryScript: {
-    codeHash: "0x...",
-    hashType: "type",
-    args: "0x...",
-  },
+  registries: [
+    {
+      codeHash: "0x...",
+      hashType: "type",
+      typeIdValue: "0x...", // 32-byte hex, bytes 34..66 of the v2 registry type args
+      required: true,
+    },
+  ],
 });
 
 const result = firewall.checkTransaction({
-  cellDeps: [{ type: registryScript, data: registryData }],
+  cellDeps: [{ type: registryScriptType, data: registryData }],
   outputs: [{ lockArgs: "0x..." }],
 });
 
@@ -56,7 +59,7 @@ If your cells don't use the Firewall lock, the SDK still works as a standalone p
 
 ## Testnet
 
-The canonical testnet registry values are in [`notes/deployments/testnet.registry.json`](../../notes/deployments/testnet.registry.json). Use those for `registryScript` against `https://testnet.ckb.dev`.
+The canonical testnet registry values are in [`notes/deployments/testnet.registry.json`](../../notes/deployments/testnet.registry.json). The `registrySpec` object in that file maps directly to a `RegistrySpecLike` entry in the `registries` array.
 
 ## Result codes
 

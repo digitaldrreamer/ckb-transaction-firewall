@@ -4,7 +4,7 @@ import {
   MissingRegistryCellDepError,
   RegistryNotSortedError,
 } from "./errors.js";
-import type { CellDepLike, RegistryPayload, ScriptLike } from "./types.js";
+import type { CellDepLike, GovernanceHeader, RegistryPayload, RegistrySpecLike } from "./types.js";
 
 function strip0x(hex: string): string {
   return hex.startsWith("0x") ? hex.slice(2) : hex;
@@ -49,30 +49,71 @@ function bytesToHex(bytes: Uint8Array): string {
     .join("")}`;
 }
 
-function eqScript(a: ScriptLike, b: ScriptLike): boolean {
-  return (
-    a.codeHash.toLowerCase() === b.codeHash.toLowerCase() &&
-    a.hashType === b.hashType &&
-    strip0x(a.args).toLowerCase() === strip0x(b.args).toLowerCase()
-  );
+function compareIdentifiers(a: string, b: string): number {
+  const ab = hexToBytes(a);
+  const bb = hexToBytes(b);
+  const len = Math.min(ab.length, bb.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (ab[i] as number) - (bb[i] as number);
+    if (diff !== 0) return diff;
+  }
+  return ab.length - bb.length;
 }
 
-export function resolveRegistryDep(
+
+/// Resolves each RegistrySpecLike to the matching cell dep.
+///
+/// Matches on: code_hash + hash_type + dep.type.args[34..66] == spec.typeIdValue
+/// (v2 registry type args are exactly 66 bytes; type_id_value occupies bytes 34..66).
+///
+/// Returns the resolved CellDepLike for each spec in order.
+/// Required specs with no match → MissingRegistryCellDepError.
+/// Specs with multiple matches → AmbiguousRegistryCellDepError.
+export function resolveRegistryDeps(
   deps: CellDepLike[],
-  expectedRegistryScript: ScriptLike,
-): CellDepLike {
-  const matches = deps.filter((d) => d.type && eqScript(d.type, expectedRegistryScript));
-  if (matches.length === 0) {
-    throw new MissingRegistryCellDepError();
+  specs: RegistrySpecLike[],
+): CellDepLike[] {
+  const resolved: CellDepLike[] = [];
+  for (const spec of specs) {
+    const expectedCode = strip0x(spec.codeHash).toLowerCase();
+    const expectedTypeId = strip0x(spec.typeIdValue).toLowerCase();
+    const matches = deps.filter((d) => {
+      if (!d.type) return false;
+      if (strip0x(d.type.codeHash).toLowerCase() !== expectedCode) return false;
+      if (d.type.hashType !== spec.hashType) return false;
+      const args = strip0x(d.type.args).toLowerCase();
+      // v2 type args: 66 bytes = 132 hex chars; type_id_value at chars 68..132
+      if (args.length !== 132) return false;
+      return args.slice(68) === expectedTypeId;
+    });
+    if (matches.length === 0) {
+      if (spec.required) throw new MissingRegistryCellDepError();
+    } else if (matches.length > 1) {
+      throw new AmbiguousRegistryCellDepError();
+    } else {
+      const dep = matches[0];
+      if (dep !== undefined) resolved.push(dep);
+    }
   }
-  if (matches.length > 1) {
-    throw new AmbiguousRegistryCellDepError();
+  return resolved;
+}
+
+function parseGovernanceHeader(data: Uint8Array, offset: number): GovernanceHeader {
+  if (offset + 3 > data.length) throw new InvalidRegistryDataError();
+  const ghVersion = readU8(data, offset);
+  const signerCount = readU8(data, offset + 1);
+  const threshold = readU8(data, offset + 2);
+  let pos = offset + 3;
+  if (pos + 33 * signerCount + 2 + 32 > data.length) throw new InvalidRegistryDataError();
+  const pubkeys: Uint8Array[] = [];
+  for (let i = 0; i < signerCount; i++) {
+    pubkeys.push(data.slice(pos, pos + 33));
+    pos += 33;
   }
-  const dep = matches[0];
-  if (dep === undefined) {
-    throw new MissingRegistryCellDepError();
-  }
-  return dep;
+  const validatorCount = (readU8(data, pos) | (readU8(data, pos + 1) << 8)) >>> 0;
+  pos += 2;
+  const validatorMerkleRoot = data.slice(pos, pos + 32);
+  return { version: ghVersion, signerCount, threshold, pubkeys, validatorCount, validatorMerkleRoot };
 }
 
 export function parseRegistryPayload(registryDataHex: string): RegistryPayload {
@@ -89,18 +130,24 @@ export function parseRegistryPayload(registryDataHex: string): RegistryPayload {
     throw new InvalidRegistryDataError();
   }
   const version = readU8(data, 4);
-  if (version !== 0x01) {
+  if (version !== 0x02) {
     throw new InvalidRegistryDataError();
   }
 
+  if (data.length < 7) throw new InvalidRegistryDataError();
+  const govHeaderLen = (readU8(data, 5) | (readU8(data, 6) << 8)) >>> 0;
+  if (data.length < 7 + govHeaderLen + 4) throw new InvalidRegistryDataError();
+  const governanceHeader = parseGovernanceHeader(data, 7);
+  let offset = 7 + govHeaderLen;
+
   const count =
     (
-      readU8(data, 5) |
-      (readU8(data, 6) << 8) |
-      (readU8(data, 7) << 16) |
-      (readU8(data, 8) << 24)
+      readU8(data, offset) |
+      (readU8(data, offset + 1) << 8) |
+      (readU8(data, offset + 2) << 16) |
+      (readU8(data, offset + 3) << 24)
     ) >>> 0;
-  let offset = 9;
+  offset += 4;
   const entries: RegistryPayload["entries"] = [];
 
   for (let i = 0; i < count; i += 1) {
@@ -128,11 +175,10 @@ export function parseRegistryPayload(registryDataHex: string): RegistryPayload {
     if (cur === undefined || prev === undefined) {
       throw new InvalidRegistryDataError();
     }
-    // Duplicates are permitted (equal identifiers are still blacklisted); only strict descent is an error.
-    if (cur.identifier < prev.identifier) {
+    if (compareIdentifiers(cur.identifier, prev.identifier) <= 0) {
       throw new RegistryNotSortedError();
     }
   }
 
-  return { version, entries };
+  return { version, entries, governanceHeader };
 }
