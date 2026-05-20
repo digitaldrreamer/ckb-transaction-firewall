@@ -290,14 +290,16 @@ fn program_entry() -> Result<(), i8> {
     // Load witness and extract signer entries + GOV1 v2 payload.
     let witness = load_witness_fields(0, Source::GroupInput)?;
 
-    // Compute signing_message = blake2b(proposal_id_hash || vote_digest_hash).
+    // Compute signing_message = blake2b(tx_hash || proposal_id_hash || vote_digest_hash).
+    let tx_hash = ckb_std::high_level::load_tx_hash().map_err(|_| ERR_INVALID_ARGS)?;
     let (proposal_id_hash, vote_digest_hash) = parse_gov1_hashes(&witness.gov1_payload)?;
     if proposal_id_hash == [0u8; 32] || vote_digest_hash == [0u8; 32] {
         return Err(ERR_INVALID_WITNESS);
     }
-    let mut signing_preimage = [0u8; 64];
-    signing_preimage[..32].copy_from_slice(&proposal_id_hash);
-    signing_preimage[32..].copy_from_slice(&vote_digest_hash);
+    let mut signing_preimage = [0u8; 96];
+    signing_preimage[..32].copy_from_slice(&tx_hash);
+    signing_preimage[32..64].copy_from_slice(&proposal_id_hash);
+    signing_preimage[64..].copy_from_slice(&vote_digest_hash);
     let signing_message = blake2b_256(&signing_preimage);
 
     // Verify each signer and count unique valid signatures.
