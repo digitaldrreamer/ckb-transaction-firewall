@@ -5,7 +5,7 @@ use ckb_testtool::builtin::ALWAYS_SUCCESS;
 use ckb_testtool::ckb_types::{
     bytes::Bytes,
     core::{HeaderBuilder, ScriptHashType, TransactionBuilder},
-    packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, Script},
+    packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgs},
     prelude::*,
 };
 use ckb_testtool::context::Context;
@@ -222,10 +222,18 @@ fn build_tx_with_firewall_lock(
 
     let output = output_builder.build();
 
+    // The firewall lock reads WitnessArgs.lock before spawn_cell — it returns
+    // INNER_LOCK_REJECTED (15) immediately if the field is absent or empty.
+    // Tests use a dummy 65-byte signature; ALWAYS_SUCCESS ignores argv contents.
+    let dummy_witness = WitnessArgs::new_builder()
+        .lock(Some(Bytes::from(vec![0u8; 65])).pack())
+        .build();
+
     let mut tx_builder = TransactionBuilder::default()
         .input(input)
         .output(output)
         .output_data(Bytes::new().pack())
+        .witness(dummy_witness.as_bytes().pack())
         .cell_dep(
             CellDep::new_builder()
                 .out_point(firewall_script_out_point)
