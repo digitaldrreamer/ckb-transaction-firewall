@@ -81,6 +81,9 @@ export function extractGovernanceHeaderRaw(hex: string): Uint8Array | null {
 export function encodeRegistryPayload(payload: RegistryPayload, governanceHeaderRaw?: Uint8Array): Uint8Array {
   const encodedEntries = payload.entries.map((e) => {
     const id = hexToBytes(e.identifier);
+    if (id.length > 255) {
+      throw new Error(`Identifier too long: ${id.length} bytes (max 255). Entry: ${e.identifier.slice(0, 20)}…`);
+    }
     const buf = new Uint8Array(1 + id.length + 8);
     buf[0] = id.length;
     buf.set(id, 1);

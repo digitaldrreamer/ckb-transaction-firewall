@@ -4,8 +4,8 @@ import cfonts from "cfonts";
 import { inspectCommand, inspectDefaults } from "./commands/inspect.js";
 import { proposeCommand } from "./commands/propose.js";
 import { proposalsCommand } from "./commands/proposals.js";
-import { voteCommand } from "./commands/vote.js";
-import { signCommand } from "./commands/sign.js";
+import { voteCommand, voteDefaults } from "./commands/vote.js";
+import { signCommand, signDefaults } from "./commands/sign.js";
 import { executeCommand, executeDefaults } from "./commands/execute.js";
 import { exportCommand } from "./commands/export.js";
 import { importCommand } from "./commands/import.js";
@@ -27,7 +27,7 @@ function printBanner(): void {
 program
   .name("ckb-firewall")
   .description("Manage the CKB Transaction Firewall blacklist registry")
-  .version("0.2.0")
+  .version("0.2.3")
   .addHelpCommand(false);
 
 // ── inspect ──────────────────────────────────────────────────────────────────
@@ -97,25 +97,33 @@ program
 
 // ── vote ──────────────────────────────────────────────────────────────────────
 
+const voteDefs = voteDefaults();
+
 program
   .command("vote")
   .description("Record a cryptographically signed validator vote on a governance proposal")
   .option("--proposal <id>", "Proposal ID or hash")
   .option("--vote <choice>", "Vote: yes|no|abstain")
-  .option("--key <hex>", "32-byte validator private key in hex (prompted if omitted)")
-  .action(async (opts: { proposal?: string; vote?: string; key?: string }) => {
+  .option("--rpc-url <url>", "CKB node RPC URL", voteDefs.rpcUrl)
+  .option("--registry-tx <hash>", "Registry cell tx hash", voteDefs.registryTx)
+  .option("--registry-index <n>", "Registry cell output index", voteDefs.registryIndex)
+  .action(async (opts: { proposal?: string; vote?: string; rpcUrl: string; registryTx: string; registryIndex: string }) => {
     await voteCommand(opts);
   });
 
 // ── sign ──────────────────────────────────────────────────────────────────────
 
+const signDefs = signDefaults();
+
 program
   .command("sign")
   .description("Sign an approved proposal as a governance signer (secp256k1)")
   .option("--proposal <id>", "Proposal ID or hash")
-  .option("--signer-index <0-4>", "Your signer index in the governance set")
-  .option("--key <hex>", "32-byte private key in hex (prompted if omitted)")
-  .action(async (opts: { proposal?: string; signerIndex?: string; key?: string }) => {
+  .option("--signer-index <n>", "Your signer index in the governance set")
+  .option("--rpc-url <url>", "CKB node RPC URL", signDefs.rpcUrl)
+  .option("--registry-tx <hash>", "Registry cell tx hash", signDefs.registryTx)
+  .option("--registry-index <n>", "Registry cell output index", signDefs.registryIndex)
+  .action(async (opts: { proposal?: string; signerIndex?: string; rpcUrl: string; registryTx: string; registryIndex: string }) => {
     await signCommand(opts);
   });
 

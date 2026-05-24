@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 
-const { execSync } = require("node:child_process");
+const { execSync, execFileSync } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const { resolve } = require("node:path");
 
@@ -29,7 +29,14 @@ Notes:
 }
 
 function run(cmd) {
-  return execSync(cmd, { cwd: ROOT_DIR, stdio: "pipe", encoding: "utf8" });
+  // Split into program + args to avoid shell interpretation of metacharacters.
+  // Note: supports basic quoted args only — does not handle escaped quotes,
+  // shell variables ($VAR, $(cmd)), redirects, or pipes. Commands requiring
+  // those features should be implemented as helper scripts invoked directly.
+  const parts = cmd.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+  if (parts.length === 0) throw new Error(`Empty command string: ${JSON.stringify(cmd)}`);
+  const [program, ...args] = parts.map((p) => p.replace(/^['"]|['"]$/g, ""));
+  return execFileSync(program, args, { cwd: ROOT_DIR, stdio: "pipe", encoding: "utf8" });
 }
 
 function parseArgs(argv) {

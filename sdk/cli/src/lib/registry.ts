@@ -15,7 +15,7 @@ export async function resolveRegistryOutpoint(
   registryTx: string,
   registryIndex: number,
 ): Promise<{ txHash: string; index: number }> {
-  if (rpcUrl === TESTNET_RPC_URL && registryTx === TESTNET_REGISTRY_CELL.txHash) {
+  if (rpcUrl.replace(/\/$/, "") === TESTNET_RPC_URL && registryTx === TESTNET_REGISTRY_CELL.txHash) {
     try {
       const found = await findLiveRegistryCell(rpcUrl, TESTNET_REGISTRY_SPEC);
       return { txHash: found.txHash, index: found.index };

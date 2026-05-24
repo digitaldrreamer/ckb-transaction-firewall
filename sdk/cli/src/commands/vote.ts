@@ -13,15 +13,27 @@ import {
   VOTE_THRESHOLD,
   type VoteChoice,
 } from "../lib/proposals.js";
-import { hexToBytes, bytesToHex } from "../lib/blkl.js";
-import { computeMerkleProof } from "../lib/validator-set.js";
-import { TESTNET_GOVERNANCE_PUBKEYS } from "../lib/defaults.js";
+import { hexToBytes, bytesToHex, extractGovernanceHeaderRaw, parseGovernanceHeader } from "../lib/blkl.js";
+import { computeMerkleProof, computeMerkleRoot } from "../lib/validator-set.js";
+import { TESTNET_GOVERNANCE_PUBKEYS, TESTNET_REGISTRY_CELL, TESTNET_RPC_URL } from "../lib/defaults.js";
+import { getLiveCell } from "../lib/rpc.js";
+import { resolveRegistryOutpoint } from "../lib/registry.js";
 import { printHints } from "../lib/hints.js";
 
 export interface VoteOptions {
   proposal?: string;
   vote?: string;
-  key?: string;
+  rpcUrl: string;
+  registryTx: string;
+  registryIndex: string;
+}
+
+export function voteDefaults(): Partial<VoteOptions> {
+  return {
+    rpcUrl: TESTNET_RPC_URL,
+    registryTx: TESTNET_REGISTRY_CELL.txHash,
+    registryIndex: String(TESTNET_REGISTRY_CELL.index),
+  };
 }
 
 function isValidPrivKey(hex: string): boolean {
@@ -75,33 +87,24 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
 
   // ── private key → pubkey ─────────────────────────────────────────────────
 
-  let privateKeyBytes: Uint8Array;
-  if (opts.key) {
-    if (!isValidPrivKey(opts.key)) {
-      console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
-      process.exit(1);
-    }
-    privateKeyBytes = hexToBytes(opts.key);
-  } else {
-    console.log();
-    const { keyInput } = await inquirer.prompt<{ keyInput: string }>([
-      {
-        type: "password",
-        name: "keyInput",
-        message: "Validator private key (32-byte hex):",
-        mask: "*",
-      },
-    ]);
-    if (!keyInput.trim()) {
-      console.error(logSymbols.error, chalk.red("A private key is required. Pass --key <hex> or enter it at the prompt."));
-      process.exit(1);
-    }
-    if (!isValidPrivKey(keyInput.trim())) {
-      console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
-      process.exit(1);
-    }
-    privateKeyBytes = hexToBytes(keyInput.trim());
+  console.log();
+  const { keyInput } = await inquirer.prompt<{ keyInput: string }>([
+    {
+      type: "password",
+      name: "keyInput",
+      message: "Validator private key (32-byte hex):",
+      mask: "*",
+    },
+  ]);
+  if (!keyInput.trim()) {
+    console.error(logSymbols.error, chalk.red("A private key is required."));
+    process.exit(1);
   }
+  if (!isValidPrivKey(keyInput.trim())) {
+    console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
+    process.exit(1);
+  }
+  const privateKeyBytes = hexToBytes(keyInput.trim());
 
   const pubkeyBytes = secp256k1.getPublicKey(privateKeyBytes, true); // 33 bytes compressed
   const pubkey = bytesToHex(new Uint8Array(pubkeyBytes));
@@ -115,7 +118,31 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
     privateKeyBytes.fill(0);
     process.exit(1);
   }
-  const { proof: merkleProof, leafIndex: merkleLeafIndex } = merkleResult;
+  const { proof: merkleProof, leafIndex: merkleLeafIndex } = merkleResult!;
+
+  // Verify the local validator set matches the on-chain Merkle root so votes won't be
+  // silently rejected at execution time if the validator set has rotated.
+  const localRoot = computeMerkleRoot(validatorSet);
+  try {
+    const registryIndexInt = Number.parseInt(opts.registryIndex, 10);
+    const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, registryIndexInt);
+    const cell = await getLiveCell(opts.rpcUrl, txHash, index);
+    const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
+    const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
+    if (govHeader && govHeader.validatorCount > 0) {
+      const onChainRoot = bytesToHex(govHeader.validatorMerkleRoot);
+      if (onChainRoot.toLowerCase() !== localRoot.toLowerCase()) {
+        console.error(logSymbols.error, chalk.red(
+          "Validator set mismatch: local TESTNET_GOVERNANCE_PUBKEYS do not match the on-chain Merkle root.",
+        ));
+        console.error(chalk.dim("  This vote will be rejected at execution time. Update to the current validator set."));
+        privateKeyBytes.fill(0);
+        process.exit(1);
+      }
+    }
+  } catch {
+    console.log(chalk.dim("  Note: could not verify on-chain validator set — network unavailable, proceeding with local check."));
+  }
 
   // Duplicate check by pubkey.
   if (proposal.votes.some((v) => v.pubkey.toLowerCase() === pubkey.toLowerCase())) {
@@ -169,6 +196,15 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
   const signature = bytesToHex(sigBytes);
 
   // ── record vote ──────────────────────────────────────────────────────────
+
+  // Block new votes once signing has started — adding a vote would change voteDigestHash
+  // and invalidate any signatures already collected.
+  if (proposal.signatures.length > 0) {
+    console.error(logSymbols.error, chalk.red(
+      "Cannot record vote — signing has already begun. Adding a vote would invalidate existing signatures.",
+    ));
+    process.exit(1);
+  }
 
   proposal.votes.push({ pubkey, vote, timestamp, signature, merkleLeafIndex, merkleProof });
   proposal.voteDigestHash = computeVoteDigestHash(proposal.votes);

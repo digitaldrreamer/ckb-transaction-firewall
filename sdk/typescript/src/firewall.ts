@@ -1,15 +1,12 @@
 import { parseRegistryPayload, resolveRegistryDeps } from "./blacklist.js";
+import { isBlacklisted, isTypeArgsBlacklisted } from "./builder.js";
 import {
   AmbiguousRegistryCellDepError,
   InvalidRegistryDataError,
   MissingRegistryCellDepError,
   RegistryNotSortedError,
 } from "./errors.js";
-import type { FirewallConfig, FirewallDecision, UnsignedTxLike } from "./types.js";
-
-function normalize(hex: string): string {
-  return hex.startsWith("0x") ? hex.toLowerCase() : `0x${hex.toLowerCase()}`;
-}
+import type { FirewallConfig, FirewallDecision, RegistryPayload, UnsignedTxLike } from "./types.js";
 
 function mapUnknownToDecision(err: unknown): FirewallDecision {
   if (err instanceof MissingRegistryCellDepError) {
@@ -30,25 +27,23 @@ function mapUnknownToDecision(err: unknown): FirewallDecision {
 export class TransactionFirewall {
   constructor(private readonly config: FirewallConfig) {}
 
+  // Checks all outputs against the registry cell deps in the transaction.
+  // Uses expiry-aware binary search — expired entries do not block transactions,
+  // matching the behaviour of the on-chain firewall-lock contract.
   checkTransaction(tx: UnsignedTxLike): FirewallDecision {
-    const registryIds = new Set<string>();
+    let payloads: RegistryPayload[];
     try {
       const deps = resolveRegistryDeps(tx.cellDeps, this.config.registries);
-      for (const dep of deps) {
-        const payload = parseRegistryPayload(dep.data);
-        for (const entry of payload.entries) {
-          registryIds.add(normalize(entry.identifier));
-        }
-      }
+      payloads = deps.map((dep) => parseRegistryPayload(dep.data));
     } catch (err: unknown) {
       return mapUnknownToDecision(err);
     }
 
     for (const out of tx.outputs) {
-      if (registryIds.has(normalize(out.lockArgs))) {
+      if (isBlacklisted(out.lockArgs, payloads)) {
         return { ok: false, code: 11, reason: "BlacklistedLockArgs" };
       }
-      if (out.typeArgs && registryIds.has(normalize(out.typeArgs))) {
+      if (out.typeArgs && isTypeArgsBlacklisted(out.typeArgs, payloads)) {
         return { ok: false, code: 12, reason: "BlacklistedTypeArgs" };
       }
     }

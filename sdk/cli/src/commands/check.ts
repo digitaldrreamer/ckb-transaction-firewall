@@ -4,7 +4,7 @@ import ora from "ora";
 import { parseRegistryPayload } from "@ckb-firewall/sdk";
 import { getLiveCell } from "../lib/rpc.js";
 import { resolveRegistryOutpoint } from "../lib/registry.js";
-import { hexToBytes, strip0x } from "../lib/blkl.js";
+import { strip0x } from "../lib/blkl.js";
 import {
   TESTNET_REGISTRY_CELL,
   TESTNET_RPC_URL,
@@ -58,14 +58,24 @@ export async function checkCommand(opts: CheckOptions): Promise<void> {
     process.exit(1);
   }
 
-  const identifierBytes = hexToBytes(lockArgs);
   const nowSec = BigInt(Math.floor(Date.now() / 1000));
 
-  const match = payload.entries.find((e) => {
-    const eBytes = hexToBytes(e.identifier);
-    if (eBytes.length !== identifierBytes.length) return false;
-    return eBytes.every((b, i) => b === identifierBytes[i]);
-  });
+  // Normalize once before the binary search loop to avoid repeated hexToBytes allocations.
+  const targetHex = strip0x(lockArgs).toLowerCase();
+
+  // Binary search on the sorted registry (O(log n) instead of O(n)).
+  // Lexicographic comparison on equal-length-per-byte hex strings is equivalent to byte comparison.
+  let lo = 0;
+  let hi = payload.entries.length - 1;
+  let match: (typeof payload.entries)[0] | undefined;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const entry = payload.entries[mid]!;
+    const entryHex = strip0x(entry.identifier).toLowerCase();
+    if (entryHex === targetHex) { match = entry; break; }
+    if (entryHex < targetHex) lo = mid + 1;
+    else hi = mid - 1;
+  }
 
   console.log();
   if (!match) {

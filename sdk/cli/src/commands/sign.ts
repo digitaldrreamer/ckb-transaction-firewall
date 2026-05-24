@@ -12,7 +12,7 @@ import {
   signingMessage,
   SIG_THRESHOLD,
 } from "../lib/proposals.js";
-import { hexToBytes, bytesToHex, strip0x, encodeRegistryPayload, extractGovernanceHeaderRaw, insertSorted, removeEntry } from "../lib/blkl.js";
+import { hexToBytes, bytesToHex, encodeRegistryPayload, extractGovernanceHeaderRaw, parseGovernanceHeader, insertSorted, removeEntry } from "../lib/blkl.js";
 import { parseRegistryPayload } from "@ckb-firewall/sdk";
 import { getLiveCell } from "../lib/rpc.js";
 import { resolveRegistryOutpoint } from "../lib/registry.js";
@@ -23,10 +23,17 @@ import { TESTNET_RPC_URL, TESTNET_REGISTRY_CELL } from "../lib/defaults.js";
 export interface SignOptions {
   proposal?: string;
   signerIndex?: string;
-  key?: string;
   rpcUrl: string;
   registryTx: string;
   registryIndex: string;
+}
+
+export function signDefaults(): Partial<SignOptions> {
+  return {
+    rpcUrl: TESTNET_RPC_URL,
+    registryTx: TESTNET_REGISTRY_CELL.txHash,
+    registryIndex: String(TESTNET_REGISTRY_CELL.index),
+  };
 }
 
 
@@ -41,9 +48,11 @@ function isValidPrivKey(hex: string): boolean {
   }
 }
 
-export function parseSignerIndex(value: string): number | null {
-  if (!/^[0-4]$/.test(value.trim())) return null;
-  return Number.parseInt(value.trim(), 10);
+export function parseSignerIndex(value: string, maxExclusive = 5): number | null {
+  if (!/^\d+$/.test(value.trim())) return null;
+  const n = Number.parseInt(value.trim(), 10);
+  if (n < 0 || n >= maxExclusive) return null;
+  return n;
 }
 
 export async function signCommand(opts: SignOptions): Promise<void> {
@@ -103,83 +112,22 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     process.exit(1);
   }
 
-  // ── signer index ─────────────────────────────────────────────────────────
-
-  let signerIndex: number;
-  if (opts.signerIndex !== undefined) {
-    const parsed = parseSignerIndex(opts.signerIndex);
-    if (parsed === null) {
-      console.error(logSymbols.error, chalk.red("--signer-index must be 0–4."));
-      process.exit(1);
-    }
-    signerIndex = parsed;
-  } else {
-    const usedIndices = new Set(proposal.signatures.map((s) => s.signerIndex));
-    const available = [0, 1, 2, 3, 4].filter((i) => !usedIndices.has(i));
-    if (available.length === 0) {
-      console.log(logSymbols.success, chalk.green("All 5 signers have already signed."));
-      process.exit(0);
-    }
-    const { idx } = await inquirer.prompt<{ idx: number }>([
-      {
-        type: "list",
-        name: "idx",
-        message: "Your signer index:",
-        choices: available.map((i) => ({ name: `Signer ${i}`, value: i })),
-      },
-    ]);
-    signerIndex = idx;
-  }
-
-  // Check if this index already signed.
-  if (proposal.signatures.some((s) => s.signerIndex === signerIndex)) {
-    console.log(logSymbols.warning, chalk.yellow(`Signer ${signerIndex} has already signed this proposal.`));
-    process.exit(0);
-  }
-
-  // ── private key ──────────────────────────────────────────────────────────
-
-  let privateKeyBytes: Uint8Array;
-  if (opts.key) {
-    if (!isValidPrivKey(opts.key)) {
-      console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
-      process.exit(1);
-    }
-    privateKeyBytes = hexToBytes(opts.key);
-  } else {
-    console.log();
-    const { keyInput } = await inquirer.prompt<{ keyInput: string }>([
-      {
-        type: "password",
-        name: "keyInput",
-        message: `Private key for signer ${signerIndex} (32-byte hex):`,
-        mask: "*",
-      },
-    ]);
-    if (!keyInput.trim()) {
-      console.error(logSymbols.error, chalk.red("A private key is required. Pass --key <hex> or enter it at the prompt."));
-      process.exit(1);
-    } else if (!isValidPrivKey(keyInput.trim())) {
-      console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
-      process.exit(1);
-    } else {
-      privateKeyBytes = hexToBytes(keyInput.trim());
-    }
-  }
-
-  // ── compute old_root / new_root ──────────────────────────────────────────
-  // Signers must commit to the exact state transition (old_root → new_root)
-  // so that signatures cannot be replayed against a different registry output.
+  // ── fetch registry cell (before signer index prompt so we can use on-chain committee size) ──
 
   const registryIndexInt = Number.parseInt(opts.registryIndex, 10);
   const spinner = ora("Fetching current registry cell to compute signing roots").start();
   let oldRoot: Uint8Array;
   let newRoot: Uint8Array;
+  let committeeSize: number | null = null;
   try {
     const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, registryIndexInt);
     const cell = await getLiveCell(opts.rpcUrl, txHash, index);
     const currentPayload = parseRegistryPayload(cell.data);
     const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
+    const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
+    if (govHeader && govHeader.pubkeys.length > 0) {
+      committeeSize = govHeader.pubkeys.length;
+    }
     const oldBlkl = hexToBytes(cell.data);
 
     let newEntries;
@@ -201,6 +149,68 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     console.error(chalk.red(err instanceof Error ? err.message : String(err)));
     process.exit(1);
   }
+
+  // ── signer index ─────────────────────────────────────────────────────────
+  // committeeSize comes from the on-chain governance header so the prompt
+  // accurately reflects which indices are valid for this deployment.
+
+  let signerIndex: number;
+  if (opts.signerIndex !== undefined) {
+    const maxExclusive = committeeSize ?? Number.MAX_SAFE_INTEGER;
+    const parsed = parseSignerIndex(opts.signerIndex, maxExclusive);
+    if (parsed === null) {
+      console.error(logSymbols.error, chalk.red(
+        committeeSize !== null
+          ? `--signer-index must be 0–${committeeSize - 1} for this committee.`
+          : "--signer-index must be a non-negative integer.",
+      ));
+      process.exit(1);
+    }
+    signerIndex = parsed as number;
+  } else {
+    const usedIndices = new Set(proposal.signatures.map((s) => s.signerIndex));
+    const totalSigners = committeeSize ?? 5;
+    const available = Array.from({ length: totalSigners }, (_, i) => i).filter((i) => !usedIndices.has(i));
+    if (available.length === 0) {
+      console.log(logSymbols.success, chalk.green(`All ${totalSigners} signers have already signed.`));
+      process.exit(0);
+    }
+    const { idx } = await inquirer.prompt<{ idx: number }>([
+      {
+        type: "list",
+        name: "idx",
+        message: "Your signer index:",
+        choices: available.map((i) => ({ name: `Signer ${i}`, value: i })),
+      },
+    ]);
+    signerIndex = idx;
+  }
+
+  // Check if this index already signed.
+  if (proposal.signatures.some((s) => s.signerIndex === signerIndex)) {
+    console.log(logSymbols.warning, chalk.yellow(`Signer ${signerIndex} has already signed this proposal.`));
+    process.exit(0);
+  }
+
+  // ── private key ──────────────────────────────────────────────────────────
+
+  console.log();
+  const { keyInput } = await inquirer.prompt<{ keyInput: string }>([
+    {
+      type: "password",
+      name: "keyInput",
+      message: `Private key for signer ${signerIndex} (32-byte hex):`,
+      mask: "*",
+    },
+  ]);
+  if (!keyInput.trim()) {
+    console.error(logSymbols.error, chalk.red("A private key is required."));
+    process.exit(1);
+  } else if (!isValidPrivKey(keyInput.trim())) {
+    console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
+    process.exit(1);
+  }
+  const privateKeyBytes = hexToBytes(keyInput.trim());
 
   // ── sign ─────────────────────────────────────────────────────────────────
 
