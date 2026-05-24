@@ -508,4 +508,78 @@ mod tests {
         let expected_pk = dummy_pubkey(); // signer 0 compressed pubkey
         assert_eq!(recovered, expected_pk);
     }
+
+    // ── verify_since_timestamp ────────────────────────────────────────────────
+
+    fn valid_since(ms: u64) -> u64 {
+        SINCE_METRIC_TIMESTAMP | (ms & SINCE_VALUE_MASK)
+    }
+
+    #[test]
+    fn test_since_valid_exact_min() {
+        let min_ms = 1_700_000_000_000u64;
+        assert!(verify_since_timestamp(valid_since(min_ms), min_ms).is_ok());
+    }
+
+    #[test]
+    fn test_since_valid_after_min() {
+        let min_ms = 1_700_000_000_000u64;
+        assert!(verify_since_timestamp(valid_since(min_ms + 3_600_000), min_ms).is_ok());
+    }
+
+    #[test]
+    fn test_since_valid_min_zero() {
+        // review_window_end_ms = 0 means no delay required; any absolute timestamp passes.
+        assert!(verify_since_timestamp(valid_since(0), 0).is_ok());
+    }
+
+    #[test]
+    fn test_since_reject_relative_timestamp() {
+        // Bit 63 = 1 makes the lock relative; the chain would treat the value as a
+        // block-count / time-offset from the tip, not an absolute MTP constraint.
+        let min_ms = 1_700_000_000_000u64;
+        let since = SINCE_LOCK_TYPE_FLAG | SINCE_METRIC_TIMESTAMP | min_ms;
+        assert_eq!(verify_since_timestamp(since, min_ms), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_relative_block_number() {
+        // Relative block-number since (bits 63=1, 62:61=00).
+        let since = SINCE_LOCK_TYPE_FLAG | 1_000u64;
+        assert_eq!(verify_since_timestamp(since, 0), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_absolute_block_number_metric() {
+        // Absolute block-number since (bits 63=0, 62:61=00); value is a block height, not ms.
+        let since = 0x0000_0000_0000_0001u64; // block 1
+        assert_eq!(verify_since_timestamp(since, 0), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_absolute_epoch_metric() {
+        // Absolute epoch since (bits 63=0, 62:61=01); value encodes epoch+index, not ms.
+        let since = 0x2000_0000_0000_0001u64;
+        assert_eq!(verify_since_timestamp(since, 0), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_zero_since_with_nonzero_min() {
+        // since = 0 is absolute block 0 (block-number metric); rejected before timestamp check.
+        assert_eq!(verify_since_timestamp(0u64, 1), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_timestamp_before_min() {
+        let min_ms = 1_700_000_000_000u64;
+        let since = valid_since(min_ms - 1);
+        assert_eq!(verify_since_timestamp(since, min_ms), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_timestamp_far_before_min() {
+        let min_ms = 1_700_000_000_000u64;
+        let since = valid_since(0); // timestamp = 0 ms
+        assert_eq!(verify_since_timestamp(since, min_ms), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
 }
