@@ -44,7 +44,7 @@ The `execute` command:
 
 The registry type script (`blacklist-registry`) validates:
 - BLKL v2 payload structure and entry sort order
-- GOV1 v3 witness binding (old\_root, new\_root, proposal and vote hashes non-zero)
+- GOV1 v3 witness binding: `old_root`/`new_root` consistency with actual cell data; `proposal_id_hash` and `vote_digest_hash` non-zero
 - Governance-lock identity on the output registry cell
 
 The governance-lock script validates:

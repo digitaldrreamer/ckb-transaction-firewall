@@ -34,7 +34,7 @@ The mandatory 72-hour governance review window is now enforced at consensus leve
 - `governance-lock` parses the v3 witness, extracts `review_window_end_ms`, loads the input's `since`, and returns `ERR_REVIEW_WINDOW_NOT_MET (6)` if the since value encodes an earlier timestamp or uses a non-timestamp metric
 - `review_window_end_ms` is included in the signing preimage (v3 = 136 bytes), so it cannot be tampered with after signing
 
-**Backward compatibility:** v2 witnesses (133 bytes, version=0x02) are still accepted; the since check is only applied when `version == 0x03`.
+**Format:** GOV1 v3 witnesses (141 bytes, version=0x03) are required. Both contracts reject any other version.
 
 ---
 
@@ -51,10 +51,10 @@ The TypeScript SDK pre-flight check (`TransactionFirewall.checkTransaction()`) m
 
 ### Signature Binding (Replay Prevention)
 
-Governance signer signatures are bound to the exact 128-byte preimage:
+Governance signer signatures are bound to the exact 136-byte preimage:
 
-```
-blake2b(proposal_id_hash(32) || vote_digest_hash(32) || old_root(32) || new_root(32))
+```text
+blake2b(proposal_id_hash(32) || vote_digest_hash(32) || old_root(32) || new_root(32) || review_window_end_ms(8))
 ```
 
 This prevents:

@@ -4,7 +4,7 @@
 //! - Exactly-one input + exactly-one output registry cell per update transaction.
 //! - Registry payload format invariants (BLKL v2, sorted entries).
 //! - Governance authorization via a configured governance lock script identity.
-//! - Governance context binding via a GOV1 v2 or v3 witness payload committed to by tx signatures.
+//! - Governance context binding via a GOV1 v3 witness payload committed to by tx signatures.
 //! - Type ID enforcement to preserve registry identity across updates.
 //!
 //! Signature verification is delegated entirely to the governance-lock script
@@ -417,7 +417,7 @@ fn decode_bytesopt_field(field: &[u8]) -> Result<Option<Vec<u8>>, SysError> {
     Ok(Some(field[4..(4 + count)].to_vec()))
 }
 
-/// Extracts the GOV1 v2 or v3 binding from WitnessArgs.input_type at the given input index.
+/// Extracts the GOV1 v3 binding from WitnessArgs.input_type at the given input index.
 fn load_governance_witness_payload(input_index: usize) -> Result<Vec<u8>, SysError> {
     let buf = load_witness_bytes(input_index, Source::Input)?;
     if buf.len() < 16 {
@@ -523,7 +523,7 @@ fn program_entry() -> Result<(), SysError> {
     };
     let new_root = blake2b_256(out_data.as_slice());
 
-    // GOV1 v2 or v3 binding from WitnessArgs.input_type.
+    // GOV1 v3 binding from WitnessArgs.input_type.
     let gov_payload = load_governance_witness_payload(witness_index)?;
     let gov = GovernanceWitness::parse(gov_payload.as_slice())?;
 

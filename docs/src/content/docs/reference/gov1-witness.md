@@ -60,7 +60,7 @@ Neither `proposal_id_hash` nor `vote_digest_hash` may be the zero hash (`[0u8; 3
 
 The governance cell input's `since` field must be set to an **absolute median-time-past timestamp** encoding `review_window_end_ms`:
 
-```
+```text
 since = 0x4000_0000_0000_0000 | review_window_end_ms
 ```
 

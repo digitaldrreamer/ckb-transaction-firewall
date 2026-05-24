@@ -43,7 +43,6 @@ import {
   TESTNET_REGISTRY_CELL,
   TESTNET_CONTRACT_OUTPOINTS,
   SECP256K1_DEP_GROUP,
-  TESTNET_GOVERNANCE_PUBKEYS,
   warnIfTrivialTestKeys,
 } from "../lib/defaults.js";
 import { printHints } from "../lib/hints.js";
@@ -59,8 +58,6 @@ export interface ExecuteOptions {
 }
 
 export async function executeCommand(opts: ExecuteOptions): Promise<void> {
-  warnIfTrivialTestKeys(TESTNET_GOVERNANCE_PUBKEYS);
-
   // ── select proposal ──────────────────────────────────────────────────────
 
   let proposalId = opts.proposal?.trim() ?? "";
@@ -99,11 +96,9 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     console.log(logSymbols.error, chalk.red(`Review window not passed — ${h}h remaining.`));
     process.exit(1);
   }
-  // SECURITY NOTE: The 72-hour review window is enforced by this CLI only.
-  // The on-chain governance-lock contract does NOT verify timing. An attacker
-  // with sufficient governance keys could bypass this check by building the
-  // transaction manually. For mainnet, enforce the review window on-chain using
-  // CKB's `since` field with median-time-past semantics on the governance input.
+  // The review window is also enforced on-chain: the governance cell input's `since`
+  // field is set to an absolute MTP timestamp, and governance-lock v3 rejects the
+  // transaction if the chain's median time has not yet reached reviewWindowEndsAt.
   if (!isVoteApproved(proposal)) {
     console.log(logSymbols.error, chalk.red("Vote threshold not met."));
     console.log(chalk.dim(`  Use: ckb-firewall vote --proposal ${proposal.id}`));
@@ -155,11 +150,11 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
 
   // ── fetch current registry cell ──────────────────────────────────────────
 
-  const registryIndex = Number.parseInt(opts.registryIndex, 10);
-  if (!Number.isInteger(registryIndex) || registryIndex < 0) {
+  if (!/^\d+$/.test(opts.registryIndex.trim())) {
     console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
     process.exit(1);
   }
+  const registryIndex = Number.parseInt(opts.registryIndex.trim(), 10);
 
   const spinner = ora("Fetching current registry cell").start();
   let cell: Awaited<ReturnType<typeof getLiveCell>>;
@@ -187,6 +182,11 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   const oldRoot = ckbBlake2b(oldBlkl);
   const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
   const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
+
+  // Warn if the live on-chain committee uses known trivial test keys.
+  if (govHeader && govHeader.pubkeys.length > 0) {
+    warnIfTrivialTestKeys(govHeader.pubkeys);
+  }
 
   // M1: verify signature count against the on-chain threshold, not the compile-time default.
   if (govHeader && govHeader.threshold > 0) {

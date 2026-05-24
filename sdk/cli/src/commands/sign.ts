@@ -18,7 +18,7 @@ import { getLiveCell } from "../lib/rpc.js";
 import { resolveRegistryOutpoint } from "../lib/registry.js";
 import { ckbBlake2b } from "../lib/witness.js";
 import { printHints } from "../lib/hints.js";
-import { TESTNET_RPC_URL, TESTNET_REGISTRY_CELL, TESTNET_GOVERNANCE_PUBKEYS, warnIfTrivialTestKeys } from "../lib/defaults.js";
+import { TESTNET_RPC_URL, TESTNET_REGISTRY_CELL, warnIfTrivialTestKeys } from "../lib/defaults.js";
 
 export interface SignOptions {
   proposal?: string;
@@ -85,8 +85,6 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     proposalId = chosen;
   }
 
-  warnIfTrivialTestKeys(TESTNET_GOVERNANCE_PUBKEYS);
-
   const proposal = loadProposal(proposalId);
 
   // ── checks ───────────────────────────────────────────────────────────────
@@ -118,11 +116,11 @@ export async function signCommand(opts: SignOptions): Promise<void> {
 
   // ── fetch registry cell (before signer index prompt so we can use on-chain committee size) ──
 
-  const registryIndexInt = Number.parseInt(opts.registryIndex, 10);
-  if (!Number.isInteger(registryIndexInt) || registryIndexInt < 0) {
+  if (!/^\d+$/.test(opts.registryIndex.trim())) {
     console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
     process.exit(1);
   }
+  const registryIndexInt = Number.parseInt(opts.registryIndex.trim(), 10);
   const spinner = ora("Fetching current registry cell to compute signing roots").start();
   let oldRoot: Uint8Array;
   let newRoot: Uint8Array;
@@ -135,6 +133,7 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
     const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
     if (govHeader && govHeader.pubkeys.length > 0) {
+      warnIfTrivialTestKeys(govHeader.pubkeys);
       committeeSize = govHeader.pubkeys.length;
       onChainThreshold = govHeader.threshold;
       if (onChainThreshold !== SIG_THRESHOLD) {
