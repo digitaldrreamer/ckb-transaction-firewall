@@ -13,7 +13,7 @@ use ckb_testtool::context::Context;
 
 const MAX_CYCLES: u64 = 70_000_000;
 
-// Error codes from blacklist-registry type script (v2)
+// Error codes from blacklist-registry type script
 const ERROR_INVALID_TYPE_ARGS_LAYOUT: i8 = 20;
 const ERROR_INVALID_REGISTRY_CELL_TOPOLOGY: i8 = 21;
 const ERROR_INVALID_REGISTRY_PAYLOAD: i8 = 22;
@@ -92,9 +92,9 @@ fn compute_type_id(first_input_outpoint: &OutPoint, registry_output_index: u64) 
     blake2b_256(&preimage)
 }
 
-/// Build a GOV1 v2 binding for WitnessArgs.input_type (133 bytes).
-/// Layout: GOV1(4) | version(0x02) | proposal_id_hash(32) | vote_digest_hash(32) |
-///         old_root(32) | new_root(32)
+/// Build a GOV1 v3 binding for WitnessArgs.input_type (141 bytes).
+/// Layout: GOV1(4) | version(0x03) | proposal_id_hash(32) | vote_digest_hash(32) |
+///         old_root(32) | new_root(32) | review_window_end_ms(8 LE u64)
 /// Both proposal_id_hash and vote_digest_hash must be non-zero (enforced on-chain).
 fn build_gov1_binding(
     proposal_id_hash: [u8; 32],
@@ -104,12 +104,13 @@ fn build_gov1_binding(
 ) -> Bytes {
     let mut raw = vec![];
     raw.extend_from_slice(b"GOV1");
-    raw.push(0x02u8);
+    raw.push(0x03u8);
     raw.extend_from_slice(&proposal_id_hash);
     raw.extend_from_slice(&vote_digest_hash);
     raw.extend_from_slice(&old_root);
     raw.extend_from_slice(&new_root);
-    assert_eq!(raw.len(), 133);
+    raw.extend_from_slice(&0u64.to_le_bytes()); // review_window_end_ms (blacklist-registry ignores this)
+    assert_eq!(raw.len(), 141);
     Bytes::from(raw)
 }
 
@@ -181,7 +182,7 @@ fn test_pass_bootstrap_registry_creation_with_5_of_5_signers() {
         .expect("bootstrap tx should pass");
 }
 
-/// In v2, signer threshold is enforced by the governance-lock, not the registry.
+/// Signer threshold is enforced by the governance-lock, not the registry.
 /// With ALWAYS_SUCCESS as governance lock, any signer count passes at the registry level.
 #[test]
 fn test_pass_bootstrap_registry_creation_with_partial_signers() {
@@ -652,7 +653,7 @@ fn test_reject_bootstrap_type_id_mismatch() {
     assert_error_code(err, ERROR_INVALID_TYPE_ID);
 }
 
-/// The GOV1 v2 binding requires non-zero proposal_id_hash and vote_digest_hash.
+/// The GOV1 v3 binding requires non-zero proposal_id_hash and vote_digest_hash.
 #[test]
 fn test_reject_zero_proposal_hash_in_gov1_witness() {
     let mut context = Context::default();
@@ -713,7 +714,7 @@ fn test_reject_zero_proposal_hash_in_gov1_witness() {
 }
 
 /// Ensure insufficient valid signers produces the expected result.
-/// In v2, signer validation is the governance-lock's responsibility.
+/// Signer validation is the governance-lock's responsibility.
 /// With ALWAYS_SUCCESS as governance lock, any signer set passes at the registry level.
 #[test]
 fn test_pass_update_with_insufficient_signers_at_registry_level() {
