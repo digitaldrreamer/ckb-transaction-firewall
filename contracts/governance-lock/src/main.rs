@@ -6,11 +6,9 @@
 //! 1. Parse BLKL v2 from the input registry cell data → governance header (pubkeys + threshold).
 //! 2. Load WitnessArgs at Source::GroupInput[0]:
 //!    - lock field: governance signer witness (signer_count + [signer_index + sig(65)] × N)
-//!    - input_type field: GOV1 v2 or v3 binding (also read by blacklist-registry)
-//! 3. Parse GOV1:
-//!    - v2 (133 bytes): signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root)
-//!    - v3 (141 bytes): adds review_window_end_ms(8 LE); signing_message includes this field,
-//!      and the input's since field MUST be an absolute timestamp >= review_window_end_ms.
+//!    - input_type field: GOV1 v3 binding (141 bytes, also read by blacklist-registry)
+//! 3. Parse GOV1 v3: signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root || review_window_end_ms)
+//!    The input's `since` field MUST be an absolute median-time-past timestamp >= review_window_end_ms.
 //! 4. For each signer entry: recover pubkey via secp256k1 ECDSA, verify against header pubkeys.
 //! 5. Require valid_count >= threshold.
 
@@ -241,32 +239,19 @@ fn load_witness_fields(index: usize, source: Source) -> Result<WitnessFields, i8
     Ok(WitnessFields { signers, gov1_payload })
 }
 
-/// Parses a GOV1 v2 or v3 payload.
+/// Parses a GOV1 v3 payload (141 bytes).
 ///
-/// Returns (proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms).
-/// `review_window_end_ms` is `Some(ms)` for v3, `None` for v2.
-///
-/// v2 layout (133 bytes): GOV1(4) | 0x02(1) | proposal_id_hash(32) | vote_digest_hash(32) | old_root(32) | new_root(32)
-/// v3 layout (141 bytes): same prefix + review_window_end_ms(8 LE u64, ms since Unix epoch)
+/// Layout: GOV1(4) | 0x03(1) | proposal_id_hash(32) | vote_digest_hash(32) | old_root(32) | new_root(32) | review_window_end_ms(8 LE u64)
 fn parse_gov1_hashes(
     payload: &[u8],
-) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32], Option<u64>), i8> {
-    if payload.len() < 5 {
+) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32], u64), i8> {
+    if payload.len() != 141 {
         return Err(ERR_INVALID_WITNESS);
     }
     if &payload[0..4] != b"GOV1" {
         return Err(ERR_INVALID_WITNESS);
     }
-    // Version byte is the canonical discriminator; length must match the version.
-    // Checking length first would allow a 141-byte v2 payload to silently skip
-    // the since enforcement that v3 requires.
-    let version = payload[4];
-    let expected_len: usize = match version {
-        0x02 => 133,
-        0x03 => 141,
-        _ => return Err(ERR_INVALID_WITNESS),
-    };
-    if payload.len() != expected_len {
+    if payload[4] != 0x03 {
         return Err(ERR_INVALID_WITNESS);
     }
     let mut proposal_id_hash = [0u8; 32];
@@ -277,14 +262,10 @@ fn parse_gov1_hashes(
     old_root.copy_from_slice(&payload[69..101]);
     let mut new_root = [0u8; 32];
     new_root.copy_from_slice(&payload[101..133]);
-    let review_window_end_ms = if version == 0x03 {
-        Some(u64::from_le_bytes([
-            payload[133], payload[134], payload[135], payload[136],
-            payload[137], payload[138], payload[139], payload[140],
-        ]))
-    } else {
-        None
-    };
+    let review_window_end_ms = u64::from_le_bytes([
+        payload[133], payload[134], payload[135], payload[136],
+        payload[137], payload[138], payload[139], payload[140],
+    ]);
     Ok((proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms))
 }
 
@@ -355,43 +336,28 @@ fn program_entry() -> Result<(), i8> {
     let blkl_data = load_cell_data_bytes(0, Source::GroupInput)?;
     let header = parse_governance_header(&blkl_data)?;
 
-    // Load witness and extract signer entries + GOV1 v2 payload.
+    // Load witness and extract signer entries + GOV1 v3 payload.
     let witness = load_witness_fields(0, Source::GroupInput)?;
 
-    // Parse GOV1 v2 or v3 payload and build the signing message.
-    //
-    // v2 preimage (128 bytes): proposal_id_hash || vote_digest_hash || old_root || new_root
-    // v3 preimage (136 bytes): same + review_window_end_ms (8 LE u64, ms since Unix epoch).
-    //
-    // For v3, the input's `since` field MUST be an absolute timestamp >= review_window_end_ms,
-    // enforcing the governance review window at the consensus layer.
+    // Parse GOV1 v3 payload. The input's `since` field must be an absolute timestamp
+    // >= review_window_end_ms, enforcing the governance review window at consensus level.
+    // Preimage (136 bytes): proposal_id_hash || vote_digest_hash || old_root || new_root || review_window_end_ms
     let (proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms) =
         parse_gov1_hashes(&witness.gov1_payload)?;
     if proposal_id_hash == [0u8; 32] || vote_digest_hash == [0u8; 32] {
         return Err(ERR_INVALID_WITNESS);
     }
 
-    let signing_message = if let Some(rw_end_ms) = review_window_end_ms {
-        // v3: verify on-chain time constraint then use extended preimage.
-        let since = load_input_since(0, Source::GroupInput)?;
-        verify_since_timestamp(since, rw_end_ms)?;
+    let since = load_input_since(0, Source::GroupInput)?;
+    verify_since_timestamp(since, review_window_end_ms)?;
 
-        let mut preimage = [0u8; 136];
-        preimage[..32].copy_from_slice(&proposal_id_hash);
-        preimage[32..64].copy_from_slice(&vote_digest_hash);
-        preimage[64..96].copy_from_slice(&old_root);
-        preimage[96..128].copy_from_slice(&new_root);
-        preimage[128..136].copy_from_slice(&rw_end_ms.to_le_bytes());
-        blake2b_256(&preimage)
-    } else {
-        // v2: backward-compatible 128-byte preimage.
-        let mut preimage = [0u8; 128];
-        preimage[..32].copy_from_slice(&proposal_id_hash);
-        preimage[32..64].copy_from_slice(&vote_digest_hash);
-        preimage[64..96].copy_from_slice(&old_root);
-        preimage[96..].copy_from_slice(&new_root);
-        blake2b_256(&preimage)
-    };
+    let mut preimage = [0u8; 136];
+    preimage[..32].copy_from_slice(&proposal_id_hash);
+    preimage[32..64].copy_from_slice(&vote_digest_hash);
+    preimage[64..96].copy_from_slice(&old_root);
+    preimage[96..128].copy_from_slice(&new_root);
+    preimage[128..136].copy_from_slice(&review_window_end_ms.to_le_bytes());
+    let signing_message = blake2b_256(&preimage);
 
     // Verify each signer and count unique valid signatures.
     let max_signers = header.pubkeys.len();
@@ -488,31 +454,42 @@ mod tests {
 
     #[test]
     fn test_parse_gov1_hashes_valid() {
-        let mut payload = [0u8; 133];
+        let mut payload = [0u8; 141];
         payload[0..4].copy_from_slice(b"GOV1");
-        payload[4] = 0x02;
-        payload[5..37].fill(0x11);   // proposal_id_hash
-        payload[37..69].fill(0x22);  // vote_digest_hash
-        payload[69..101].fill(0x33); // old_root
+        payload[4] = 0x03;
+        payload[5..37].fill(0x11);    // proposal_id_hash
+        payload[37..69].fill(0x22);   // vote_digest_hash
+        payload[69..101].fill(0x33);  // old_root
         payload[101..133].fill(0x44); // new_root
-        let (pid, vdh) = parse_gov1_hashes(&payload).expect("should parse");
+        payload[133..141].copy_from_slice(&1_000u64.to_le_bytes()); // review_window_end_ms
+        let (pid, vdh, _, _, rw) = parse_gov1_hashes(&payload).expect("should parse");
         assert_eq!(pid, [0x11u8; 32]);
         assert_eq!(vdh, [0x22u8; 32]);
+        assert_eq!(rw, 1_000u64);
     }
 
     #[test]
     fn test_parse_gov1_hashes_wrong_length() {
-        assert!(parse_gov1_hashes(&[0u8; 132]).is_err());
-        assert!(parse_gov1_hashes(&[0u8; 134]).is_err());
+        assert!(parse_gov1_hashes(&[0u8; 133]).is_err()); // v2 length no longer accepted
+        assert!(parse_gov1_hashes(&[0u8; 140]).is_err());
+        assert!(parse_gov1_hashes(&[0u8; 142]).is_err());
     }
 
     #[test]
     fn test_parse_gov1_hashes_wrong_magic() {
-        let mut payload = [0u8; 133];
+        let mut payload = [0u8; 141];
         payload[0..4].copy_from_slice(b"NOPE");
-        payload[4] = 0x02;
+        payload[4] = 0x03;
         payload[5..37].fill(0x11);
         payload[37..69].fill(0x22);
+        assert!(parse_gov1_hashes(&payload).is_err());
+    }
+
+    #[test]
+    fn test_parse_gov1_hashes_wrong_version() {
+        let mut payload = [0u8; 141];
+        payload[0..4].copy_from_slice(b"GOV1");
+        payload[4] = 0x02; // v2 no longer accepted
         assert!(parse_gov1_hashes(&payload).is_err());
     }
 

@@ -13,33 +13,9 @@ export interface Gov1BindingParams {
   newRoot: Uint8Array;
 }
 
-// GOV1 v2 — binding commitment only, no signers (133 bytes).
-// Signers go in WitnessArgs.lock as a separate governance-sig-witness.
-export function buildGov1WitnessV2(params: Gov1BindingParams): Uint8Array {
-  for (const [name, val] of [
-    ["proposalIdHash", params.proposalIdHash],
-    ["voteDigestHash", params.voteDigestHash],
-    ["oldRoot", params.oldRoot],
-    ["newRoot", params.newRoot],
-  ] as const) {
-    if (val.length !== 32) throw new Error(`${name} must be exactly 32 bytes, got ${val.length}`);
-  }
-  // 4 magic + 1 version + 32*4 hashes = 133 bytes
-  const buf = new Uint8Array(133);
-  let off = 0;
-  buf[off++] = 0x47; buf[off++] = 0x4f; buf[off++] = 0x56; buf[off++] = 0x31; // GOV1
-  buf[off++] = 0x02; // version 2
-  buf.set(params.proposalIdHash, off); off += 32;
-  buf.set(params.voteDigestHash, off); off += 32;
-  buf.set(params.oldRoot, off); off += 32;
-  buf.set(params.newRoot, off); off += 32;
-  return buf;
-}
-
-// GOV1 v3 — adds reviewWindowEndMs (8 LE u64) after the v2 fields (141 bytes total).
-// governance-lock verifies that the input's `since` field encodes an absolute timestamp
-// >= reviewWindowEndMs, enforcing the governance review window at consensus level.
-// The reviewWindowEndMs is also included in the signing preimage to prevent tampering.
+// GOV1 v3 — 141 bytes. governance-lock verifies that the input's `since` field encodes an
+// absolute median-time-past timestamp >= reviewWindowEndMs, enforcing the review window at
+// consensus level. reviewWindowEndMs is included in the signing preimage to prevent tampering.
 export function buildGov1WitnessV3(
   params: Gov1BindingParams & { reviewWindowEndMs: bigint },
 ): Uint8Array {

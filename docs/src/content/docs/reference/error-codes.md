@@ -50,15 +50,26 @@ if (!result.ok) {
 - `16` `OutputScriptParseFailed`
 - 17 AmbiguousRegistryCellDep
 
+## Governance lock
+
+These codes are returned by `governance-lock` when a registry update transaction is rejected.
+
+- `1` `InvalidArgs` — contract args are not 1 byte (version)
+- `2` `InvalidBlkl` — registry cell data is not a valid BLKL v2 payload or governance header
+- `3` `InvalidWitness` — GOV1 payload is malformed (wrong magic, wrong version, wrong length, or zero hashes)
+- `4` `SigVerificationFailed` — a signer entry has an invalid secp256k1 signature or the recovered pubkey doesn't match
+- `5` `ThresholdNotMet` — fewer than the required number of valid signatures
+- `6` `ReviewWindowNotMet` — the governance cell input's `since` field encodes a timestamp before `review_window_end_ms`
+
 ## Blacklist registry
 
-- 20 InvalidTypeArgsLayout
-- 21 InvalidRegistryCellTopology
-- 22 InvalidRegistryPayload
-- 23 UnsupportedRegistryVersion
-- 24 InvalidGovernanceWitness
-- 25 UnauthorizedGovernanceLock
-- 27 InvalidTypeId
+- `20` `InvalidTypeArgsLayout`
+- `21` `InvalidRegistryCellTopology`
+- `22` `InvalidRegistryPayload`
+- `23` `UnsupportedRegistryVersion`
+- `24` `InvalidGovernanceWitness`
+- `25` `UnauthorizedGovernanceLock`
+- `27` `InvalidTypeId`
 
 
 ## SDK mapping

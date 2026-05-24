@@ -219,44 +219,27 @@ export function isReadyToExecute(proposal: Proposal): boolean {
   );
 }
 
-// The message each governance signer signs.
-//
-// v2 preimage (128 bytes): proposal_id_hash(32) || vote_digest_hash(32) || old_root(32) || new_root(32)
-// v3 preimage (136 bytes): same + review_window_end_ms(8 LE u64, ms since Unix epoch)
-//
-// Providing reviewWindowEndMs produces a v3 signing message that also binds the review window
-// end time. governance-lock verifies the input's `since` field against this value on-chain.
+// The message each governance signer signs (GOV1 v3, 136-byte preimage).
+// proposal_id_hash(32) || vote_digest_hash(32) || old_root(32) || new_root(32) || review_window_end_ms(8 LE u64)
 export function signingMessage(
   proposal: Proposal,
   oldRoot: Uint8Array,
   newRoot: Uint8Array,
-  reviewWindowEndMs?: bigint,
+  reviewWindowEndMs: bigint,
 ): Uint8Array {
   if (oldRoot.length !== 32) throw new Error(`oldRoot must be 32 bytes, got ${oldRoot.length}`);
   if (newRoot.length !== 32) throw new Error(`newRoot must be 32 bytes, got ${newRoot.length}`);
   const proposalBytes = hexToBytes(proposal.proposalIdHash);
   const voteBytes = hexToBytes(proposal.voteDigestHash);
-
-  if (reviewWindowEndMs !== undefined) {
-    // v3: 136-byte preimage includes reviewWindowEndMs as LE u64.
-    const combined = new Uint8Array(136);
-    combined.set(proposalBytes, 0);
-    combined.set(voteBytes, 32);
-    combined.set(oldRoot, 64);
-    combined.set(newRoot, 96);
-    let ms = reviewWindowEndMs;
-    for (let i = 0; i < 8; i++) {
-      combined[128 + i] = Number(ms & 0xffn);
-      ms >>= 8n;
-    }
-    return ckbBlake2b(combined);
-  }
-
-  // v2: 128-byte preimage (backward compatible).
-  const combined = new Uint8Array(128);
+  const combined = new Uint8Array(136);
   combined.set(proposalBytes, 0);
   combined.set(voteBytes, 32);
   combined.set(oldRoot, 64);
   combined.set(newRoot, 96);
+  let ms = reviewWindowEndMs;
+  for (let i = 0; i < 8; i++) {
+    combined[128 + i] = Number(ms & 0xffn);
+    ms >>= 8n;
+  }
   return ckbBlake2b(combined);
 }
