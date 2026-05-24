@@ -132,16 +132,34 @@ export async function importCommand(opts: ImportOptions): Promise<void> {
     }
 
     if (existing.proposalIdHash === proposal.proposalIdHash) {
-      // Same proposal. Merge votes and signatures, preferring the newer entry per participant.
-      const votesByPubkey = new Map(existing.votes.map((v) => [v.pubkey.toLowerCase(), v]));
-      for (const v of proposal.votes) {
-        const key = v.pubkey.toLowerCase();
-        const prev = votesByPubkey.get(key);
-        if (!prev || v.timestamp > prev.timestamp) {
-          votesByPubkey.set(key, v);
+      // Signatures freeze the vote digest — once signing has begun, votes must not change
+      // or existing signatures become invalid for the new voteDigestHash.
+      const signingStarted = existing.signatures.length > 0 || proposal.signatures.length > 0;
+
+      let mergedVotes: typeof existing.votes;
+      let mergedVoteDigest: string;
+      if (signingStarted) {
+        // Preserve whichever side has signatures; don't alter its vote set.
+        mergedVotes = existing.signatures.length > 0 ? existing.votes : proposal.votes;
+        mergedVoteDigest = existing.signatures.length > 0 ? existing.voteDigestHash : proposal.voteDigestHash;
+        if (existing.votes.length !== proposal.votes.length) {
+          process.stderr.write(
+            `Note: votes not merged for proposal ${proposal.id} — signing has already begun and the vote digest is frozen.\n`,
+          );
         }
+      } else {
+        // No signatures yet — merge votes freely, preferring the newer entry per validator.
+        const votesByPubkey = new Map(existing.votes.map((v) => [v.pubkey.toLowerCase(), v]));
+        for (const v of proposal.votes) {
+          const key = v.pubkey.toLowerCase();
+          const prev = votesByPubkey.get(key);
+          if (!prev || v.timestamp > prev.timestamp) {
+            votesByPubkey.set(key, v);
+          }
+        }
+        mergedVotes = [...votesByPubkey.values()];
+        mergedVoteDigest = computeVoteDigestHash(mergedVotes);
       }
-      const mergedVotes = [...votesByPubkey.values()];
 
       // Incoming signature always replaces existing for the same signer index.
       const sigBySigner = new Map(existing.signatures.map((s) => [s.signerIndex, s]));
@@ -150,7 +168,6 @@ export async function importCommand(opts: ImportOptions): Promise<void> {
       }
       const mergedSigs = [...sigBySigner.values()];
 
-      const mergedVoteDigest = computeVoteDigestHash(mergedVotes);
       const merged: Proposal = {
         ...proposal,
         votes: mergedVotes,

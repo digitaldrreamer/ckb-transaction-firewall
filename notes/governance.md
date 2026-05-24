@@ -1,5 +1,7 @@
 # Governance Deep Dive
 
+> **Testnet configuration note**: The deployed CLI and contracts use a simplified testnet governance setup — 5 governance signers with a 3-of-5 threshold and 5 validators with a 3-of-5 vote threshold. The production targets described in the *Voting Policy* section below (9 active validators, higher quorums) describe the intended mainnet configuration. Constants: `VOTE_THRESHOLD = 3`, `SIG_THRESHOLD = 3`, `REVIEW_WINDOW_MS = 72h`. See `sdk/cli/src/lib/proposals.ts` and `sdk/cli/src/lib/defaults.ts`.
+
 This document describes how blacklist entries are added, removed, and audited without centralized control.
 
 ## Governance Principles

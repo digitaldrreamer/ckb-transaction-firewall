@@ -28,6 +28,14 @@ export interface SignOptions {
   registryIndex: string;
 }
 
+export function signDefaults(): Partial<SignOptions> {
+  return {
+    rpcUrl: TESTNET_RPC_URL,
+    registryTx: TESTNET_REGISTRY_CELL.txHash,
+    registryIndex: String(TESTNET_REGISTRY_CELL.index),
+  };
+}
+
 
 function isValidPrivKey(hex: string): boolean {
   try {

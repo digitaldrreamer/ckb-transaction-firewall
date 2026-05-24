@@ -119,7 +119,14 @@ export function listProposals(): Proposal[] {
   const results: Proposal[] = [];
   for (const f of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
     try {
-      results.push(JSON.parse(readFileSync(join(dir, f), "utf8")) as Proposal);
+      const p = validateProposalSchema(JSON.parse(readFileSync(join(dir, f), "utf8")));
+      // Auto-reject proposals whose review window has passed without reaching the vote threshold.
+      if ((p.status === "pending-review" || p.status === "voting") &&
+          isReviewWindowPassed(p) && !isVoteApproved(p)) {
+        p.status = "rejected";
+        saveProposal(p);
+      }
+      results.push(p);
     } catch {
       process.stderr.write(`Warning: skipping malformed proposal file: ${f}\n`);
     }

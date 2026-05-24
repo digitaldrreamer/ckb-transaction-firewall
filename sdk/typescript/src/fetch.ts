@@ -10,10 +10,13 @@ import type { RegistryPayload, RegistrySpecLike } from "./types.js";
 // The registry cell moves on every governance update (consumed + recreated).
 // Callers should track the current outpoint via an indexer or the CLI
 // (`ckb-firewall inspect` shows the active cell outpoint).
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 export async function fetchRegistryPayload(
   rpcUrl: string,
   txHash: string,
   outputIndex: number,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<RegistryPayload> {
   const outpoint = { tx_hash: txHash, index: `0x${outputIndex.toString(16)}` };
   const body = JSON.stringify({
@@ -23,15 +26,23 @@ export async function fetchRegistryPayload(
     params: [outpoint, true],
   });
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let resp: Response;
   try {
     resp = await fetch(rpcUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
+      signal: controller.signal,
     });
   } catch (cause) {
+    if (cause instanceof Error && cause.name === "AbortError") {
+      throw new Error(`CKB RPC get_live_cell timed out after ${timeoutMs}ms`);
+    }
     throw new Error(`CKB RPC unreachable at ${rpcUrl}: ${(cause as Error).message}`, { cause });
+  } finally {
+    clearTimeout(timer);
   }
 
   if (!resp.ok) {
@@ -81,6 +92,7 @@ export async function fetchRegistryPayload(
 export async function findRegistryCell(
   rpcUrl: string,
   spec: RegistrySpecLike,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<{ txHash: string; index: number }> {
   const body = JSON.stringify({
     id: 1,
@@ -100,15 +112,23 @@ export async function findRegistryCell(
     ],
   });
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let resp: Response;
   try {
     resp = await fetch(rpcUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
+      signal: controller.signal,
     });
   } catch (cause) {
+    if (cause instanceof Error && cause.name === "AbortError") {
+      throw new Error(`CKB RPC get_cells timed out after ${timeoutMs}ms`);
+    }
     throw new Error(`CKB RPC unreachable at ${rpcUrl}: ${(cause as Error).message}`, { cause });
+  } finally {
+    clearTimeout(timer);
   }
 
   if (!resp.ok) {
