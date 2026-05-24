@@ -1,3 +1,4 @@
+import { secp256k1 } from "@noble/curves/secp256k1.js";
 import type { RegistrySpecLike } from "@ckb-firewall/sdk";
 
 export const TESTNET_RPC_URL = "https://testnet.ckb.dev";
@@ -52,7 +53,8 @@ export const SECP256K1_DEP_GROUP = {
 };
 
 // Governance committee — 5 compressed secp256k1 pubkeys (33 bytes each).
-// Corresponding private keys are [0x01*32] through [0x05*32].
+// WARNING: These are TESTNET-ONLY keys. NEVER use them for mainnet or any
+// deployment with real value. Rotate to fresh keys before any production use.
 export const TESTNET_GOVERNANCE_PUBKEYS: Uint8Array[] = [
   new Uint8Array([0x03, 0x1b, 0x84, 0xc5, 0x56, 0x7b, 0x12, 0x64, 0x40, 0x99, 0x5d, 0x3e, 0xd5, 0xaa, 0xba, 0x05, 0x65, 0xd7, 0x1e, 0x18, 0x34, 0x60, 0x48, 0x19, 0xff, 0x9c, 0x17, 0xf5, 0xe9, 0xd5, 0xdd, 0x07, 0x8f]),
   new Uint8Array([0x02, 0x4d, 0x4b, 0x6c, 0xd1, 0x36, 0x10, 0x32, 0xca, 0x9b, 0xd2, 0xae, 0xb9, 0xd9, 0x00, 0xaa, 0x4d, 0x45, 0xd9, 0xea, 0xd8, 0x0a, 0xc9, 0x42, 0x33, 0x74, 0xc4, 0x51, 0xa7, 0x25, 0x4d, 0x07, 0x66]),
@@ -63,3 +65,34 @@ export const TESTNET_GOVERNANCE_PUBKEYS: Uint8Array[] = [
 
 export const TESTNET_GOVERNANCE_THRESHOLD = 3;
 export const TESTNET_GOVERNANCE_VALIDATOR_COUNT = 5;
+
+// Known trivial private keys (0x01*32 through 0x05*32) used for testnet bootstrapping.
+// Any deployment using these keys is insecure — anyone can read this source and take control.
+const TRIVIAL_TEST_PRIVKEYS: Uint8Array[] = Array.from({ length: 5 }, (_, i) =>
+  new Uint8Array(32).fill(i + 1),
+);
+
+/**
+ * Emits a CRITICAL warning to stderr if any of the configured governance pubkeys
+ * correspond to known trivial test private keys (0x01*32 … 0x05*32).
+ * Call this before any governance write operation.
+ */
+export function warnIfTrivialTestKeys(pubkeys: Uint8Array[]): void {
+  const trivialPubkeys = TRIVIAL_TEST_PRIVKEYS.map((priv) =>
+    secp256k1.getPublicKey(priv, true),
+  );
+  const hasTrivial = pubkeys.some((pub) =>
+    trivialPubkeys.some(
+      (tp) => tp.length === pub.length && tp.every((b, i) => b === pub[i]),
+    ),
+  );
+  if (hasTrivial) {
+    process.stderr.write(
+      "\n⚠️  CRITICAL SECURITY WARNING ⚠️\n" +
+      "The governance committee contains keys derived from trivial test private keys.\n" +
+      "Any attacker who reads this repository's source code can sign governance proposals.\n" +
+      "DO NOT use this deployment for any real-value or production purpose.\n" +
+      "Rotate to freshly generated keys before any non-test use.\n\n",
+    );
+  }
+}

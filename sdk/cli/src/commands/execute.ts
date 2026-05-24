@@ -33,15 +33,17 @@ import {
 import { verifyMerkleProof } from "../lib/validator-set.js";
 import {
   ckbBlake2b,
-  buildGov1WitnessV2,
+  buildGov1WitnessV3,
   buildGovernanceSigWitness,
   buildWitnessArgs,
+  encodeAbsoluteTimestampSince,
 } from "../lib/witness.js";
 import {
   TESTNET_RPC_URL,
   TESTNET_REGISTRY_CELL,
   TESTNET_CONTRACT_OUTPOINTS,
   SECP256K1_DEP_GROUP,
+  warnIfTrivialTestKeys,
 } from "../lib/defaults.js";
 import { printHints } from "../lib/hints.js";
 
@@ -94,6 +96,9 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     console.log(logSymbols.error, chalk.red(`Review window not passed — ${h}h remaining.`));
     process.exit(1);
   }
+  // The review window is also enforced on-chain: the governance cell input's `since`
+  // field is set to an absolute MTP timestamp, and governance-lock v3 rejects the
+  // transaction if the chain's median time has not yet reached reviewWindowEndsAt.
   if (!isVoteApproved(proposal)) {
     console.log(logSymbols.error, chalk.red("Vote threshold not met."));
     console.log(chalk.dim(`  Use: ckb-firewall vote --proposal ${proposal.id}`));
@@ -110,9 +115,9 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
 
   // P0-8: reject if the proposal's expiry has already passed.
   if (proposal.expiresAt !== "0") {
-    const expiryMs = Number(proposal.expiresAt) * 1000;
-    if (Date.now() >= expiryMs) {
-      console.log(logSymbols.error, chalk.red(`Proposal "${proposal.id}" has already expired (${new Date(expiryMs).toISOString()}).`));
+    const expiryMs = BigInt(proposal.expiresAt) * 1000n;
+    if (BigInt(Date.now()) >= expiryMs) {
+      console.log(logSymbols.error, chalk.red(`Proposal "${proposal.id}" has already expired (${new Date(Number(expiryMs)).toISOString()}).`));
       console.log(chalk.dim("  A new proposal must be created for this blacklist entry."));
       process.exit(1);
     }
@@ -145,11 +150,11 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
 
   // ── fetch current registry cell ──────────────────────────────────────────
 
-  const registryIndex = Number.parseInt(opts.registryIndex, 10);
-  if (!Number.isInteger(registryIndex) || registryIndex < 0) {
+  if (!/^\d+$/.test(opts.registryIndex.trim())) {
     console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
     process.exit(1);
   }
+  const registryIndex = Number.parseInt(opts.registryIndex.trim(), 10);
 
   const spinner = ora("Fetching current registry cell").start();
   let cell: Awaited<ReturnType<typeof getLiveCell>>;
@@ -177,6 +182,30 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   const oldRoot = ckbBlake2b(oldBlkl);
   const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
   const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
+
+  // Warn if the live on-chain committee uses known trivial test keys.
+  if (govHeader && govHeader.pubkeys.length > 0) {
+    warnIfTrivialTestKeys(govHeader.pubkeys);
+  }
+
+  // M1: verify signature count against the on-chain threshold, not the compile-time default.
+  if (govHeader && govHeader.threshold > 0) {
+    const onChainThreshold = govHeader.threshold;
+    if (onChainThreshold !== SIG_THRESHOLD) {
+      process.stderr.write(
+        `Warning: on-chain signature threshold (${onChainThreshold}) differs from compile-time default (${SIG_THRESHOLD}). ` +
+        `Using the on-chain value.\n`,
+      );
+    }
+    if (proposal.signatures.length < onChainThreshold) {
+      console.error(
+        logSymbols.error,
+        chalk.red(`Only ${proposal.signatures.length}/${onChainThreshold} signatures — need more (on-chain threshold).`),
+      );
+      console.error(chalk.dim(`  Use: ckb-firewall sign --proposal ${proposal.id}`));
+      process.exit(1);
+    }
+  }
 
   if (govHeader && govHeader.validatorCount > 0) {
     const rootHex = bytesToHex(govHeader.validatorMerkleRoot);
@@ -218,8 +247,10 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   const newRoot = ckbBlake2b(newBlkl);
 
   // C-4: verify governance signer signatures against on-chain pubkeys from governance header.
+  // Use the v3 signing message (includes reviewWindowEndMs) to match what sign.ts produced.
+  const reviewWindowEndMsForVerify = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
   if (govHeader && govHeader.pubkeys.length > 0) {
-    const msgHash = signingMessage(proposal, oldRoot, newRoot);
+    const msgHash = signingMessage(proposal, oldRoot, newRoot, reviewWindowEndMsForVerify);
     for (const s of proposal.signatures) {
       if (!Number.isInteger(s.signerIndex) || s.signerIndex < 0 || s.signerIndex >= govHeader.pubkeys.length) {
         console.error(logSymbols.error, chalk.red(`Signer index ${s.signerIndex} is out of range for the on-chain governance committee (${govHeader.pubkeys.length} signers).`));
@@ -249,7 +280,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     }
   }
 
-  // ── build GOV1 witness with real signatures ───────────────────────────────
+  // ── build GOV1 v3 witness with real signatures ────────────────────────────
 
   // P0-2: recompute voteDigestHash from votes and verify it matches the stored value.
   const recomputedVoteDigest = computeVoteDigestHash(proposal.votes);
@@ -260,16 +291,29 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     process.exit(1);
   }
 
+  // reviewWindowEndMs is included in the GOV1 v3 witness and the signing preimage,
+  // binding signers to the review window end time. governance-lock verifies the input's
+  // `since` field is an absolute timestamp >= this value, enforcing the review window on-chain.
+  const reviewWindowEndMs = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
+
   const proposalIdBytes = hexToBytes(proposal.proposalIdHash);
   const voteDigestBytes = hexToBytes(proposal.voteDigestHash);
 
-  const signers = proposal.signatures.slice(0, SIG_THRESHOLD).map((s) => ({
+  // Use the on-chain threshold for signer selection; fall back to compile-time constant.
+  const effectiveThreshold = govHeader?.threshold ?? SIG_THRESHOLD;
+  const signers = proposal.signatures.slice(0, effectiveThreshold).map((s) => ({
     index: s.signerIndex,
     sig: hexToBytes(s.signature),
   }));
 
-  // v2: GOV1 binding in input_type, signer entries in lock field.
-  const gov1 = buildGov1WitnessV2({ proposalIdHash: proposalIdBytes, voteDigestHash: voteDigestBytes, oldRoot, newRoot });
+  // v3: GOV1 binding (with review window) in input_type, signer entries in lock field.
+  const gov1 = buildGov1WitnessV3({
+    proposalIdHash: proposalIdBytes,
+    voteDigestHash: voteDigestBytes,
+    oldRoot,
+    newRoot,
+    reviewWindowEndMs,
+  });
   const sigWitness = buildGovernanceSigWitness(signers);
   const witnessBytes = buildWitnessArgs({ lock: sigWitness, inputType: gov1 });
 
@@ -305,9 +349,16 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
           dep_type: "code",
         },
       ],
+      // Governance transactions update the registry cell, not firewall-protected cells.
+      // No header_deps are needed — expiry checks only apply when spending firewall-locked cells.
       header_deps: [],
       inputs: [
-        { since: "0x0", previous_output: { tx_hash: cell.txHash, index: `0x${cell.index.toString(16)}` } },
+        {
+          // Absolute median-time-past since lock: CKB consensus enforces this transaction cannot
+          // be included in a block until the block's MTP >= reviewWindowEndsAt.
+          since: encodeAbsoluteTimestampSince(reviewWindowEndMs),
+          previous_output: { tx_hash: cell.txHash, index: `0x${cell.index.toString(16)}` },
+        },
       ],
       outputs: [{ capacity: cell.capacity, lock: cell.lock, type: cell.type }],
       outputs_data: [bytesToHex(newBlkl)],

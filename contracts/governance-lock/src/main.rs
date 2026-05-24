@@ -6,8 +6,9 @@
 //! 1. Parse BLKL v2 from the input registry cell data → governance header (pubkeys + threshold).
 //! 2. Load WitnessArgs at Source::GroupInput[0]:
 //!    - lock field: governance signer witness (signer_count + [signer_index + sig(65)] × N)
-//!    - input_type field: GOV1 v2 binding (read by blacklist-registry, not by us)
-//! 3. Compute signing_message = blake2b(proposal_id_hash || vote_digest_hash).
+//!    - input_type field: GOV1 v3 binding (141 bytes, also read by blacklist-registry)
+//! 3. Parse GOV1 v3: signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root || review_window_end_ms)
+//!    The input's `since` field MUST be an absolute median-time-past timestamp >= review_window_end_ms.
 //! 4. For each signer entry: recover pubkey via secp256k1 ECDSA, verify against header pubkeys.
 //! 5. Require valid_count >= threshold.
 
@@ -37,7 +38,7 @@ use alloc::vec::Vec;
 use blake2b_ref::{Blake2b, Blake2bBuilder};
 use ckb_std::ckb_constants::Source;
 use ckb_std::error::SysError;
-use ckb_std::syscalls::{load_cell_data, load_script, load_witness};
+use ckb_std::syscalls::{load_cell_data, load_input, load_script, load_witness};
 use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
 
 const ERR_INVALID_ARGS: i8 = 1;
@@ -45,6 +46,14 @@ const ERR_INVALID_BLKL: i8 = 2;
 const ERR_INVALID_WITNESS: i8 = 3;
 const ERR_SIG_VERIFICATION: i8 = 4;
 const ERR_THRESHOLD_NOT_MET: i8 = 5;
+const ERR_REVIEW_WINDOW_NOT_MET: i8 = 6;
+
+// CKB `since` field encoding for absolute median-time-past (timestamp) locks.
+// Bit 62 set = timestamp metric; bit 63 clear = absolute.
+const SINCE_LOCK_TYPE_FLAG: u64    = 1 << 63;
+const SINCE_METRIC_TYPE_MASK: u64  = 0x6000_0000_0000_0000;
+const SINCE_METRIC_TIMESTAMP: u64  = 0x4000_0000_0000_0000;
+const SINCE_VALUE_MASK: u64        = 0x00FF_FFFF_FFFF_FFFF;
 
 fn blake2b_256(data: &[u8]) -> [u8; 32] {
     let mut out = [0u8; 32];
@@ -230,13 +239,19 @@ fn load_witness_fields(index: usize, source: Source) -> Result<WitnessFields, i8
     Ok(WitnessFields { signers, gov1_payload })
 }
 
-/// Parses GOV1 v2 and returns (proposal_id_hash, vote_digest_hash, old_root, new_root).
-fn parse_gov1_hashes(payload: &[u8]) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32]), i8> {
-    // GOV1(4) | version=0x02(1) | proposal_id_hash(32) | vote_digest_hash(32) | old_root(32) | new_root(32) = 133 bytes
-    if payload.len() != 133 {
+/// Parses a GOV1 v3 payload (141 bytes).
+///
+/// Layout: GOV1(4) | 0x03(1) | proposal_id_hash(32) | vote_digest_hash(32) | old_root(32) | new_root(32) | review_window_end_ms(8 LE u64)
+fn parse_gov1_hashes(
+    payload: &[u8],
+) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32], u64), i8> {
+    if payload.len() != 141 {
         return Err(ERR_INVALID_WITNESS);
     }
-    if &payload[0..4] != b"GOV1" || payload[4] != 0x02 {
+    if &payload[0..4] != b"GOV1" {
+        return Err(ERR_INVALID_WITNESS);
+    }
+    if payload[4] != 0x03 {
         return Err(ERR_INVALID_WITNESS);
     }
     let mut proposal_id_hash = [0u8; 32];
@@ -247,7 +262,37 @@ fn parse_gov1_hashes(payload: &[u8]) -> Result<([u8; 32], [u8; 32], [u8; 32], [u
     old_root.copy_from_slice(&payload[69..101]);
     let mut new_root = [0u8; 32];
     new_root.copy_from_slice(&payload[101..133]);
-    Ok((proposal_id_hash, vote_digest_hash, old_root, new_root))
+    let review_window_end_ms = u64::from_le_bytes([
+        payload[133], payload[134], payload[135], payload[136],
+        payload[137], payload[138], payload[139], payload[140],
+    ]);
+    Ok((proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms))
+}
+
+/// Loads the `since` field (first 8 bytes of a CellInput) for the given input index.
+/// CellInput layout: since(8 LE u64) | previous_output.tx_hash(32) | previous_output.index(4)
+fn load_input_since(index: usize, source: Source) -> Result<u64, i8> {
+    let raw = load_var_bytes_from(|buf, off| load_input(buf, off, index, source))?;
+    if raw.len() < 8 {
+        return Err(ERR_INVALID_WITNESS);
+    }
+    Ok(u64::from_le_bytes([raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7]]))
+}
+
+/// Checks that `since` encodes an absolute median-time-past timestamp >= `min_ms`.
+/// Rejects block-number or epoch since values, and relative since values.
+fn verify_since_timestamp(since: u64, min_ms: u64) -> Result<(), i8> {
+    if since & SINCE_LOCK_TYPE_FLAG != 0 {
+        return Err(ERR_REVIEW_WINDOW_NOT_MET); // relative since is not allowed
+    }
+    if since & SINCE_METRIC_TYPE_MASK != SINCE_METRIC_TIMESTAMP {
+        return Err(ERR_REVIEW_WINDOW_NOT_MET); // must be timestamp metric
+    }
+    let timestamp_ms = since & SINCE_VALUE_MASK;
+    if timestamp_ms < min_ms {
+        return Err(ERR_REVIEW_WINDOW_NOT_MET);
+    }
+    Ok(())
 }
 
 /// Recovers the compressed secp256k1 public key from a prehash and 65-byte compact signature.
@@ -291,22 +336,28 @@ fn program_entry() -> Result<(), i8> {
     let blkl_data = load_cell_data_bytes(0, Source::GroupInput)?;
     let header = parse_governance_header(&blkl_data)?;
 
-    // Load witness and extract signer entries + GOV1 v2 payload.
+    // Load witness and extract signer entries + GOV1 v3 payload.
     let witness = load_witness_fields(0, Source::GroupInput)?;
 
-    // Compute signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root).
-    // This binds each signer to the exact proposal identity AND the precise registry state transition,
-    // preventing reuse of signatures across different registry outputs.
-    let (proposal_id_hash, vote_digest_hash, old_root, new_root) = parse_gov1_hashes(&witness.gov1_payload)?;
+    // Parse GOV1 v3 payload. The input's `since` field must be an absolute timestamp
+    // >= review_window_end_ms, enforcing the governance review window at consensus level.
+    // Preimage (136 bytes): proposal_id_hash || vote_digest_hash || old_root || new_root || review_window_end_ms
+    let (proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms) =
+        parse_gov1_hashes(&witness.gov1_payload)?;
     if proposal_id_hash == [0u8; 32] || vote_digest_hash == [0u8; 32] {
         return Err(ERR_INVALID_WITNESS);
     }
-    let mut signing_preimage = [0u8; 128];
-    signing_preimage[..32].copy_from_slice(&proposal_id_hash);
-    signing_preimage[32..64].copy_from_slice(&vote_digest_hash);
-    signing_preimage[64..96].copy_from_slice(&old_root);
-    signing_preimage[96..].copy_from_slice(&new_root);
-    let signing_message = blake2b_256(&signing_preimage);
+
+    let since = load_input_since(0, Source::GroupInput)?;
+    verify_since_timestamp(since, review_window_end_ms)?;
+
+    let mut preimage = [0u8; 136];
+    preimage[..32].copy_from_slice(&proposal_id_hash);
+    preimage[32..64].copy_from_slice(&vote_digest_hash);
+    preimage[64..96].copy_from_slice(&old_root);
+    preimage[96..128].copy_from_slice(&new_root);
+    preimage[128..136].copy_from_slice(&review_window_end_ms.to_le_bytes());
+    let signing_message = blake2b_256(&preimage);
 
     // Verify each signer and count unique valid signatures.
     let max_signers = header.pubkeys.len();
@@ -403,31 +454,42 @@ mod tests {
 
     #[test]
     fn test_parse_gov1_hashes_valid() {
-        let mut payload = [0u8; 133];
+        let mut payload = [0u8; 141];
         payload[0..4].copy_from_slice(b"GOV1");
-        payload[4] = 0x02;
-        payload[5..37].fill(0x11);   // proposal_id_hash
-        payload[37..69].fill(0x22);  // vote_digest_hash
-        payload[69..101].fill(0x33); // old_root
+        payload[4] = 0x03;
+        payload[5..37].fill(0x11);    // proposal_id_hash
+        payload[37..69].fill(0x22);   // vote_digest_hash
+        payload[69..101].fill(0x33);  // old_root
         payload[101..133].fill(0x44); // new_root
-        let (pid, vdh) = parse_gov1_hashes(&payload).expect("should parse");
+        payload[133..141].copy_from_slice(&1_000u64.to_le_bytes()); // review_window_end_ms
+        let (pid, vdh, _, _, rw) = parse_gov1_hashes(&payload).expect("should parse");
         assert_eq!(pid, [0x11u8; 32]);
         assert_eq!(vdh, [0x22u8; 32]);
+        assert_eq!(rw, 1_000u64);
     }
 
     #[test]
     fn test_parse_gov1_hashes_wrong_length() {
-        assert!(parse_gov1_hashes(&[0u8; 132]).is_err());
-        assert!(parse_gov1_hashes(&[0u8; 134]).is_err());
+        assert!(parse_gov1_hashes(&[0u8; 133]).is_err()); // v2 length no longer accepted
+        assert!(parse_gov1_hashes(&[0u8; 140]).is_err());
+        assert!(parse_gov1_hashes(&[0u8; 142]).is_err());
     }
 
     #[test]
     fn test_parse_gov1_hashes_wrong_magic() {
-        let mut payload = [0u8; 133];
+        let mut payload = [0u8; 141];
         payload[0..4].copy_from_slice(b"NOPE");
-        payload[4] = 0x02;
+        payload[4] = 0x03;
         payload[5..37].fill(0x11);
         payload[37..69].fill(0x22);
+        assert!(parse_gov1_hashes(&payload).is_err());
+    }
+
+    #[test]
+    fn test_parse_gov1_hashes_wrong_version() {
+        let mut payload = [0u8; 141];
+        payload[0..4].copy_from_slice(b"GOV1");
+        payload[4] = 0x02; // v2 no longer accepted
         assert!(parse_gov1_hashes(&payload).is_err());
     }
 
@@ -445,5 +507,79 @@ mod tests {
         let recovered = recover_pubkey(&msg_hash, &sig_bytes).expect("recover");
         let expected_pk = dummy_pubkey(); // signer 0 compressed pubkey
         assert_eq!(recovered, expected_pk);
+    }
+
+    // ── verify_since_timestamp ────────────────────────────────────────────────
+
+    fn valid_since(ms: u64) -> u64 {
+        SINCE_METRIC_TIMESTAMP | (ms & SINCE_VALUE_MASK)
+    }
+
+    #[test]
+    fn test_since_valid_exact_min() {
+        let min_ms = 1_700_000_000_000u64;
+        assert!(verify_since_timestamp(valid_since(min_ms), min_ms).is_ok());
+    }
+
+    #[test]
+    fn test_since_valid_after_min() {
+        let min_ms = 1_700_000_000_000u64;
+        assert!(verify_since_timestamp(valid_since(min_ms + 3_600_000), min_ms).is_ok());
+    }
+
+    #[test]
+    fn test_since_valid_min_zero() {
+        // review_window_end_ms = 0 means no delay required; any absolute timestamp passes.
+        assert!(verify_since_timestamp(valid_since(0), 0).is_ok());
+    }
+
+    #[test]
+    fn test_since_reject_relative_timestamp() {
+        // Bit 63 = 1 makes the lock relative; the chain would treat the value as a
+        // block-count / time-offset from the tip, not an absolute MTP constraint.
+        let min_ms = 1_700_000_000_000u64;
+        let since = SINCE_LOCK_TYPE_FLAG | SINCE_METRIC_TIMESTAMP | min_ms;
+        assert_eq!(verify_since_timestamp(since, min_ms), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_relative_block_number() {
+        // Relative block-number since (bits 63=1, 62:61=00).
+        let since = SINCE_LOCK_TYPE_FLAG | 1_000u64;
+        assert_eq!(verify_since_timestamp(since, 0), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_absolute_block_number_metric() {
+        // Absolute block-number since (bits 63=0, 62:61=00); value is a block height, not ms.
+        let since = 0x0000_0000_0000_0001u64; // block 1
+        assert_eq!(verify_since_timestamp(since, 0), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_absolute_epoch_metric() {
+        // Absolute epoch since (bits 63=0, 62:61=01); value encodes epoch+index, not ms.
+        let since = 0x2000_0000_0000_0001u64;
+        assert_eq!(verify_since_timestamp(since, 0), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_zero_since_with_nonzero_min() {
+        // since = 0 is absolute block 0 (block-number metric); rejected before timestamp check.
+        assert_eq!(verify_since_timestamp(0u64, 1), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_timestamp_before_min() {
+        let min_ms = 1_700_000_000_000u64;
+        let since = valid_since(min_ms - 1);
+        assert_eq!(verify_since_timestamp(since, min_ms), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    }
+
+    #[test]
+    fn test_since_reject_timestamp_far_before_min() {
+        let min_ms = 1_700_000_000_000u64;
+        let since = valid_since(0); // timestamp = 0 ms
+        assert_eq!(verify_since_timestamp(since, min_ms), Err(ERR_REVIEW_WINDOW_NOT_MET));
     }
 }

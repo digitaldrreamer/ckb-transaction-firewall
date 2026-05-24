@@ -18,7 +18,7 @@ import { getLiveCell } from "../lib/rpc.js";
 import { resolveRegistryOutpoint } from "../lib/registry.js";
 import { ckbBlake2b } from "../lib/witness.js";
 import { printHints } from "../lib/hints.js";
-import { TESTNET_RPC_URL, TESTNET_REGISTRY_CELL } from "../lib/defaults.js";
+import { TESTNET_RPC_URL, TESTNET_REGISTRY_CELL, warnIfTrivialTestKeys } from "../lib/defaults.js";
 
 export interface SignOptions {
   proposal?: string;
@@ -60,6 +60,8 @@ export async function signCommand(opts: SignOptions): Promise<void> {
 
   let proposalId = opts.proposal?.trim() ?? "";
   if (!proposalId) {
+    // Use SIG_THRESHOLD as a conservative filter; the real on-chain threshold
+    // is checked after fetching the registry cell.
     const signable = listProposals().filter(
       (p) =>
         (p.status === "approved" || p.status === "voting" || p.status === "pending-review") &&
@@ -114,11 +116,16 @@ export async function signCommand(opts: SignOptions): Promise<void> {
 
   // ── fetch registry cell (before signer index prompt so we can use on-chain committee size) ──
 
-  const registryIndexInt = Number.parseInt(opts.registryIndex, 10);
+  if (!/^\d+$/.test(opts.registryIndex.trim())) {
+    console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
+    process.exit(1);
+  }
+  const registryIndexInt = Number.parseInt(opts.registryIndex.trim(), 10);
   const spinner = ora("Fetching current registry cell to compute signing roots").start();
   let oldRoot: Uint8Array;
   let newRoot: Uint8Array;
   let committeeSize: number | null = null;
+  let onChainThreshold: number | null = null;
   try {
     const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, registryIndexInt);
     const cell = await getLiveCell(opts.rpcUrl, txHash, index);
@@ -126,7 +133,15 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
     const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
     if (govHeader && govHeader.pubkeys.length > 0) {
+      warnIfTrivialTestKeys(govHeader.pubkeys);
       committeeSize = govHeader.pubkeys.length;
+      onChainThreshold = govHeader.threshold;
+      if (onChainThreshold !== SIG_THRESHOLD) {
+        process.stderr.write(
+          `Warning: on-chain signature threshold (${onChainThreshold}) differs from compile-time default (${SIG_THRESHOLD}). ` +
+          `Using the on-chain value.\n`,
+        );
+      }
     }
     const oldBlkl = hexToBytes(cell.data);
 
@@ -217,7 +232,9 @@ export async function signCommand(opts: SignOptions): Promise<void> {
   // Derive pubkey before zeroing key material.
   const pubKey = bytesToHex(new Uint8Array(secp256k1.getPublicKey(privateKeyBytes, true)));
 
-  const msgHash = signingMessage(proposal, oldRoot!, newRoot!);
+  // Use v3 signing (includes reviewWindowEndMs) so governance-lock can verify the since constraint.
+  const reviewWindowEndMs = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
+  const msgHash = signingMessage(proposal, oldRoot!, newRoot!, reviewWindowEndMs);
   // @noble/curves v2 'recovered' format: [recovery_bit(1), r(32), s(32)].
   // CKB secp256k1 expects: [r(32), s(32), recovery_bit(1)].
   const recoveredSig = secp256k1.sign(msgHash, privateKeyBytes, { lowS: true, format: "recovered" });
@@ -232,8 +249,9 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     timestamp: new Date().toISOString(),
   });
 
+  const effectiveThreshold = onChainThreshold ?? SIG_THRESHOLD;
   const sigCount = proposal.signatures.length;
-  if (sigCount >= SIG_THRESHOLD) {
+  if (sigCount >= effectiveThreshold) {
     proposal.status = "approved";
   }
 
@@ -243,14 +261,14 @@ export async function signCommand(opts: SignOptions): Promise<void> {
   console.log(logSymbols.success, chalk.green(`Signed by signer ${signerIndex}`));
   console.log(`  Public key:  ${chalk.dim(pubKey)}`);
   console.log(`  Signature:   ${chalk.dim(bytesToHex(sigBytes).slice(0, 20) + "…")}`);
-  console.log(`  Signatures:  ${sigCount}/${SIG_THRESHOLD} collected`);
+  console.log(`  Signatures:  ${sigCount}/${effectiveThreshold} collected`);
 
-  if (sigCount >= SIG_THRESHOLD) {
+  if (sigCount >= effectiveThreshold) {
     console.log();
     console.log(logSymbols.success, chalk.green("Signature threshold met — ready to execute."));
     console.log(`  Next: ${chalk.dim(`ckb-firewall execute --proposal ${proposal.id}`)}`);
   } else {
-    console.log(`  Need ${SIG_THRESHOLD - sigCount} more signature(s).`);
+    console.log(`  Need ${effectiveThreshold - sigCount} more signature(s).`);
   }
   console.log();
   printHints("sign");

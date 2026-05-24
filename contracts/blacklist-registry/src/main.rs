@@ -4,7 +4,7 @@
 //! - Exactly-one input + exactly-one output registry cell per update transaction.
 //! - Registry payload format invariants (BLKL v2, sorted entries).
 //! - Governance authorization via a configured governance lock script identity.
-//! - Governance context binding via a GOV1 v2 witness payload committed to by tx signatures.
+//! - Governance context binding via a GOV1 v3 witness payload committed to by tx signatures.
 //! - Type ID enforcement to preserve registry identity across updates.
 //!
 //! Signature verification is delegated entirely to the governance-lock script
@@ -188,16 +188,18 @@ impl RegistryPayload {
     }
 }
 
-/// Governance witness v2 — GOV1 binding placed in WitnessArgs.input_type.
+/// Governance witness — GOV1 v3 binding placed in WitnessArgs.input_type.
 ///
-/// Layout: GOV1(4) | version=0x02(1) | proposal_id_hash(32) | vote_digest_hash(32) |
-///         old_root(32) | new_root(32) = 133 bytes total.
+/// Layout (141 bytes): GOV1(4) | version=0x03(1) | proposal_id_hash(32) |
+///   vote_digest_hash(32) | old_root(32) | new_root(32) | review_window_end_ms(8 LE u64)
+///
+/// governance-lock verifies review_window_end_ms against the input's `since` field.
+/// This type script only needs the 4 hashes; the final 8 bytes are parsed but not used here.
 ///
 /// Signer entries live in WitnessArgs.lock for the governance-lock to verify.
 /// This type script does NOT touch the lock field.
 #[derive(Debug, Clone)]
 pub struct GovernanceWitness {
-    pub version: u8,
     pub proposal_id_hash: [u8; 32],
     pub vote_digest_hash: [u8; 32],
     pub old_root: [u8; 32],
@@ -206,14 +208,13 @@ pub struct GovernanceWitness {
 
 impl GovernanceWitness {
     pub fn parse(raw: &[u8]) -> Result<Self, SysError> {
-        if raw.len() != 133 {
+        if raw.len() != 141 {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
         if &raw[0..4] != b"GOV1" {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
-        let version = raw[4];
-        if version != 0x02 {
+        if raw[4] != 0x03 {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
         let mut proposal_id_hash = [0u8; 32];
@@ -224,7 +225,7 @@ impl GovernanceWitness {
         old_root.copy_from_slice(&raw[69..101]);
         let mut new_root = [0u8; 32];
         new_root.copy_from_slice(&raw[101..133]);
-        Ok(Self { version, proposal_id_hash, vote_digest_hash, old_root, new_root })
+        Ok(Self { proposal_id_hash, vote_digest_hash, old_root, new_root })
     }
 }
 
@@ -416,7 +417,7 @@ fn decode_bytesopt_field(field: &[u8]) -> Result<Option<Vec<u8>>, SysError> {
     Ok(Some(field[4..(4 + count)].to_vec()))
 }
 
-/// Extracts the GOV1 v2 binding from WitnessArgs.input_type at the given input index.
+/// Extracts the GOV1 v3 binding from WitnessArgs.input_type at the given input index.
 fn load_governance_witness_payload(input_index: usize) -> Result<Vec<u8>, SysError> {
     let buf = load_witness_bytes(input_index, Source::Input)?;
     if buf.len() < 16 {
@@ -522,7 +523,7 @@ fn program_entry() -> Result<(), SysError> {
     };
     let new_root = blake2b_256(out_data.as_slice());
 
-    // GOV1 v2 binding from WitnessArgs.input_type.
+    // GOV1 v3 binding from WitnessArgs.input_type.
     let gov_payload = load_governance_witness_payload(witness_index)?;
     let gov = GovernanceWitness::parse(gov_payload.as_slice())?;
 
@@ -626,14 +627,14 @@ mod tests {
     fn test_governance_witness_parse_valid() {
         let mut raw = vec![];
         raw.extend_from_slice(b"GOV1");
-        raw.push(0x02);
-        raw.extend_from_slice(&[1u8; 32]);
-        raw.extend_from_slice(&[2u8; 32]);
-        raw.extend_from_slice(&[3u8; 32]);
-        raw.extend_from_slice(&[4u8; 32]);
-        assert_eq!(raw.len(), 133);
+        raw.push(0x03);
+        raw.extend_from_slice(&[1u8; 32]); // proposal_id_hash
+        raw.extend_from_slice(&[2u8; 32]); // vote_digest_hash
+        raw.extend_from_slice(&[3u8; 32]); // old_root
+        raw.extend_from_slice(&[4u8; 32]); // new_root
+        raw.extend_from_slice(&[0u8; 8]);  // review_window_end_ms
+        assert_eq!(raw.len(), 141);
         let w = GovernanceWitness::parse(&raw).expect("should parse");
-        assert_eq!(w.version, 0x02);
         assert_eq!(w.proposal_id_hash, [1u8; 32]);
         assert_eq!(w.vote_digest_hash, [2u8; 32]);
         assert_eq!(w.old_root, [3u8; 32]);
@@ -644,27 +645,27 @@ mod tests {
     fn test_governance_witness_wrong_length() {
         let mut raw = vec![];
         raw.extend_from_slice(b"GOV1");
-        raw.push(0x02);
+        raw.push(0x03);
         raw.extend_from_slice(&[1u8; 32]);
         raw.extend_from_slice(&[2u8; 32]);
         raw.extend_from_slice(&[3u8; 32]);
-        // Missing new_root — only 101 bytes
+        // Missing new_root + review_window_end_ms
         assert!(GovernanceWitness::parse(&raw).is_err());
     }
 
     #[test]
     fn test_governance_witness_wrong_version() {
-        let mut raw = vec![0u8; 133];
+        let mut raw = vec![0u8; 141];
         raw[0..4].copy_from_slice(b"GOV1");
-        raw[4] = 0x01;
+        raw[4] = 0x02; // v2 no longer accepted
         assert!(GovernanceWitness::parse(&raw).is_err());
     }
 
     #[test]
     fn test_governance_witness_invalid_magic() {
-        let mut raw = vec![0u8; 133];
+        let mut raw = vec![0u8; 141];
         raw[0..4].copy_from_slice(b"NOPE");
-        raw[4] = 0x02;
+        raw[4] = 0x03;
         assert!(GovernanceWitness::parse(&raw).is_err());
     }
 

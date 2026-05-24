@@ -36,17 +36,19 @@ The `execute` command:
 - Verifies every vote signature against the voter's public key
 - Verifies every vote pubkey is in the on-chain validator Merkle set
 - Verifies every governance signer signature against the on-chain committee pubkeys from the BLKL governance header
-- Builds the GOV1 v2 witness and fetches the live registry cell
+- Builds the GOV1 v3 witness and fetches the live registry cell
+- Sets the `since` field on the governance cell input to enforce the review window at consensus level
 - Produces a signed transaction ready for `ckb-cli` submission
 
 ## On-chain validation
 
 The registry type script (`blacklist-registry`) validates:
 - BLKL v2 payload structure and entry sort order
-- GOV1 v2 witness binding (old\_root, new\_root, proposal and vote hashes non-zero)
+- GOV1 v3 witness binding: `old_root`/`new_root` consistency with actual cell data; `proposal_id_hash` and `vote_digest_hash` non-zero
 - Governance-lock identity on the output registry cell
 
 The governance-lock script validates:
+- The governance cell input's `since` field encodes an absolute median-time-past timestamp ≥ `review_window_end_ms` from the GOV1 payload
 - Signer count meets the threshold
 - Each signer's recovered pubkey matches the committee pubkey at that index (read from the BLKL governance header)
 
@@ -55,7 +57,7 @@ Vote signature verification is off-chain — the `execute` command performs it b
 ## Timing constraints
 
 The minimum realistic timeline is approximately **120 hours**:
-- 72 hours review window (mandatory, enforced on-chain via the GOV1 timestamp)
+- 72 hours review window (mandatory, enforced on-chain via `CellInput.since` and the GOV1 `review_window_end_ms` field)
 - Time for validators to vote (varies)
 - Time for signers to sign (varies)
 

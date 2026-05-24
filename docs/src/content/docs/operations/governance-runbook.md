@@ -138,6 +138,6 @@ The entry should appear in the registry and `check` should print that it is blac
 
 ## Notes
 
-- The 72-hour review window is enforced by the CLI at execute time. `execute` will refuse to proceed until it passes.
+- The 72-hour review window is enforced **on-chain** via the `since` field on the governance cell input. The transaction is invalid at consensus level until the chain's median block time reaches `reviewWindowEndsAt` — this cannot be bypassed by building the transaction manually.
 - The minimum full timeline is approximately 120 hours. Set `--expires-at` accordingly for temporary entries.
 - If a participant's local proposal file is out of sync, re-import the latest shared version to merge.

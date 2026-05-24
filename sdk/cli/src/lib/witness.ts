@@ -13,9 +13,12 @@ export interface Gov1BindingParams {
   newRoot: Uint8Array;
 }
 
-// GOV1 v2 — binding commitment only, no signers (133 bytes).
-// Signers go in WitnessArgs.lock as a separate governance-sig-witness.
-export function buildGov1WitnessV2(params: Gov1BindingParams): Uint8Array {
+// GOV1 v3 — 141 bytes. governance-lock verifies that the input's `since` field encodes an
+// absolute median-time-past timestamp >= reviewWindowEndMs, enforcing the review window at
+// consensus level. reviewWindowEndMs is included in the signing preimage to prevent tampering.
+export function buildGov1WitnessV3(
+  params: Gov1BindingParams & { reviewWindowEndMs: bigint },
+): Uint8Array {
   for (const [name, val] of [
     ["proposalIdHash", params.proposalIdHash],
     ["voteDigestHash", params.voteDigestHash],
@@ -24,16 +27,31 @@ export function buildGov1WitnessV2(params: Gov1BindingParams): Uint8Array {
   ] as const) {
     if (val.length !== 32) throw new Error(`${name} must be exactly 32 bytes, got ${val.length}`);
   }
-  // 4 magic + 1 version + 32*4 hashes = 133 bytes
-  const buf = new Uint8Array(133);
+  // 4 magic + 1 version + 32*4 hashes + 8 reviewWindowEndMs = 141 bytes
+  const buf = new Uint8Array(141);
   let off = 0;
   buf[off++] = 0x47; buf[off++] = 0x4f; buf[off++] = 0x56; buf[off++] = 0x31; // GOV1
-  buf[off++] = 0x02; // version 2
+  buf[off++] = 0x03; // version 3
   buf.set(params.proposalIdHash, off); off += 32;
   buf.set(params.voteDigestHash, off); off += 32;
   buf.set(params.oldRoot, off); off += 32;
   buf.set(params.newRoot, off); off += 32;
+  // reviewWindowEndMs as LE u64
+  let ms = params.reviewWindowEndMs;
+  for (let i = 0; i < 8; i++) {
+    buf[off++] = Number(ms & 0xffn);
+    ms >>= 8n;
+  }
   return buf;
+}
+
+// Encodes a Unix timestamp (milliseconds) as a CKB absolute median-time-past `since` value.
+// Format: bit62=1 (timestamp metric), bit63=0 (absolute), bits55-0 = timestamp_ms.
+export function encodeAbsoluteTimestampSince(timestampMs: bigint): string {
+  const TIMESTAMP_FLAG = 0x4000_0000_0000_0000n;
+  const VALUE_MASK = 0x00FF_FFFF_FFFF_FFFFn;
+  const since = TIMESTAMP_FLAG | (timestampMs & VALUE_MASK);
+  return `0x${since.toString(16).padStart(16, "0")}`;
 }
 
 // Builds the WitnessArgs.lock content for governance transactions (v2).
@@ -101,8 +119,9 @@ export function buildWitnessArgs(params: {
   return buf;
 }
 
-// Placeholder signatures (3-of-5) for testnet where on-chain sig verification is off.
-// Replace with real governance signatures for production use.
+// FOR UNIT TESTING ONLY — generates structurally-valid but cryptographically fake signatures.
+// governance-lock verifies secp256k1 signatures on-chain for GOV1 v3; these WILL be rejected by the chain.
+// Never use in a real governance transaction. Only valid in test environments that mock the contract.
 export function placeholderSigners(count: 3 | 4 | 5 = 3): Array<{ index: number; sig: Uint8Array }> {
   return Array.from({ length: count }, (_, i) => ({
     index: i,

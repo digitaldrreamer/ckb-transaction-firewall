@@ -1,21 +1,24 @@
 ---
 title: GOV1 Witness
-description: Governance witness layout for registry update transactions — v2 split format across WitnessArgs fields.
+description: Governance witness layout for registry update transactions — v3 format with on-chain review window enforcement.
 ---
 
-`GOV1` is the governance witness payload that binds a registry update transaction to a specific proposal, vote digest, and BLKL state transition. Version `0x02` splits the payload across two `WitnessArgs` fields: the GOV1 binding goes in `input_type` and the signer entries go in `lock`.
+`GOV1` is the governance witness payload that binds a registry update transaction to a specific proposal, vote digest, and BLKL state transition. Version `0x03` splits the payload across two `WitnessArgs` fields: the GOV1 binding goes in `input_type` and the signer entries go in `lock`. The `since` field on the governance cell input enforces the review window at consensus level.
 
 ## Quick start
 
 ```ts
-import { buildGov1WitnessV2, buildGovernanceSigWitness, buildWitnessArgs } from "../lib/witness.js";
+import { buildGov1WitnessV3, buildGovernanceSigWitness, buildWitnessArgs, encodeAbsoluteTimestampSince } from "../lib/witness.js";
 
 // Built by the CLI's execute command — illustrative only
-const gov1 = buildGov1WitnessV2({
-  proposalIdHash,   // Uint8Array(32)
-  voteDigestHash,   // Uint8Array(32)
-  oldRoot,          // Uint8Array(32) — blake2b of input registry data
-  newRoot,          // Uint8Array(32) — blake2b of output registry data
+const reviewWindowEndMs = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
+
+const gov1 = buildGov1WitnessV3({
+  proposalIdHash,     // Uint8Array(32)
+  voteDigestHash,     // Uint8Array(32)
+  oldRoot,            // Uint8Array(32) — blake2b of input registry data
+  newRoot,            // Uint8Array(32) — blake2b of output registry data
+  reviewWindowEndMs,  // bigint — ms since Unix epoch
 });
 
 const sigWitness = buildGovernanceSigWitness([
@@ -25,28 +28,52 @@ const sigWitness = buildGovernanceSigWitness([
 ]);
 
 const witness = buildWitnessArgs({ lock: sigWitness, inputType: gov1 });
+
+// The governance cell input must set `since` to enforce the review window on-chain.
+const since = encodeAbsoluteTimestampSince(reviewWindowEndMs);
+// Set this on the CellInput for the registry cell in the transaction.
 ```
 
 ## WitnessArgs.input\_type — GOV1 binding
 
-The registry type script reads `WitnessArgs.input_type`. This field is exactly 133 bytes:
+The registry type script reads `WitnessArgs.input_type`. This field is exactly 141 bytes:
 
 | Field | Offset | Size | Value |
 |-------|--------|------|-------|
 | `magic` | 0 | 4 bytes | ASCII `GOV1` (`0x47 0x4f 0x56 0x31`) |
-| `version` | 4 | 1 byte | `0x02` |
+| `version` | 4 | 1 byte | `0x03` |
 | `proposal_id_hash` | 5 | 32 bytes | blake2b hash of the canonical proposal fields |
 | `vote_digest_hash` | 37 | 32 bytes | blake2b hash of the sorted signed vote records |
 | `old_root` | 69 | 32 bytes | blake2b of the input registry cell data |
 | `new_root` | 101 | 32 bytes | blake2b of the output registry cell data |
+| `review_window_end_ms` | 133 | 8 bytes | LE u64 — Unix timestamp in ms when the review window ends |
 
-**Total: 133 bytes** (after molecule `BytesOpt` length prefix — the raw payload is 133 bytes).
+**Total: 141 bytes** (raw payload; molecule `BytesOpt` adds a 4-byte length prefix on the wire).
 
 Neither `proposal_id_hash` nor `vote_digest_hash` may be the zero hash (`[0u8; 32]`); the type script rejects such witnesses.
 
 ### What `old_root` and `new_root` bind
 
 `old_root = blake2b(input_registry_cell_data)` and `new_root = blake2b(output_registry_cell_data)`. The type script independently recomputes both roots from the actual cell data and rejects the transaction if they don't match what the witness claims. This prevents the witness from being replayed against a different registry state.
+
+## CellInput.since — review window enforcement
+
+The governance cell input's `since` field must be set to an **absolute median-time-past timestamp** encoding `review_window_end_ms`:
+
+```text
+since = 0x4000_0000_0000_0000 | review_window_end_ms
+```
+
+- Bit 63 = 0: absolute (not relative)
+- Bit 62 = 1: timestamp metric (median block time)
+- Bits 55–0: `review_window_end_ms` value
+
+`governance-lock` reads this field and returns `ERR_REVIEW_WINDOW_NOT_MET (6)` if:
+- The since value uses a relative flag (bit 63 = 1)
+- The metric is not timestamp (bit 62 ≠ 1)
+- The encoded timestamp is less than `review_window_end_ms` from the GOV1 payload
+
+Because `review_window_end_ms` is included in the signing preimage, it cannot be tampered with after governance signers have signed.
 
 ## WitnessArgs.lock — Governance signer entries
 
@@ -71,10 +98,10 @@ Each signer entry is 66 bytes:
 The governance-lock computes the message each signer must have signed as:
 
 ```
-signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root)
+signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root || review_window_end_ms)
 ```
 
-Signature recovery uses this 32-byte hash directly as the ECDSA prehash. By including `old_root` and `new_root` in the preimage, each signer explicitly commits to the exact registry state transition they are authorising — making it impossible to reuse signatures from one proposal's execution against a different or malicious registry output. The `execute` CLI command verifies each stored signature against the corresponding on-chain pubkey (from the governance header) before building the witness.
+This is a 136-byte preimage hashed down to 32 bytes. By including `old_root`, `new_root`, and `review_window_end_ms` in the preimage, each signer explicitly commits to the exact registry state transition and the review window end time. It is impossible to reuse signatures from one proposal against a different registry output or a shorter review window.
 
 ## Vote digest
 
@@ -102,6 +129,7 @@ The `execute` command recomputes `vote_digest_hash` from the stored votes and ab
 | `proposal_id_hash` / `vote_digest_hash` non-zero | Registry type script (on-chain) |
 | Each signer signature valid against committee pubkey | Governance-lock script (on-chain) |
 | Threshold (≥ N-of-M valid signatures) | Governance-lock script (on-chain) |
+| `since` encodes absolute timestamp ≥ `review_window_end_ms` | Governance-lock script (on-chain) |
 | Each vote signature valid against voter pubkey | CLI `execute` (off-chain, pre-submission) |
 | Each vote pubkey in validator Merkle set | CLI `execute` (off-chain, pre-submission) |
 | `vote_digest_hash` recomputed from votes matches stored | CLI `execute` (off-chain, pre-submission) |
@@ -109,7 +137,7 @@ The `execute` command recomputes `vote_digest_hash` from the stored votes and ab
 
 ## Reference
 
-- Witness builder: `sdk/cli/src/lib/witness.ts` — `buildGov1WitnessV2`, `buildGovernanceSigWitness`, `buildWitnessArgs`
+- Witness builder: `sdk/cli/src/lib/witness.ts` — `buildGov1WitnessV3`, `buildGovernanceSigWitness`, `buildWitnessArgs`, `encodeAbsoluteTimestampSince`
 - Proposal types: `sdk/cli/src/lib/proposals.ts` — `ProposalVote`, `computeVoteDigestHash`, `signingMessage`, `voteSigningMessage`
 - On-chain GOV1 parser: `contracts/blacklist-registry/src/main.rs` — `GovernanceWitness::parse`
-- On-chain signer verifier: `contracts/governance-lock/src/main.rs` — `program_entry`
+- On-chain signer verifier + since check: `contracts/governance-lock/src/main.rs` — `program_entry`, `verify_since_timestamp`
