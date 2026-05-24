@@ -4,7 +4,7 @@
 //! - Exactly-one input + exactly-one output registry cell per update transaction.
 //! - Registry payload format invariants (BLKL v2, sorted entries).
 //! - Governance authorization via a configured governance lock script identity.
-//! - Governance context binding via a GOV1 v2 witness payload committed to by tx signatures.
+//! - Governance context binding via a GOV1 v2 or v3 witness payload committed to by tx signatures.
 //! - Type ID enforcement to preserve registry identity across updates.
 //!
 //! Signature verification is delegated entirely to the governance-lock script
@@ -210,15 +210,21 @@ pub struct GovernanceWitness {
 
 impl GovernanceWitness {
     pub fn parse(raw: &[u8]) -> Result<Self, SysError> {
-        // Accept v2 (133 bytes) and v3 (141 bytes, adds review_window_end_ms).
-        if raw.len() != 133 && raw.len() != 141 {
+        if raw.len() < 5 {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
         if &raw[0..4] != b"GOV1" {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
+        // Version byte is the canonical discriminator; enforce the expected length
+        // for each version to prevent mismatched (version, length) pairs.
         let version = raw[4];
-        if version != 0x02 && version != 0x03 {
+        let expected_len: usize = match version {
+            0x02 => 133,
+            0x03 => 141,
+            _ => return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS)),
+        };
+        if raw.len() != expected_len {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
         let mut proposal_id_hash = [0u8; 32];
@@ -421,7 +427,7 @@ fn decode_bytesopt_field(field: &[u8]) -> Result<Option<Vec<u8>>, SysError> {
     Ok(Some(field[4..(4 + count)].to_vec()))
 }
 
-/// Extracts the GOV1 v2 binding from WitnessArgs.input_type at the given input index.
+/// Extracts the GOV1 v2 or v3 binding from WitnessArgs.input_type at the given input index.
 fn load_governance_witness_payload(input_index: usize) -> Result<Vec<u8>, SysError> {
     let buf = load_witness_bytes(input_index, Source::Input)?;
     if buf.len() < 16 {
@@ -527,7 +533,7 @@ fn program_entry() -> Result<(), SysError> {
     };
     let new_root = blake2b_256(out_data.as_slice());
 
-    // GOV1 v2 binding from WitnessArgs.input_type.
+    // GOV1 v2 or v3 binding from WitnessArgs.input_type.
     let gov_payload = load_governance_witness_payload(witness_index)?;
     let gov = GovernanceWitness::parse(gov_payload.as_slice())?;
 

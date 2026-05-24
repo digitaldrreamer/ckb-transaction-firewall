@@ -251,14 +251,22 @@ fn load_witness_fields(index: usize, source: Source) -> Result<WitnessFields, i8
 fn parse_gov1_hashes(
     payload: &[u8],
 ) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32], Option<u64>), i8> {
-    if payload.len() != 133 && payload.len() != 141 {
+    if payload.len() < 5 {
         return Err(ERR_INVALID_WITNESS);
     }
     if &payload[0..4] != b"GOV1" {
         return Err(ERR_INVALID_WITNESS);
     }
+    // Version byte is the canonical discriminator; length must match the version.
+    // Checking length first would allow a 141-byte v2 payload to silently skip
+    // the since enforcement that v3 requires.
     let version = payload[4];
-    if version != 0x02 && version != 0x03 {
+    let expected_len: usize = match version {
+        0x02 => 133,
+        0x03 => 141,
+        _ => return Err(ERR_INVALID_WITNESS),
+    };
+    if payload.len() != expected_len {
         return Err(ERR_INVALID_WITNESS);
     }
     let mut proposal_id_hash = [0u8; 32];

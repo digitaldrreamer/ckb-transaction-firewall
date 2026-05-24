@@ -24,13 +24,17 @@ The testnet governance committee uses secp256k1 keys derived from trivial privat
 
 ---
 
-### H3 — Review Window is Enforced by CLI Only (Not On-Chain)
+### H3 — Review Window Enforced On-Chain via GOV1 v3 + CKB `since` ✓ Fixed
 
-The mandatory 72-hour governance review window is a social contract enforced by CLI logic in `execute.ts`. The on-chain `governance-lock` contract does NOT verify timestamps.
+The mandatory 72-hour governance review window is now enforced at consensus level. `execute.ts` sets the `since` field on the governance cell input to an absolute median-time-past timestamp equal to `reviewWindowEndsAt`, and `governance-lock` verifies this constraint on-chain.
 
-**Impact:** An attacker with sufficient governance keys (3/5) can bypass the review window by building and submitting the governance transaction directly, without using the CLI.
+**How it works:**
+- `execute.ts` builds a **GOV1 v3 witness** (141 bytes = v2 + 8-byte LE u64 `review_window_end_ms`)
+- The governance input's `since` field is set to `0x4000_0000_0000_0000 | review_window_end_ms` (absolute MTP timestamp)
+- `governance-lock` parses the v3 witness, extracts `review_window_end_ms`, loads the input's `since`, and returns `ERR_REVIEW_WINDOW_NOT_MET (6)` if the since value encodes an earlier timestamp or uses a non-timestamp metric
+- `review_window_end_ms` is included in the signing preimage (v3 = 136 bytes), so it cannot be tampered with after signing
 
-**Mitigation path (mainnet):** Implement on-chain review window enforcement using CKB's native `since` field on the governance cell input with median-time-past semantics. This encodes a minimum time delay directly in the transaction structure, enforced at consensus level.
+**Backward compatibility:** v2 witnesses (133 bytes, version=0x02) are still accepted; the since check is only applied when `version == 0x03`.
 
 ---
 
@@ -75,7 +79,7 @@ All remote RPC calls require HTTPS. The CLI enforces this at the call site and w
 | C1 | Critical | Mitigated (warning) | Trivial testnet governance keys |
 | H1 | High | Fixed | governance-lock module comment vs. implementation mismatch |
 | H2 | High | Fixed | HTTPS not enforced (now throws) |
-| H3 | High | Documented | Review window CLI-only enforcement |
+| H3 | High | Fixed | Review window now enforced on-chain via GOV1 v3 + CKB `since` |
 | M1 | Medium | Fixed | SIG_THRESHOLD hardcoded, not from on-chain governance header |
 | M2 | Medium | Fixed | `placeholderSigners` misleading comment |
 | M3 | Medium | Fixed | `proposalPath` lacked hex format validation |
@@ -97,7 +101,7 @@ Before any mainnet or high-value deployment:
 - [ ] Generate fresh governance private keys (never expose them)
 - [ ] Update `TESTNET_GOVERNANCE_PUBKEYS` and constants in `defaults.ts`
 - [ ] Redeploy contracts with new governance committee pubkeys in BLKL registry
-- [ ] Implement on-chain review window enforcement via CKB `since` field
+- [x] Implement on-chain review window enforcement via CKB `since` field (GOV1 v3)
 - [ ] Establish key custody policy (HSM, multi-party signing, offline storage)
 - [ ] Add governance proposal deposit / rate limiting to prevent spam
 - [ ] Audit duplicate vote pubkey handling in `computeVoteDigestHash`
