@@ -233,7 +233,9 @@ export async function signCommand(opts: SignOptions): Promise<void> {
   // Derive pubkey before zeroing key material.
   const pubKey = bytesToHex(new Uint8Array(secp256k1.getPublicKey(privateKeyBytes, true)));
 
-  const msgHash = signingMessage(proposal, oldRoot!, newRoot!);
+  // Use v3 signing (includes reviewWindowEndMs) so governance-lock can verify the since constraint.
+  const reviewWindowEndMs = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
+  const msgHash = signingMessage(proposal, oldRoot!, newRoot!, reviewWindowEndMs);
   // @noble/curves v2 'recovered' format: [recovery_bit(1), r(32), s(32)].
   // CKB secp256k1 expects: [r(32), s(32), recovery_bit(1)].
   const recoveredSig = secp256k1.sign(msgHash, privateKeyBytes, { lowS: true, format: "recovered" });

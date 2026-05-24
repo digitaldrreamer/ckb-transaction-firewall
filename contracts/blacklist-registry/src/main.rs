@@ -188,10 +188,14 @@ impl RegistryPayload {
     }
 }
 
-/// Governance witness v2 — GOV1 binding placed in WitnessArgs.input_type.
+/// Governance witness — GOV1 binding placed in WitnessArgs.input_type.
 ///
-/// Layout: GOV1(4) | version=0x02(1) | proposal_id_hash(32) | vote_digest_hash(32) |
-///         old_root(32) | new_root(32) = 133 bytes total.
+/// v2 layout (133 bytes): GOV1(4) | version=0x02(1) | proposal_id_hash(32) |
+///   vote_digest_hash(32) | old_root(32) | new_root(32)
+///
+/// v3 layout (141 bytes): same prefix + review_window_end_ms(8 LE u64).
+///   The review_window_end_ms is verified by governance-lock against the input's `since` field.
+///   This type script ignores the extra 8 bytes — it only needs the 4 hashes.
 ///
 /// Signer entries live in WitnessArgs.lock for the governance-lock to verify.
 /// This type script does NOT touch the lock field.
@@ -206,14 +210,15 @@ pub struct GovernanceWitness {
 
 impl GovernanceWitness {
     pub fn parse(raw: &[u8]) -> Result<Self, SysError> {
-        if raw.len() != 133 {
+        // Accept v2 (133 bytes) and v3 (141 bytes, adds review_window_end_ms).
+        if raw.len() != 133 && raw.len() != 141 {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
         if &raw[0..4] != b"GOV1" {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
         let version = raw[4];
-        if version != 0x02 {
+        if version != 0x02 && version != 0x03 {
             return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));
         }
         let mut proposal_id_hash = [0u8; 32];

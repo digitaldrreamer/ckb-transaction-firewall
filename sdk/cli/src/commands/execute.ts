@@ -33,9 +33,10 @@ import {
 import { verifyMerkleProof } from "../lib/validator-set.js";
 import {
   ckbBlake2b,
-  buildGov1WitnessV2,
+  buildGov1WitnessV3,
   buildGovernanceSigWitness,
   buildWitnessArgs,
+  encodeAbsoluteTimestampSince,
 } from "../lib/witness.js";
 import {
   TESTNET_RPC_URL,
@@ -246,8 +247,10 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   const newRoot = ckbBlake2b(newBlkl);
 
   // C-4: verify governance signer signatures against on-chain pubkeys from governance header.
+  // Use the v3 signing message (includes reviewWindowEndMs) to match what sign.ts produced.
+  const reviewWindowEndMsForVerify = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
   if (govHeader && govHeader.pubkeys.length > 0) {
-    const msgHash = signingMessage(proposal, oldRoot, newRoot);
+    const msgHash = signingMessage(proposal, oldRoot, newRoot, reviewWindowEndMsForVerify);
     for (const s of proposal.signatures) {
       if (!Number.isInteger(s.signerIndex) || s.signerIndex < 0 || s.signerIndex >= govHeader.pubkeys.length) {
         console.error(logSymbols.error, chalk.red(`Signer index ${s.signerIndex} is out of range for the on-chain governance committee (${govHeader.pubkeys.length} signers).`));
@@ -277,7 +280,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     }
   }
 
-  // ── build GOV1 witness with real signatures ───────────────────────────────
+  // ── build GOV1 v3 witness with real signatures ────────────────────────────
 
   // P0-2: recompute voteDigestHash from votes and verify it matches the stored value.
   const recomputedVoteDigest = computeVoteDigestHash(proposal.votes);
@@ -288,16 +291,29 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     process.exit(1);
   }
 
+  // reviewWindowEndMs is included in the GOV1 v3 witness and the signing preimage,
+  // binding signers to the review window end time. governance-lock verifies the input's
+  // `since` field is an absolute timestamp >= this value, enforcing the review window on-chain.
+  const reviewWindowEndMs = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
+
   const proposalIdBytes = hexToBytes(proposal.proposalIdHash);
   const voteDigestBytes = hexToBytes(proposal.voteDigestHash);
 
-  const signers = proposal.signatures.slice(0, SIG_THRESHOLD).map((s) => ({
+  // Use the on-chain threshold for signer selection; fall back to compile-time constant.
+  const effectiveThreshold = govHeader?.threshold ?? SIG_THRESHOLD;
+  const signers = proposal.signatures.slice(0, effectiveThreshold).map((s) => ({
     index: s.signerIndex,
     sig: hexToBytes(s.signature),
   }));
 
-  // v2: GOV1 binding in input_type, signer entries in lock field.
-  const gov1 = buildGov1WitnessV2({ proposalIdHash: proposalIdBytes, voteDigestHash: voteDigestBytes, oldRoot, newRoot });
+  // v3: GOV1 binding (with review window) in input_type, signer entries in lock field.
+  const gov1 = buildGov1WitnessV3({
+    proposalIdHash: proposalIdBytes,
+    voteDigestHash: voteDigestBytes,
+    oldRoot,
+    newRoot,
+    reviewWindowEndMs,
+  });
   const sigWitness = buildGovernanceSigWitness(signers);
   const witnessBytes = buildWitnessArgs({ lock: sigWitness, inputType: gov1 });
 
@@ -337,7 +353,12 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       // No header_deps are needed — expiry checks only apply when spending firewall-locked cells.
       header_deps: [],
       inputs: [
-        { since: "0x0", previous_output: { tx_hash: cell.txHash, index: `0x${cell.index.toString(16)}` } },
+        {
+          // Absolute median-time-past since lock: CKB consensus enforces this transaction cannot
+          // be included in a block until the block's MTP >= reviewWindowEndsAt.
+          since: encodeAbsoluteTimestampSince(reviewWindowEndMs),
+          previous_output: { tx_hash: cell.txHash, index: `0x${cell.index.toString(16)}` },
+        },
       ],
       outputs: [{ capacity: cell.capacity, lock: cell.lock, type: cell.type }],
       outputs_data: [bytesToHex(newBlkl)],

@@ -6,8 +6,11 @@
 //! 1. Parse BLKL v2 from the input registry cell data → governance header (pubkeys + threshold).
 //! 2. Load WitnessArgs at Source::GroupInput[0]:
 //!    - lock field: governance signer witness (signer_count + [signer_index + sig(65)] × N)
-//!    - input_type field: GOV1 v2 binding (read by blacklist-registry, not by us)
-//! 3. Compute signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root).
+//!    - input_type field: GOV1 v2 or v3 binding (also read by blacklist-registry)
+//! 3. Parse GOV1:
+//!    - v2 (133 bytes): signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root)
+//!    - v3 (141 bytes): adds review_window_end_ms(8 LE); signing_message includes this field,
+//!      and the input's since field MUST be an absolute timestamp >= review_window_end_ms.
 //! 4. For each signer entry: recover pubkey via secp256k1 ECDSA, verify against header pubkeys.
 //! 5. Require valid_count >= threshold.
 
@@ -37,7 +40,7 @@ use alloc::vec::Vec;
 use blake2b_ref::{Blake2b, Blake2bBuilder};
 use ckb_std::ckb_constants::Source;
 use ckb_std::error::SysError;
-use ckb_std::syscalls::{load_cell_data, load_script, load_witness};
+use ckb_std::syscalls::{load_cell_data, load_input, load_script, load_witness};
 use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
 
 const ERR_INVALID_ARGS: i8 = 1;
@@ -45,6 +48,14 @@ const ERR_INVALID_BLKL: i8 = 2;
 const ERR_INVALID_WITNESS: i8 = 3;
 const ERR_SIG_VERIFICATION: i8 = 4;
 const ERR_THRESHOLD_NOT_MET: i8 = 5;
+const ERR_REVIEW_WINDOW_NOT_MET: i8 = 6;
+
+// CKB `since` field encoding for absolute median-time-past (timestamp) locks.
+// Bit 62 set = timestamp metric; bit 63 clear = absolute.
+const SINCE_LOCK_TYPE_FLAG: u64    = 1 << 63;
+const SINCE_METRIC_TYPE_MASK: u64  = 0x6000_0000_0000_0000;
+const SINCE_METRIC_TIMESTAMP: u64  = 0x4000_0000_0000_0000;
+const SINCE_VALUE_MASK: u64        = 0x00FF_FFFF_FFFF_FFFF;
 
 fn blake2b_256(data: &[u8]) -> [u8; 32] {
     let mut out = [0u8; 32];
@@ -230,13 +241,24 @@ fn load_witness_fields(index: usize, source: Source) -> Result<WitnessFields, i8
     Ok(WitnessFields { signers, gov1_payload })
 }
 
-/// Parses GOV1 v2 and returns (proposal_id_hash, vote_digest_hash, old_root, new_root).
-fn parse_gov1_hashes(payload: &[u8]) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32]), i8> {
-    // GOV1(4) | version=0x02(1) | proposal_id_hash(32) | vote_digest_hash(32) | old_root(32) | new_root(32) = 133 bytes
-    if payload.len() != 133 {
+/// Parses a GOV1 v2 or v3 payload.
+///
+/// Returns (proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms).
+/// `review_window_end_ms` is `Some(ms)` for v3, `None` for v2.
+///
+/// v2 layout (133 bytes): GOV1(4) | 0x02(1) | proposal_id_hash(32) | vote_digest_hash(32) | old_root(32) | new_root(32)
+/// v3 layout (141 bytes): same prefix + review_window_end_ms(8 LE u64, ms since Unix epoch)
+fn parse_gov1_hashes(
+    payload: &[u8],
+) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32], Option<u64>), i8> {
+    if payload.len() != 133 && payload.len() != 141 {
         return Err(ERR_INVALID_WITNESS);
     }
-    if &payload[0..4] != b"GOV1" || payload[4] != 0x02 {
+    if &payload[0..4] != b"GOV1" {
+        return Err(ERR_INVALID_WITNESS);
+    }
+    let version = payload[4];
+    if version != 0x02 && version != 0x03 {
         return Err(ERR_INVALID_WITNESS);
     }
     let mut proposal_id_hash = [0u8; 32];
@@ -247,7 +269,41 @@ fn parse_gov1_hashes(payload: &[u8]) -> Result<([u8; 32], [u8; 32], [u8; 32], [u
     old_root.copy_from_slice(&payload[69..101]);
     let mut new_root = [0u8; 32];
     new_root.copy_from_slice(&payload[101..133]);
-    Ok((proposal_id_hash, vote_digest_hash, old_root, new_root))
+    let review_window_end_ms = if version == 0x03 {
+        Some(u64::from_le_bytes([
+            payload[133], payload[134], payload[135], payload[136],
+            payload[137], payload[138], payload[139], payload[140],
+        ]))
+    } else {
+        None
+    };
+    Ok((proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms))
+}
+
+/// Loads the `since` field (first 8 bytes of a CellInput) for the given input index.
+/// CellInput layout: since(8 LE u64) | previous_output.tx_hash(32) | previous_output.index(4)
+fn load_input_since(index: usize, source: Source) -> Result<u64, i8> {
+    let raw = load_var_bytes_from(|buf, off| load_input(buf, off, index, source))?;
+    if raw.len() < 8 {
+        return Err(ERR_INVALID_WITNESS);
+    }
+    Ok(u64::from_le_bytes([raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7]]))
+}
+
+/// Checks that `since` encodes an absolute median-time-past timestamp >= `min_ms`.
+/// Rejects block-number or epoch since values, and relative since values.
+fn verify_since_timestamp(since: u64, min_ms: u64) -> Result<(), i8> {
+    if since & SINCE_LOCK_TYPE_FLAG != 0 {
+        return Err(ERR_REVIEW_WINDOW_NOT_MET); // relative since is not allowed
+    }
+    if since & SINCE_METRIC_TYPE_MASK != SINCE_METRIC_TIMESTAMP {
+        return Err(ERR_REVIEW_WINDOW_NOT_MET); // must be timestamp metric
+    }
+    let timestamp_ms = since & SINCE_VALUE_MASK;
+    if timestamp_ms < min_ms {
+        return Err(ERR_REVIEW_WINDOW_NOT_MET);
+    }
+    Ok(())
 }
 
 /// Recovers the compressed secp256k1 public key from a prehash and 65-byte compact signature.
@@ -294,19 +350,40 @@ fn program_entry() -> Result<(), i8> {
     // Load witness and extract signer entries + GOV1 v2 payload.
     let witness = load_witness_fields(0, Source::GroupInput)?;
 
-    // Compute signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root).
-    // This binds each signer to the exact proposal identity AND the precise registry state transition,
-    // preventing reuse of signatures across different registry outputs.
-    let (proposal_id_hash, vote_digest_hash, old_root, new_root) = parse_gov1_hashes(&witness.gov1_payload)?;
+    // Parse GOV1 v2 or v3 payload and build the signing message.
+    //
+    // v2 preimage (128 bytes): proposal_id_hash || vote_digest_hash || old_root || new_root
+    // v3 preimage (136 bytes): same + review_window_end_ms (8 LE u64, ms since Unix epoch).
+    //
+    // For v3, the input's `since` field MUST be an absolute timestamp >= review_window_end_ms,
+    // enforcing the governance review window at the consensus layer.
+    let (proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms) =
+        parse_gov1_hashes(&witness.gov1_payload)?;
     if proposal_id_hash == [0u8; 32] || vote_digest_hash == [0u8; 32] {
         return Err(ERR_INVALID_WITNESS);
     }
-    let mut signing_preimage = [0u8; 128];
-    signing_preimage[..32].copy_from_slice(&proposal_id_hash);
-    signing_preimage[32..64].copy_from_slice(&vote_digest_hash);
-    signing_preimage[64..96].copy_from_slice(&old_root);
-    signing_preimage[96..].copy_from_slice(&new_root);
-    let signing_message = blake2b_256(&signing_preimage);
+
+    let signing_message = if let Some(rw_end_ms) = review_window_end_ms {
+        // v3: verify on-chain time constraint then use extended preimage.
+        let since = load_input_since(0, Source::GroupInput)?;
+        verify_since_timestamp(since, rw_end_ms)?;
+
+        let mut preimage = [0u8; 136];
+        preimage[..32].copy_from_slice(&proposal_id_hash);
+        preimage[32..64].copy_from_slice(&vote_digest_hash);
+        preimage[64..96].copy_from_slice(&old_root);
+        preimage[96..128].copy_from_slice(&new_root);
+        preimage[128..136].copy_from_slice(&rw_end_ms.to_le_bytes());
+        blake2b_256(&preimage)
+    } else {
+        // v2: backward-compatible 128-byte preimage.
+        let mut preimage = [0u8; 128];
+        preimage[..32].copy_from_slice(&proposal_id_hash);
+        preimage[32..64].copy_from_slice(&vote_digest_hash);
+        preimage[64..96].copy_from_slice(&old_root);
+        preimage[96..].copy_from_slice(&new_root);
+        blake2b_256(&preimage)
+    };
 
     // Verify each signer and count unique valid signatures.
     let max_signers = header.pubkeys.len();

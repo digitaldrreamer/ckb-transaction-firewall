@@ -36,6 +36,48 @@ export function buildGov1WitnessV2(params: Gov1BindingParams): Uint8Array {
   return buf;
 }
 
+// GOV1 v3 — adds reviewWindowEndMs (8 LE u64) after the v2 fields (141 bytes total).
+// governance-lock verifies that the input's `since` field encodes an absolute timestamp
+// >= reviewWindowEndMs, enforcing the governance review window at consensus level.
+// The reviewWindowEndMs is also included in the signing preimage to prevent tampering.
+export function buildGov1WitnessV3(
+  params: Gov1BindingParams & { reviewWindowEndMs: bigint },
+): Uint8Array {
+  for (const [name, val] of [
+    ["proposalIdHash", params.proposalIdHash],
+    ["voteDigestHash", params.voteDigestHash],
+    ["oldRoot", params.oldRoot],
+    ["newRoot", params.newRoot],
+  ] as const) {
+    if (val.length !== 32) throw new Error(`${name} must be exactly 32 bytes, got ${val.length}`);
+  }
+  // 4 magic + 1 version + 32*4 hashes + 8 reviewWindowEndMs = 141 bytes
+  const buf = new Uint8Array(141);
+  let off = 0;
+  buf[off++] = 0x47; buf[off++] = 0x4f; buf[off++] = 0x56; buf[off++] = 0x31; // GOV1
+  buf[off++] = 0x03; // version 3
+  buf.set(params.proposalIdHash, off); off += 32;
+  buf.set(params.voteDigestHash, off); off += 32;
+  buf.set(params.oldRoot, off); off += 32;
+  buf.set(params.newRoot, off); off += 32;
+  // reviewWindowEndMs as LE u64
+  let ms = params.reviewWindowEndMs;
+  for (let i = 0; i < 8; i++) {
+    buf[off++] = Number(ms & 0xffn);
+    ms >>= 8n;
+  }
+  return buf;
+}
+
+// Encodes a Unix timestamp (milliseconds) as a CKB absolute median-time-past `since` value.
+// Format: bit62=1 (timestamp metric), bit63=0 (absolute), bits55-0 = timestamp_ms.
+export function encodeAbsoluteTimestampSince(timestampMs: bigint): string {
+  const TIMESTAMP_FLAG = 0x4000_0000_0000_0000n;
+  const VALUE_MASK = 0x00FF_FFFF_FFFF_FFFFn;
+  const since = TIMESTAMP_FLAG | (timestampMs & VALUE_MASK);
+  return `0x${since.toString(16).padStart(16, "0")}`;
+}
+
 // Builds the WitnessArgs.lock content for governance transactions (v2).
 // Format: signer_count(1) | [signer_index(1) + r+s+v(65)] * N
 export function buildGovernanceSigWitness(signers: Array<{ index: number; sig: Uint8Array }>): Uint8Array {
