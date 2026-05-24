@@ -128,8 +128,8 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     const msgHash = voteSigningMessage(proposal.proposalIdHash, v.vote, v.timestamp, v.pubkey);
     // Rebuild [recovery_id, r, s] from stored [r, s, recovery_id].
     const sig65 = new Uint8Array(65);
-    sig65[0] = sigBytes[64] ?? 0;
-    sig65.set(sigBytes.slice(0, 64), 1);
+    sig65[0] = sigBytes[64] as number; // length === 65 verified above
+    sig65.set(sigBytes.subarray(0, 64), 1);
     let recoveredPubkey: string;
     try {
       recoveredPubkey = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash)));
@@ -221,7 +221,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   if (govHeader && govHeader.pubkeys.length > 0) {
     const msgHash = signingMessage(proposal, oldRoot, newRoot);
     for (const s of proposal.signatures) {
-      if (s.signerIndex >= govHeader.pubkeys.length) {
+      if (!Number.isInteger(s.signerIndex) || s.signerIndex < 0 || s.signerIndex >= govHeader.pubkeys.length) {
         console.error(logSymbols.error, chalk.red(`Signer index ${s.signerIndex} is out of range for the on-chain governance committee (${govHeader.pubkeys.length} signers).`));
         process.exit(1);
       }
@@ -232,8 +232,8 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       }
       // Rebuild [recovery_id, r, s] from stored [r, s, recovery_id].
       const sig65 = new Uint8Array(65);
-      sig65[0] = sigBytes[64] ?? 0;
-      sig65.set(sigBytes.slice(0, 64), 1);
+      sig65[0] = sigBytes[64] as number; // length === 65 verified above
+      sig65.set(sigBytes.subarray(0, 64), 1);
       let recoveredPubkey: string;
       try {
         recoveredPubkey = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash)));
