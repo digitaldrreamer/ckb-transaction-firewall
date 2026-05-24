@@ -47,8 +47,8 @@ function normalizeHex(hex: string): string {
 // [code_hash(32) | hash_type(1) | type_id_value(32) | required(1)] × N |
 // inner_code_hash(32) | inner_hash_type(1) | inner_args_len(2 LE) | inner_args(M)
 export function buildFirewallLockArgs(config: FirewallLockConfig): Uint8Array {
-  if (config.flags < 0 || config.flags > 0xff) {
-    throw new RangeError("flags must be 0x00..0xff");
+  if (!Number.isInteger(config.flags) || config.flags < 0 || config.flags > 0xff) {
+    throw new RangeError("flags must be an integer in 0x00..0xff");
   }
   if ((config.flags & 0x03) === 0) {
     throw new Error("flags must have at least one check bit set (bit0=lock_args, bit1=type_args)");

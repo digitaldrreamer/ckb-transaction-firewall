@@ -42,6 +42,8 @@ import {
   TESTNET_REGISTRY_CELL,
   TESTNET_CONTRACT_OUTPOINTS,
   SECP256K1_DEP_GROUP,
+  TESTNET_GOVERNANCE_PUBKEYS,
+  warnIfTrivialTestKeys,
 } from "../lib/defaults.js";
 import { printHints } from "../lib/hints.js";
 
@@ -56,6 +58,8 @@ export interface ExecuteOptions {
 }
 
 export async function executeCommand(opts: ExecuteOptions): Promise<void> {
+  warnIfTrivialTestKeys(TESTNET_GOVERNANCE_PUBKEYS);
+
   // ── select proposal ──────────────────────────────────────────────────────
 
   let proposalId = opts.proposal?.trim() ?? "";
@@ -94,6 +98,11 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     console.log(logSymbols.error, chalk.red(`Review window not passed — ${h}h remaining.`));
     process.exit(1);
   }
+  // SECURITY NOTE: The 72-hour review window is enforced by this CLI only.
+  // The on-chain governance-lock contract does NOT verify timing. An attacker
+  // with sufficient governance keys could bypass this check by building the
+  // transaction manually. For mainnet, enforce the review window on-chain using
+  // CKB's `since` field with median-time-past semantics on the governance input.
   if (!isVoteApproved(proposal)) {
     console.log(logSymbols.error, chalk.red("Vote threshold not met."));
     console.log(chalk.dim(`  Use: ckb-firewall vote --proposal ${proposal.id}`));
@@ -110,9 +119,9 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
 
   // P0-8: reject if the proposal's expiry has already passed.
   if (proposal.expiresAt !== "0") {
-    const expiryMs = Number(proposal.expiresAt) * 1000;
-    if (Date.now() >= expiryMs) {
-      console.log(logSymbols.error, chalk.red(`Proposal "${proposal.id}" has already expired (${new Date(expiryMs).toISOString()}).`));
+    const expiryMs = BigInt(proposal.expiresAt) * 1000n;
+    if (BigInt(Date.now()) >= expiryMs) {
+      console.log(logSymbols.error, chalk.red(`Proposal "${proposal.id}" has already expired (${new Date(Number(expiryMs)).toISOString()}).`));
       console.log(chalk.dim("  A new proposal must be created for this blacklist entry."));
       process.exit(1);
     }
@@ -177,6 +186,25 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   const oldRoot = ckbBlake2b(oldBlkl);
   const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
   const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
+
+  // M1: verify signature count against the on-chain threshold, not the compile-time default.
+  if (govHeader && govHeader.threshold > 0) {
+    const onChainThreshold = govHeader.threshold;
+    if (onChainThreshold !== SIG_THRESHOLD) {
+      process.stderr.write(
+        `Warning: on-chain signature threshold (${onChainThreshold}) differs from compile-time default (${SIG_THRESHOLD}). ` +
+        `Using the on-chain value.\n`,
+      );
+    }
+    if (proposal.signatures.length < onChainThreshold) {
+      console.error(
+        logSymbols.error,
+        chalk.red(`Only ${proposal.signatures.length}/${onChainThreshold} signatures — need more (on-chain threshold).`),
+      );
+      console.error(chalk.dim(`  Use: ckb-firewall sign --proposal ${proposal.id}`));
+      process.exit(1);
+    }
+  }
 
   if (govHeader && govHeader.validatorCount > 0) {
     const rootHex = bytesToHex(govHeader.validatorMerkleRoot);
@@ -305,6 +333,8 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
           dep_type: "code",
         },
       ],
+      // Governance transactions update the registry cell, not firewall-protected cells.
+      // No header_deps are needed — expiry checks only apply when spending firewall-locked cells.
       header_deps: [],
       inputs: [
         { since: "0x0", previous_output: { tx_hash: cell.txHash, index: `0x${cell.index.toString(16)}` } },

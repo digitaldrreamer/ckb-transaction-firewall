@@ -23,7 +23,11 @@ function assertHttps(url: string, method: string): void {
     !url.startsWith("http://127.0.0.1") &&
     !url.startsWith("http://[::1]")
   ) {
-    process.stderr.write(`Warning: RPC ${method} is using a non-HTTPS URL (${url}). Registry data may be tampered in transit.\n`);
+    throw new Error(
+      `RPC ${method} requires HTTPS for remote URLs (got: ${url}). ` +
+      "Registry data integrity cannot be guaranteed over plaintext HTTP. " +
+      "Use an https:// URL or a local node (localhost / 127.0.0.1 / [::1]).",
+    );
   }
 }
 

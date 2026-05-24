@@ -101,8 +101,9 @@ export function buildWitnessArgs(params: {
   return buf;
 }
 
-// Placeholder signatures (3-of-5) for testnet where on-chain sig verification is off.
-// Replace with real governance signatures for production use.
+// FOR UNIT TESTING ONLY — generates structurally-valid but cryptographically fake signatures.
+// governance-lock v2 DOES verify secp256k1 signatures on-chain; these WILL be rejected by the chain.
+// Never use in a real governance transaction. Only valid in test environments that mock the contract.
 export function placeholderSigners(count: 3 | 4 | 5 = 3): Array<{ index: number; sig: Uint8Array }> {
   return Array.from({ length: count }, (_, i) => ({
     index: i,

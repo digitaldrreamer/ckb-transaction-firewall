@@ -188,9 +188,11 @@ impl FirewallLockArgs {
 
 /// * Registry payload structure
 ///
-/// Format (v1):
+/// Format (v2):
 /// - 4 bytes: magic number (0x424C4B4C "BLKL")
-/// - 1 byte: version (0x01)
+/// - 1 byte: version (0x02)
+/// - 2 bytes: gov_header_len (LE u16)
+/// - gov_header_len bytes: governance header (pubkeys, threshold, validator merkle root)
 /// - 4 bytes: entry count (LE u32)
 /// - N bytes: entry data (sorted by identifier)
 ///

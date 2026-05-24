@@ -7,7 +7,7 @@
 //! 2. Load WitnessArgs at Source::GroupInput[0]:
 //!    - lock field: governance signer witness (signer_count + [signer_index + sig(65)] × N)
 //!    - input_type field: GOV1 v2 binding (read by blacklist-registry, not by us)
-//! 3. Compute signing_message = blake2b(proposal_id_hash || vote_digest_hash).
+//! 3. Compute signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root).
 //! 4. For each signer entry: recover pubkey via secp256k1 ECDSA, verify against header pubkeys.
 //! 5. Require valid_count >= threshold.
 

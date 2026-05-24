@@ -67,7 +67,13 @@ export function getProposalsDir(): string {
 }
 
 function proposalPath(dir: string, proposalIdHash: string): string {
-  return join(dir, `${proposalIdHash.slice(2, 14)}.json`);
+  const short = proposalIdHash.startsWith("0x")
+    ? proposalIdHash.slice(2, 14)
+    : proposalIdHash.slice(0, 12);
+  if (!/^[0-9a-f]{12}$/i.test(short)) {
+    throw new Error(`Invalid proposalIdHash format: "${proposalIdHash}" — expected 0x-prefixed hex.`);
+  }
+  return join(dir, `${short}.json`);
 }
 
 export function saveProposal(proposal: Proposal): void {
