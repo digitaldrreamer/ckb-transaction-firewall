@@ -174,6 +174,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   // ── verify vote Merkle proofs against on-chain validator set ─────────────
 
   const oldBlkl = hexToBytes(cell.data);
+  const oldRoot = ckbBlake2b(oldBlkl);
   const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
   const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
 
@@ -191,6 +192,30 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       }
     }
   }
+
+  // ── build new BLKL payload ────────────────────────────────────────────────
+  let newEntries;
+
+  if (proposal.action === "add") {
+    if (currentPayload.entries.some((e) => strip0x(e.identifier).toLowerCase() === strip0x(proposal.lockArgs).toLowerCase())) {
+      console.log(logSymbols.warning, chalk.yellow(`${proposal.lockArgs} is already in the registry.`));
+      process.exit(0);
+    }
+    newEntries = insertSorted(currentPayload.entries, {
+      identifier: proposal.lockArgs,
+      expiresAt: BigInt(proposal.expiresAt),
+    });
+  } else {
+    newEntries = removeEntry(currentPayload.entries, proposal.lockArgs);
+    if (newEntries.length === currentPayload.entries.length) {
+      console.log(logSymbols.warning, chalk.yellow(`${proposal.lockArgs} is not in the registry.`));
+      process.exit(0);
+    }
+  }
+
+  const newPayload = { version: currentPayload.version, entries: newEntries };
+  const newBlkl = encodeRegistryPayload(newPayload, govHeaderRaw ?? undefined);
+  const newRoot = ckbBlake2b(newBlkl);
 
   // C-4: verify governance signer signatures against on-chain pubkeys from governance header.
   if (govHeader && govHeader.pubkeys.length > 0) {
@@ -224,29 +249,6 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     }
   }
 
-  // ── build new BLKL payload ────────────────────────────────────────────────
-  let newEntries;
-
-  if (proposal.action === "add") {
-    if (currentPayload.entries.some((e) => strip0x(e.identifier).toLowerCase() === strip0x(proposal.lockArgs).toLowerCase())) {
-      console.log(logSymbols.warning, chalk.yellow(`${proposal.lockArgs} is already in the registry.`));
-      process.exit(0);
-    }
-    newEntries = insertSorted(currentPayload.entries, {
-      identifier: proposal.lockArgs,
-      expiresAt: BigInt(proposal.expiresAt),
-    });
-  } else {
-    newEntries = removeEntry(currentPayload.entries, proposal.lockArgs);
-    if (newEntries.length === currentPayload.entries.length) {
-      console.log(logSymbols.warning, chalk.yellow(`${proposal.lockArgs} is not in the registry.`));
-      process.exit(0);
-    }
-  }
-
-  const newPayload = { version: currentPayload.version, entries: newEntries };
-  const newBlkl = encodeRegistryPayload(newPayload, govHeaderRaw ?? undefined);
-
   // ── build GOV1 witness with real signatures ───────────────────────────────
 
   // P0-2: recompute voteDigestHash from votes and verify it matches the stored value.
@@ -260,8 +262,6 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
 
   const proposalIdBytes = hexToBytes(proposal.proposalIdHash);
   const voteDigestBytes = hexToBytes(proposal.voteDigestHash);
-  const oldRoot = ckbBlake2b(oldBlkl);
-  const newRoot = ckbBlake2b(newBlkl);
 
   const signers = proposal.signatures.slice(0, SIG_THRESHOLD).map((s) => ({
     index: s.signerIndex,

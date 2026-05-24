@@ -102,8 +102,7 @@ program
   .description("Record a cryptographically signed validator vote on a governance proposal")
   .option("--proposal <id>", "Proposal ID or hash")
   .option("--vote <choice>", "Vote: yes|no|abstain")
-  .option("--key <hex>", "32-byte validator private key in hex (prompted if omitted)")
-  .action(async (opts: { proposal?: string; vote?: string; key?: string }) => {
+  .action(async (opts: { proposal?: string; vote?: string }) => {
     await voteCommand(opts);
   });
 
@@ -113,9 +112,8 @@ program
   .command("sign")
   .description("Sign an approved proposal as a governance signer (secp256k1)")
   .option("--proposal <id>", "Proposal ID or hash")
-  .option("--signer-index <0-4>", "Your signer index in the governance set")
-  .option("--key <hex>", "32-byte private key in hex (prompted if omitted)")
-  .action(async (opts: { proposal?: string; signerIndex?: string; key?: string }) => {
+  .option("--signer-index <n>", "Your signer index in the governance set")
+  .action(async (opts: { proposal?: string; signerIndex?: string }) => {
     await signCommand(opts);
   });
 

@@ -16,11 +16,18 @@ function rpcTimeoutMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_RPC_TIMEOUT_MS;
 }
 
+function assertHttps(url: string, method: string): void {
+  if (!url.startsWith("https://") && !url.startsWith("http://localhost") && !url.startsWith("http://127.0.0.1")) {
+    process.stderr.write(`Warning: RPC ${method} is using a non-HTTPS URL (${url}). Registry data may be tampered in transit.\n`);
+  }
+}
+
 async function call<T>(
   url: string,
   method: string,
   params: unknown[],
 ): Promise<T> {
+  assertHttps(url, method);
   const timeoutMs = rpcTimeoutMs();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);

@@ -21,7 +21,6 @@ import { printHints } from "../lib/hints.js";
 export interface VoteOptions {
   proposal?: string;
   vote?: string;
-  key?: string;
 }
 
 function isValidPrivKey(hex: string): boolean {
@@ -75,33 +74,24 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
 
   // ── private key → pubkey ─────────────────────────────────────────────────
 
-  let privateKeyBytes: Uint8Array;
-  if (opts.key) {
-    if (!isValidPrivKey(opts.key)) {
-      console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
-      process.exit(1);
-    }
-    privateKeyBytes = hexToBytes(opts.key);
-  } else {
-    console.log();
-    const { keyInput } = await inquirer.prompt<{ keyInput: string }>([
-      {
-        type: "password",
-        name: "keyInput",
-        message: "Validator private key (32-byte hex):",
-        mask: "*",
-      },
-    ]);
-    if (!keyInput.trim()) {
-      console.error(logSymbols.error, chalk.red("A private key is required. Pass --key <hex> or enter it at the prompt."));
-      process.exit(1);
-    }
-    if (!isValidPrivKey(keyInput.trim())) {
-      console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
-      process.exit(1);
-    }
-    privateKeyBytes = hexToBytes(keyInput.trim());
+  console.log();
+  const { keyInput } = await inquirer.prompt<{ keyInput: string }>([
+    {
+      type: "password",
+      name: "keyInput",
+      message: "Validator private key (32-byte hex):",
+      mask: "*",
+    },
+  ]);
+  if (!keyInput.trim()) {
+    console.error(logSymbols.error, chalk.red("A private key is required."));
+    process.exit(1);
   }
+  if (!isValidPrivKey(keyInput.trim())) {
+    console.error(logSymbols.error, chalk.red("Invalid private key — must be 32-byte hex."));
+    process.exit(1);
+  }
+  const privateKeyBytes = hexToBytes(keyInput.trim());
 
   const pubkeyBytes = secp256k1.getPublicKey(privateKeyBytes, true); // 33 bytes compressed
   const pubkey = bytesToHex(new Uint8Array(pubkeyBytes));

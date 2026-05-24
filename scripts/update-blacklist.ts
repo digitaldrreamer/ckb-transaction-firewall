@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 
-const { execSync } = require("node:child_process");
+const { execSync, execFileSync } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const { resolve } = require("node:path");
 
@@ -29,7 +29,12 @@ Notes:
 }
 
 function run(cmd) {
-  return execSync(cmd, { cwd: ROOT_DIR, stdio: "pipe", encoding: "utf8" });
+  // Split the command string into program + args to avoid shell interpretation.
+  // This prevents command injection via shell metacharacters in --cmd arguments.
+  const parts = cmd.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+  if (parts.length === 0) throw new Error("Empty command string.");
+  const [program, ...args] = parts.map((p) => p.replace(/^['"]|['"]$/g, ""));
+  return execFileSync(program, args, { cwd: ROOT_DIR, stdio: "pipe", encoding: "utf8" });
 }
 
 function parseArgs(argv) {

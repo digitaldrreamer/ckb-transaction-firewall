@@ -116,10 +116,15 @@ export function loadProposal(id: string): Proposal {
 
 export function listProposals(): Proposal[] {
   const dir = getProposalsDir();
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")) as Proposal)
-    .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+  const results: Proposal[] = [];
+  for (const f of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+    try {
+      results.push(JSON.parse(readFileSync(join(dir, f), "utf8")) as Proposal);
+    } catch {
+      process.stderr.write(`Warning: skipping malformed proposal file: ${f}\n`);
+    }
+  }
+  return results.sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
 }
 
 // Canonical representation used as input to proposalIdHash.
