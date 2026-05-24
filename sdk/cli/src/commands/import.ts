@@ -182,8 +182,9 @@ export async function importCommand(opts: ImportOptions): Promise<void> {
       saveProposal(merged);
       console.log();
       console.log(logSymbols.success, `Proposal ${chalk.bold(proposal.id)} merged.`);
-      console.log(`  Votes:      ${mergedVotes.length} (${proposal.votes.length - existing.votes.length} new)`);
-      console.log(`  Signatures: ${mergedSigs.length} (${proposal.signatures.length - existing.signatures.length} new)`);
+      const votesNote = signingStarted ? "frozen — signing started" : `${mergedVotes.length - existing.votes.length} new`;
+      console.log(`  Votes:      ${mergedVotes.length} (${votesNote})`);
+      console.log(`  Signatures: ${mergedSigs.length} (${mergedSigs.length - existing.signatures.length} new)`);
       console.log();
       return;
     }

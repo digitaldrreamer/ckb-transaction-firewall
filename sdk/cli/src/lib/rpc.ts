@@ -17,7 +17,12 @@ function rpcTimeoutMs(): number {
 }
 
 function assertHttps(url: string, method: string): void {
-  if (!url.startsWith("https://") && !url.startsWith("http://localhost") && !url.startsWith("http://127.0.0.1")) {
+  if (
+    !url.startsWith("https://") &&
+    !url.startsWith("http://localhost") &&
+    !url.startsWith("http://127.0.0.1") &&
+    !url.startsWith("http://[::1]")
+  ) {
     process.stderr.write(`Warning: RPC ${method} is using a non-HTTPS URL (${url}). Registry data may be tampered in transit.\n`);
   }
 }

@@ -29,10 +29,12 @@ Notes:
 }
 
 function run(cmd) {
-  // Split the command string into program + args to avoid shell interpretation.
-  // This prevents command injection via shell metacharacters in --cmd arguments.
+  // Split into program + args to avoid shell interpretation of metacharacters.
+  // Note: supports basic quoted args only — does not handle escaped quotes,
+  // shell variables ($VAR, $(cmd)), redirects, or pipes. Commands requiring
+  // those features should be implemented as helper scripts invoked directly.
   const parts = cmd.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
-  if (parts.length === 0) throw new Error("Empty command string.");
+  if (parts.length === 0) throw new Error(`Empty command string: ${JSON.stringify(cmd)}`);
   const [program, ...args] = parts.map((p) => p.replace(/^['"]|['"]$/g, ""));
   return execFileSync(program, args, { cwd: ROOT_DIR, stdio: "pipe", encoding: "utf8" });
 }

@@ -12,7 +12,7 @@ import {
   signingMessage,
   SIG_THRESHOLD,
 } from "../lib/proposals.js";
-import { hexToBytes, bytesToHex, strip0x, encodeRegistryPayload, extractGovernanceHeaderRaw, parseGovernanceHeader, insertSorted, removeEntry } from "../lib/blkl.js";
+import { hexToBytes, bytesToHex, encodeRegistryPayload, extractGovernanceHeaderRaw, parseGovernanceHeader, insertSorted, removeEntry } from "../lib/blkl.js";
 import { parseRegistryPayload } from "@ckb-firewall/sdk";
 import { getLiveCell } from "../lib/rpc.js";
 import { resolveRegistryOutpoint } from "../lib/registry.js";
@@ -112,21 +112,67 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     process.exit(1);
   }
 
+  // ── fetch registry cell (before signer index prompt so we can use on-chain committee size) ──
+
+  const registryIndexInt = Number.parseInt(opts.registryIndex, 10);
+  const spinner = ora("Fetching current registry cell to compute signing roots").start();
+  let oldRoot: Uint8Array;
+  let newRoot: Uint8Array;
+  let committeeSize: number | null = null;
+  try {
+    const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, registryIndexInt);
+    const cell = await getLiveCell(opts.rpcUrl, txHash, index);
+    const currentPayload = parseRegistryPayload(cell.data);
+    const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
+    const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
+    if (govHeader && govHeader.pubkeys.length > 0) {
+      committeeSize = govHeader.pubkeys.length;
+    }
+    const oldBlkl = hexToBytes(cell.data);
+
+    let newEntries;
+    if (proposal.action === "add") {
+      newEntries = insertSorted(currentPayload.entries, {
+        identifier: proposal.lockArgs,
+        expiresAt: BigInt(proposal.expiresAt),
+      });
+    } else {
+      newEntries = removeEntry(currentPayload.entries, proposal.lockArgs);
+    }
+    const newBlkl = encodeRegistryPayload({ version: currentPayload.version, entries: newEntries }, govHeaderRaw ?? undefined);
+
+    oldRoot = ckbBlake2b(oldBlkl);
+    newRoot = ckbBlake2b(newBlkl);
+    spinner.succeed("Registry roots computed");
+  } catch (err) {
+    spinner.fail("Could not fetch registry cell");
+    console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+    process.exit(1);
+  }
+
   // ── signer index ─────────────────────────────────────────────────────────
+  // committeeSize comes from the on-chain governance header so the prompt
+  // accurately reflects which indices are valid for this deployment.
 
   let signerIndex: number;
   if (opts.signerIndex !== undefined) {
-    const parsed = parseSignerIndex(opts.signerIndex, Number.MAX_SAFE_INTEGER);
+    const maxExclusive = committeeSize ?? Number.MAX_SAFE_INTEGER;
+    const parsed = parseSignerIndex(opts.signerIndex, maxExclusive);
     if (parsed === null) {
-      console.error(logSymbols.error, chalk.red("--signer-index must be a non-negative integer."));
+      console.error(logSymbols.error, chalk.red(
+        committeeSize !== null
+          ? `--signer-index must be 0–${committeeSize - 1} for this committee.`
+          : "--signer-index must be a non-negative integer.",
+      ));
       process.exit(1);
     }
     signerIndex = parsed as number;
   } else {
     const usedIndices = new Set(proposal.signatures.map((s) => s.signerIndex));
-    const available = [0, 1, 2, 3, 4].filter((i) => !usedIndices.has(i));
+    const totalSigners = committeeSize ?? 5;
+    const available = Array.from({ length: totalSigners }, (_, i) => i).filter((i) => !usedIndices.has(i));
     if (available.length === 0) {
-      console.log(logSymbols.success, chalk.green("All 5 signers have already signed."));
+      console.log(logSymbols.success, chalk.green(`All ${totalSigners} signers have already signed.`));
       process.exit(0);
     }
     const { idx } = await inquirer.prompt<{ idx: number }>([
@@ -165,45 +211,6 @@ export async function signCommand(opts: SignOptions): Promise<void> {
     process.exit(1);
   }
   const privateKeyBytes = hexToBytes(keyInput.trim());
-
-  // ── compute old_root / new_root ──────────────────────────────────────────
-  // Signers must commit to the exact state transition (old_root → new_root)
-  // so that signatures cannot be replayed against a different registry output.
-
-  const registryIndexInt = Number.parseInt(opts.registryIndex, 10);
-  const spinner = ora("Fetching current registry cell to compute signing roots").start();
-  let oldRoot: Uint8Array;
-  let newRoot: Uint8Array;
-  try {
-    const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, registryIndexInt);
-    const cell = await getLiveCell(opts.rpcUrl, txHash, index);
-    const currentPayload = parseRegistryPayload(cell.data);
-    const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
-    const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
-    if (govHeader && signerIndex >= govHeader.pubkeys.length) {
-      throw new Error(`Signer index ${signerIndex} is out of range — on-chain committee has ${govHeader.pubkeys.length} signers (0–${govHeader.pubkeys.length - 1}).`);
-    }
-    const oldBlkl = hexToBytes(cell.data);
-
-    let newEntries;
-    if (proposal.action === "add") {
-      newEntries = insertSorted(currentPayload.entries, {
-        identifier: proposal.lockArgs,
-        expiresAt: BigInt(proposal.expiresAt),
-      });
-    } else {
-      newEntries = removeEntry(currentPayload.entries, proposal.lockArgs);
-    }
-    const newBlkl = encodeRegistryPayload({ version: currentPayload.version, entries: newEntries }, govHeaderRaw ?? undefined);
-
-    oldRoot = ckbBlake2b(oldBlkl);
-    newRoot = ckbBlake2b(newBlkl);
-    spinner.succeed("Registry roots computed");
-  } catch (err) {
-    spinner.fail("Could not fetch registry cell");
-    console.error(chalk.red(err instanceof Error ? err.message : String(err)));
-    process.exit(1);
-  }
 
   // ── sign ─────────────────────────────────────────────────────────────────
 

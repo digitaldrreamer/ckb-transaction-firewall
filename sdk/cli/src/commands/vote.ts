@@ -203,7 +203,6 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
     console.error(logSymbols.error, chalk.red(
       "Cannot record vote — signing has already begun. Adding a vote would invalidate existing signatures.",
     ));
-    privateKeyBytes.fill(0);
     process.exit(1);
   }
 
