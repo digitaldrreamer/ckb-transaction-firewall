@@ -74,6 +74,7 @@ export default defineConfig({
 							'reference/gov1-witness',
 							'reference/error-codes',
 							'reference/cli',
+							'reference/glossary',
 						],
 					},
 					{
