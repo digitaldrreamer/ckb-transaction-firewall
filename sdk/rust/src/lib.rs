@@ -195,53 +195,38 @@ fn parse_governance_header(data: &[u8], offset: usize, gov_len: usize) -> Result
     })
 }
 
-/// Parse a raw BLKL registry payload (v1 or v2).
+/// Parse a raw BLKL v2 registry payload.
 ///
-/// Returns the parsed [`RegistryPayload`] on success, or [`FirewallError::InvalidRegistryData`]
-/// if the data is malformed or an unsupported version.
+/// Only version 0x02 is accepted, matching the on-chain blacklist-registry contract
+/// and the TypeScript SDK. Returns [`FirewallError::InvalidRegistryData`] for any
+/// other version, malformed data, or trailing bytes.
 pub fn parse_registry_payload(data: &[u8]) -> Result<RegistryPayload, FirewallError> {
-    if data.len() < 9 {
+    if data.len() < 7 {
         return Err(FirewallError::InvalidRegistryData);
     }
     if &data[0..4] != b"BLKL" {
         return Err(FirewallError::InvalidRegistryData);
     }
-    let version = data[4];
-
-    match version {
-        0x01 => {
-            // v1: BLKL(4) + version(1) + entry_count(4 LE) + entries
-            let count = u32::from_le_bytes([data[5], data[6], data[7], data[8]]) as usize;
-            let (entries, end) = parse_entries(data, 9, count)?;
-            if end != data.len() {
-                return Err(FirewallError::InvalidRegistryData);
-            }
-            Ok(RegistryPayload { version: 1, entries, governance_header: None })
-        }
-        0x02 => {
-            // v2: BLKL(4) + version(1) + gov_header_len(2 LE) + gov_header(N) + entry_count(4 LE) + entries
-            if data.len() < 7 {
-                return Err(FirewallError::InvalidRegistryData);
-            }
-            let gov_len = u16::from_le_bytes([data[5], data[6]]) as usize;
-            let gov_start = 7usize;
-            if data.len() < gov_start + gov_len + 4 {
-                return Err(FirewallError::InvalidRegistryData);
-            }
-            let governance_header = parse_governance_header(data, gov_start, gov_len)?;
-            let entries_start = gov_start + gov_len;
-            let count = u32::from_le_bytes([
-                data[entries_start], data[entries_start + 1],
-                data[entries_start + 2], data[entries_start + 3],
-            ]) as usize;
-            let (entries, end) = parse_entries(data, entries_start + 4, count)?;
-            if end != data.len() {
-                return Err(FirewallError::InvalidRegistryData);
-            }
-            Ok(RegistryPayload { version: 2, entries, governance_header: Some(governance_header) })
-        }
-        _ => Err(FirewallError::InvalidRegistryData),
+    if data[4] != 0x02 {
+        return Err(FirewallError::InvalidRegistryData);
     }
+    // v2: BLKL(4) + version(1) + gov_header_len(2 LE) + gov_header(N) + entry_count(4 LE) + entries
+    let gov_len = u16::from_le_bytes([data[5], data[6]]) as usize;
+    let gov_start = 7usize;
+    if data.len() < gov_start + gov_len + 4 {
+        return Err(FirewallError::InvalidRegistryData);
+    }
+    let governance_header = parse_governance_header(data, gov_start, gov_len)?;
+    let entries_start = gov_start + gov_len;
+    let count = u32::from_le_bytes([
+        data[entries_start], data[entries_start + 1],
+        data[entries_start + 2], data[entries_start + 3],
+    ]) as usize;
+    let (entries, end) = parse_entries(data, entries_start + 4, count)?;
+    if end != data.len() {
+        return Err(FirewallError::InvalidRegistryData);
+    }
+    Ok(RegistryPayload { version: 2, entries, governance_header: Some(governance_header) })
 }
 
 fn is_blacklisted(entries: &[RegistryEntry], target: &[u8], now_secs: u64) -> bool {
@@ -323,33 +308,11 @@ mod tests {
         }
     }
 
-    fn build_registry_v1(ids: &[&[u8]]) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.extend_from_slice(b"BLKL");
-        out.push(1);
-        out.extend_from_slice(&(ids.len() as u32).to_le_bytes());
-        for id in ids {
-            out.push(id.len() as u8);
-            out.extend_from_slice(id);
-            out.extend_from_slice(&0u64.to_le_bytes());
-        }
-        out
+    fn build_registry(ids: &[&[u8]]) -> Vec<u8> {
+        build_registry_with_expiry(&ids.iter().map(|id| (*id, 0u64)).collect::<Vec<_>>())
     }
 
-    fn build_registry_v1_with_expiry(ids: &[(&[u8], u64)]) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.extend_from_slice(b"BLKL");
-        out.push(1);
-        out.extend_from_slice(&(ids.len() as u32).to_le_bytes());
-        for (id, exp) in ids {
-            out.push(id.len() as u8);
-            out.extend_from_slice(id);
-            out.extend_from_slice(&exp.to_le_bytes());
-        }
-        out
-    }
-
-    fn build_registry_v2(ids: &[&[u8]]) -> Vec<u8> {
+    fn build_registry_with_expiry(ids: &[(&[u8], u64)]) -> Vec<u8> {
         let gov_header: Vec<u8> = {
             let mut h = vec![0x01u8, 0x00, 0x00, 0x00, 0x00];
             h.extend_from_slice(&[0u8; 32]);
@@ -362,10 +325,10 @@ mod tests {
         out.extend_from_slice(&gov_len.to_le_bytes());
         out.extend_from_slice(&gov_header);
         out.extend_from_slice(&(ids.len() as u32).to_le_bytes());
-        for id in ids {
+        for (id, exp) in ids {
             out.push(id.len() as u8);
             out.extend_from_slice(id);
-            out.extend_from_slice(&0u64.to_le_bytes());
+            out.extend_from_slice(&exp.to_le_bytes());
         }
         out
     }
@@ -386,7 +349,7 @@ mod tests {
     #[test]
     fn reject_blacklisted_lock_args() {
         let s = spec(1);
-        let dep = dep_for_spec(&s, build_registry_v2(&[&[0xaa, 0xbb]]));
+        let dep = dep_for_spec(&s, build_registry(&[&[0xaa, 0xbb]]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
             outputs: vec![TxOutputLike { lock_args: vec![0xaa, 0xbb], type_args: None }],
@@ -399,7 +362,7 @@ mod tests {
     #[test]
     fn reject_ambiguous_registry_dep() {
         let s = spec(1);
-        let dep = dep_for_spec(&s, build_registry_v2(&[&[0xaa]]));
+        let dep = dep_for_spec(&s, build_registry(&[&[0xaa]]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep.clone(), dep],
             outputs: vec![TxOutputLike { lock_args: vec![0x00], type_args: None }],
@@ -412,7 +375,7 @@ mod tests {
     #[test]
     fn reject_registry_not_sorted() {
         let s = spec(1);
-        let dep = dep_for_spec(&s, build_registry_v2(&[&[0xbb], &[0xaa]]));
+        let dep = dep_for_spec(&s, build_registry(&[&[0xbb], &[0xaa]]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
             outputs: vec![TxOutputLike { lock_args: vec![0x00], type_args: None }],
@@ -425,7 +388,7 @@ mod tests {
     #[test]
     fn reject_blacklisted_type_args() {
         let s = spec(1);
-        let dep = dep_for_spec(&s, build_registry_v2(&[&[0x55, 0x66]]));
+        let dep = dep_for_spec(&s, build_registry(&[&[0x55, 0x66]]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
             outputs: vec![TxOutputLike {
@@ -439,17 +402,33 @@ mod tests {
     }
 
     #[test]
-    fn parse_v1_registry_backward_compat() {
-        let data = build_registry_v1(&[&[0x01], &[0x02]]);
-        let payload = parse_registry_payload(&data).unwrap();
-        assert_eq!(payload.version, 1);
-        assert_eq!(payload.entries.len(), 2);
-        assert!(payload.governance_header.is_none());
+    fn reject_v1_registry() {
+        // On-chain contract and TypeScript SDK both reject BLKL v1; so do we.
+        let mut data = Vec::new();
+        data.extend_from_slice(b"BLKL");
+        data.push(1); // version 1
+        data.extend_from_slice(&0u32.to_le_bytes()); // entry_count = 0
+        assert_eq!(
+            parse_registry_payload(&data).unwrap_err(),
+            FirewallError::InvalidRegistryData,
+        );
+    }
+
+    #[test]
+    fn reject_unknown_version() {
+        let mut data = Vec::new();
+        data.extend_from_slice(b"BLKL");
+        data.push(3); // no such version
+        data.extend_from_slice(&[0u8; 4]);
+        assert_eq!(
+            parse_registry_payload(&data).unwrap_err(),
+            FirewallError::InvalidRegistryData,
+        );
     }
 
     #[test]
     fn parse_v2_registry_with_governance_header() {
-        let data = build_registry_v2(&[&[0xaa, 0xbb]]);
+        let data = build_registry(&[&[0xaa, 0xbb]]);
         let payload = parse_registry_payload(&data).unwrap();
         assert_eq!(payload.version, 2);
         assert_eq!(payload.entries.len(), 1);
@@ -458,20 +437,10 @@ mod tests {
     }
 
     #[test]
-    fn reject_unknown_version() {
-        let mut data = build_registry_v1(&[]);
-        data[4] = 0x03;
-        assert_eq!(
-            parse_registry_payload(&data).unwrap_err(),
-            FirewallError::InvalidRegistryData,
-        );
-    }
-
-    #[test]
     fn expire_check_active() {
         let s = spec(1);
-        // expires_at = 1000, now_secs = 999 → entry is still active → blacklisted
-        let dep = dep_for_spec(&s, build_registry_v1_with_expiry(&[(&[0xaa], 1000)]));
+        // expires_at = 1000, now_secs = 999 → still active → blacklisted
+        let dep = dep_for_spec(&s, build_registry_with_expiry(&[(&[0xaa], 1000)]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
             outputs: vec![TxOutputLike { lock_args: vec![0xaa], type_args: None }],
@@ -485,8 +454,8 @@ mod tests {
     #[test]
     fn expire_check_expired() {
         let s = spec(1);
-        // expires_at = 1000, now_secs = 1000 → entry is expired → not blacklisted
-        let dep = dep_for_spec(&s, build_registry_v1_with_expiry(&[(&[0xaa], 1000)]));
+        // expires_at = 1000, now_secs = 1000 → expired → not blacklisted
+        let dep = dep_for_spec(&s, build_registry_with_expiry(&[(&[0xaa], 1000)]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
             outputs: vec![TxOutputLike { lock_args: vec![0xaa], type_args: None }],
@@ -498,7 +467,7 @@ mod tests {
     fn permanent_entry_always_blacklisted() {
         let s = spec(1);
         // expires_at = 0 → permanent, never expires
-        let dep = dep_for_spec(&s, build_registry_v1_with_expiry(&[(&[0xbb], 0)]));
+        let dep = dep_for_spec(&s, build_registry_with_expiry(&[(&[0xbb], 0)]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
             outputs: vec![TxOutputLike { lock_args: vec![0xbb], type_args: None }],
@@ -513,8 +482,8 @@ mod tests {
     fn multi_registry_both_checked() {
         let s1 = spec(1);
         let s2 = spec(2);
-        let dep1 = dep_for_spec(&s1, build_registry_v2(&[&[0x11]]));
-        let dep2 = dep_for_spec(&s2, build_registry_v2(&[&[0x22]]));
+        let dep1 = dep_for_spec(&s1, build_registry(&[&[0x11]]));
+        let dep2 = dep_for_spec(&s2, build_registry(&[&[0x22]]));
         let firewall_cfg = FirewallConfig { registries: vec![s1, s2] };
         // output is blacklisted in registry 2
         let tx = UnsignedTxLike {
@@ -531,7 +500,7 @@ mod tests {
     fn multi_registry_missing_required() {
         let s1 = spec(1);
         let s2 = spec(2); // required, no matching dep provided
-        let dep1 = dep_for_spec(&s1, build_registry_v2(&[]));
+        let dep1 = dep_for_spec(&s1, build_registry(&[]));
         let firewall_cfg = FirewallConfig { registries: vec![s1, s2] };
         let tx = UnsignedTxLike { cell_deps: vec![dep1], outputs: vec![] };
         assert_eq!(
@@ -544,8 +513,8 @@ mod tests {
     fn multi_registry_optional_miss_ok() {
         let s1 = spec(1);
         let mut s2 = spec(2);
-        s2.required = false; // optional — missing dep is allowed
-        let dep1 = dep_for_spec(&s1, build_registry_v2(&[]));
+        s2.required = false; // optional — missing dep is fine
+        let dep1 = dep_for_spec(&s1, build_registry(&[]));
         let firewall_cfg = FirewallConfig { registries: vec![s1, s2] };
         let tx = UnsignedTxLike {
             cell_deps: vec![dep1],
@@ -556,7 +525,7 @@ mod tests {
 
     #[test]
     fn v2_trailing_data_rejected() {
-        let mut data = build_registry_v2(&[&[0xaa]]);
+        let mut data = build_registry(&[&[0xaa]]);
         data.push(0xff); // trailing garbage byte
         assert_eq!(
             parse_registry_payload(&data).unwrap_err(),
