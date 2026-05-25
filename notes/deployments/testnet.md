@@ -63,10 +63,10 @@ The SDK does not perform RPC by itself in the current build: your runtime should
 
 For the current canonical testnet registry, use [`testnet.registry.json`](testnet.registry.json):
 
-- `registryScript`: use `codeHash` and `hashType` from this; derive `typeIdValue` as bytes 34–66 of the `args` hex to build a `RegistrySpecLike` for `FirewallConfig.registries`.
+- `registrySpec`: use `codeHash` and `hashType` from this; derive `typeIdValue` as bytes 34–66 of the `args` hex to build a `RegistrySpecLike` for `FirewallConfig.registries`.
 - `canonicalRegistryCell`: fetch this outpoint from testnet via `fetchRegistryPayload(rpcUrl, txHash, index)` and pass the result to `preflightCheck`.
 - `firewallLockDeployOutPoint`: the deployed `firewall-lock` contract binary cell. Deployment metadata only.
-- `blacklistRegistryTypeScriptDeployOutPoint`: the deployed `blacklist-registry` contract binary cell. Deployment metadata only; do not use its ELF data as a registry payload.
+- `blacklistRegistryDeployOutPoint`: the deployed `blacklist-registry` contract binary cell. Deployment metadata only; do not use its ELF data as a registry payload.
 - `deploymentHistory`: log of past deployments with block numbers and tx hashes for upgrade traceability.
 
 ## 4. Optional: publish canonical constants
@@ -78,7 +78,7 @@ Because `deploy/` is gitignored, teams usually add a **checked-in** small JSON (
 Use this for real testnet pre-flight checks:
 
 1. Open [`testnet.registry.json`](testnet.registry.json).
-2. In your app, build a `RegistrySpecLike` from the `registryScript` object: set `codeHash`/`hashType` directly, and derive `typeIdValue` as bytes 34–66 (64 hex chars) of the `args` field.
+2. In your app, build a `RegistrySpecLike` from the `registrySpec` object: set `codeHash`/`hashType` directly, and derive `typeIdValue` as bytes 34–66 (64 hex chars) of the `args` field.
 3. Fetch the live BLKL payload: `const registry = await fetchRegistryPayload("https://testnet.ckb.dev", canonicalRegistryCell.txHash, canonicalRegistryCell.index)`.
 4. Run pre-flight: `preflightCheck(outputs, [registry])`.
 5. Build `outputs` the way your wallet or dapp normally would (lock args and type args you want to check).
