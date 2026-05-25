@@ -41,7 +41,7 @@ ckb-cli --url https://testnet.ckb.dev deploy apply-txs --migration-dir deploy/mi
 
 ## 2. Read the registry **type script** for the TypeScript SDK
 
-`TransactionFirewall` expects `FirewallConfig.registryScript` to match the **on-chain type script** of the live blacklist registry cell (same triple you encode in firewall lock args). After txs are **committed**, take `tx_hash` and `index` for the `blacklist_registry` output from `deploy/info.json` (see `new_recipe.cell_recipes`), then confirm status and read the cell:
+The TypeScript SDK uses `FirewallConfig.registries` (an array of `RegistrySpecLike`). The `typeIdValue` is bytes 34–66 of the registry cell's 66-byte v2 type args — the stable identifier that survives governance-lock upgrades. After txs are **committed**, take `tx_hash` and `index` for the `blacklist_registry` output from `deploy/info.json` (see `new_recipe.cell_recipes`), then confirm status and read the cell:
 
 ```bash
 TX="<tx_hash from info.json>"
@@ -59,12 +59,12 @@ Copy `code_hash`, `hash_type`, and `args` into your app (hex strings with `0x` p
 
 The SDK does not perform RPC by itself in the current build: your runtime should fetch the live registry cell (or equivalent), map it to `CellDepLike` (`type`, `data` as hex), and attach it to `UnsignedTxLike.cellDeps` before calling `TransactionFirewall.checkTransaction`.
 
-**TYPE_ID deploy cell vs BLKL:** the `blacklist_registry` row in `deploy/info.json` is the **type script binary** cell created by `ckb-cli deploy` (`enable_type_id = true`). Its **cell data** is the RISC-V program (ELF), not a `BLKL` v1 payload. The on-chain firewall lock and the TS SDK both parse **registry dep data** as `BLKL`.
+**TYPE_ID deploy cell vs BLKL:** the `blacklist_registry` row in `deploy/info.json` is the **type script binary** cell created by `ckb-cli deploy` (`enable_type_id = true`). Its **cell data** is the RISC-V program (ELF), not a `BLKL` v2 payload. The on-chain firewall lock and the TS SDK both parse **registry dep data** as `BLKL` v2.
 
 For the current canonical testnet registry, use [`testnet.registry.json`](testnet.registry.json):
 
-- `registryScript`: pass this to `new TransactionFirewall({ registryScript })`.
-- `canonicalRegistryCell`: fetch this outpoint from testnet and pass `{ type: registryScript, data }` in `unsignedTx.cellDeps`.
+- `registryScript`: use `codeHash` and `hashType` from this; derive `typeIdValue` as bytes 34–66 of the `args` hex to build a `RegistrySpecLike` for `FirewallConfig.registries`.
+- `canonicalRegistryCell`: fetch this outpoint from testnet via `fetchRegistryPayload(rpcUrl, txHash, index)` and pass the result to `preflightCheck`.
 - `firewallLockDeployOutPoint`: the deployed `firewall-lock` contract binary cell. Deployment metadata only.
 - `blacklistRegistryTypeScriptDeployOutPoint`: the deployed `blacklist-registry` contract binary cell. Deployment metadata only; do not use its ELF data as a registry payload.
 - `deploymentHistory`: log of past deployments with block numbers and tx hashes for upgrade traceability.
@@ -78,12 +78,12 @@ Because `deploy/` is gitignored, teams usually add a **checked-in** small JSON (
 Use this for real testnet pre-flight checks:
 
 1. Open [`testnet.registry.json`](testnet.registry.json).
-2. In your app, set `FirewallConfig.registryScript` to the `registryScript` object (camelCase: `codeHash`, `hashType`, `args`).
-3. Fetch `canonicalRegistryCell` with `ckb-cli --url https://testnet.ckb.dev rpc get_live_cell --tx-hash <txHash> --index <index> --with-data --output-format json`.
-4. When you call `checkTransaction`, set `unsignedTx.cellDeps` to **one** entry: `type` = that same `registryScript`, `data` = the live cell data.
-5. Build `unsignedTx.outputs` the way your wallet or dapp normally would (lock args and type args you want to check).
+2. In your app, build a `RegistrySpecLike` from the `registryScript` object: set `codeHash`/`hashType` directly, and derive `typeIdValue` as bytes 34–66 (64 hex chars) of the `args` field.
+3. Fetch the live BLKL payload: `const registry = await fetchRegistryPayload("https://testnet.ckb.dev", canonicalRegistryCell.txHash, canonicalRegistryCell.index)`.
+4. Run pre-flight: `preflightCheck(outputs, [registry])`.
+5. Build `outputs` the way your wallet or dapp normally would (lock args and type args you want to check).
 6. From repo root, confirm the SDK still passes: `cd sdk/typescript && npm ci && npm test`.
-7. Integrate the same pattern into your runtime (config or env for `registryScript`; static or fetched BLKL `data` depending on product needs).
+7. Integrate the same pattern into your runtime (config or fetched BLKL payload depending on product needs).
 
 For local/off-chain mocks only, `exampleEmptyRegistryPayloadHex` remains a minimal empty `BLKL` payload.
 

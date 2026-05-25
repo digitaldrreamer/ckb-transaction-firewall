@@ -289,6 +289,36 @@
 
 - Removed GitHub Pages deployment workflow, `docs/public/CNAME`, and Pages setup docs.
 
+## 2026-05-25
+
+### `@ckb-firewall/sdk` v0.3.2
+
+- Multi-registry support: `FirewallConfig.registries` replaces single `registryScript`; each entry is a `RegistrySpecLike` with `codeHash`, `hashType`, `typeIdValue`, and `required` flag.
+- Registry dep matching now uses `typeIdValue` (bytes 34–66 of the 66-byte v2 type args) — survives governance-lock upgrades without reconfiguration.
+- `preflightCheck` accepts an array of pre-fetched `RegistryPayload` objects and an explicit `nowSecs` parameter for time-based expiry evaluation.
+- `fetchRegistryPayload(rpcUrl, txHash, index)` added as a convenience RPC helper.
+- Dropped BLKL v1 support — only BLKL v2 payloads accepted, matching the on-chain contracts.
+- GOV1 witness version bumped to v3; v2 no longer accepted by the `blacklist-registry` type script.
+
+### `@ckb-firewall/cli` v0.2.3
+
+- Updated to use `FirewallConfig.registries` API throughout governance and inspect commands.
+- `inspect` command now prints `typeIdValue` alongside registry entries.
+- `check` command accepts `--registry-type-id` flag as an alternative to a full registry spec.
+- Added `export` and `import` subcommands for sharing proposal JSON between governance participants.
+- Fixed signing preimage to include `oldRoot`, `newRoot`, and `reviewWindowEndMs` (5-field 136-byte preimage).
+
+### `ckb-transaction-firewall-sdk` (Rust) v0.3.0
+
+- Initial publishable crate on crates.io.
+- Multi-registry: `FirewallConfig { registries: Vec<RegistrySpec> }` with `typeIdValue`-based dep matching.
+- `check_transaction(cfg, tx, now_secs)` for full pre-flight against live cell deps.
+- `preflight_check(outputs, payloads, now_secs)` for checks against pre-parsed payloads.
+- `is_blacklisted(target, payloads, now_secs)` for point checks.
+- `build_firewall_lock_script` and `build_firewall_spend_cell_deps` builder helpers.
+- Optional `serde` feature and `testnet` feature (testnet constants; outpoints are placeholders until canonical deployment is published).
+- BLKL v2 only; v1 support dropped.
+
 ## 2026-05-15
 
 ### Version bump and docs npm links

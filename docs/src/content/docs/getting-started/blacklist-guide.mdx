@@ -91,7 +91,7 @@ ckb-firewall sign --proposal <id> --signer-index 0
 ```
 
 **What the sign command does:**
-1. Computes `signing_message = blake2b(proposalIdHash || voteDigestHash)`
+1. Computes `signing_message = blake2b(proposalIdHash || voteDigestHash || oldRoot || newRoot || reviewWindowEndMs)` — a 136-byte preimage hashed to 32 bytes
 2. Signs it with the governance signer's secp256k1 private key
 3. Stores the 65-byte signature locally
 
@@ -112,7 +112,7 @@ ckb-firewall execute --proposal <id> --tx-out gov_tx.json
 4. Verifies every governance signer signature against the on-chain committee pubkeys from the BLKL header
 5. Fetches the current registry cell from the RPC
 6. Builds the new BLKL v2 payload with the address added
-7. Constructs the GOV1 v2 witness binding the proposal and vote context to the state transition
+7. Constructs the GOV1 v3 witness binding the proposal and vote context to the state transition
 8. Writes the signed transaction to `gov_tx.json`
 
 The transaction is then submitted:

@@ -21,7 +21,7 @@ The registry cell uses CKB's Type ID mechanism. When a governance update replace
 Updates are not edits. Each governance transaction:
 - Consumes the old registry cell (input)
 - Produces a new registry cell (output) with updated data
-- Carries a GOV1 v2 binding in `WitnessArgs.input_type`
+- Carries a GOV1 v3 binding in `WitnessArgs.input_type`
 - Carries governance signer entries in `WitnessArgs.lock`
 
 The `blacklist-registry` type script validates the payload structure, sort order, governance-lock identity, and GOV1 binding before accepting any update.

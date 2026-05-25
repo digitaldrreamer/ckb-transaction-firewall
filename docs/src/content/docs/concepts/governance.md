@@ -28,7 +28,7 @@ Each participant imports the file. If a proposal already exists locally, votes a
 Each validator votes using their secp256k1 private key. The vote payload is cryptographically signed — the signature and a Merkle membership proof against the on-chain validator set are stored with the vote. The `vote` command rejects keys that are not in the authorized validator set.
 
 **5. Sign**  
-After the 72-hour review window passes and the vote threshold is met (3-of-5 yes votes by default), governance signers add their secp256k1 signatures. Signatures cover the `proposalIdHash` and `voteDigestHash` — if either has been tampered with, the signature will fail on-chain.
+After the 72-hour review window passes and the vote threshold is met (3-of-5 yes votes by default), governance signers add their secp256k1 signatures. Signatures cover `proposalIdHash`, `voteDigestHash`, `oldRoot`, `newRoot`, and `reviewWindowEndMs` — any tampered field causes on-chain signature verification to fail.
 
 **6. Execute**  
 The `execute` command:
