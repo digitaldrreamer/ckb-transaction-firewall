@@ -1,0 +1,133 @@
+/* ── triggers ──────────────────────────────────────────────────────────── */
+.pv-trigger {
+  cursor: help;
+  border-radius: 2px;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--sl-color-accent);
+  text-underline-offset: 3px;
+  transition: background-color 0.1s;
+}
+.pv-trigger:hover,
+.pv-trigger:focus-visible {
+  background-color: color-mix(in srgb, var(--sl-color-accent) 12%, transparent);
+  outline: 2px solid var(--sl-color-accent-high);
+  outline-offset: 1px;
+}
+.pv-trigger:focus {
+  outline: 2px solid var(--sl-color-accent-high);
+  outline-offset: 1px;
+}
+
+/* ── shared hidden ─────────────────────────────────────────────────────── */
+.pv-hidden { display: none !important; }
+
+/* ── popover ───────────────────────────────────────────────────────────── */
+#pv-pop {
+  position: absolute;
+  z-index: 9000;
+  width: min(380px, calc(100vw - 20px));
+  background: var(--sl-color-bg);
+  border: 1px solid var(--sl-color-hairline-shade);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08), 0 8px 28px rgba(0,0,0,.14);
+  font-size: var(--sl-text-sm);
+  animation: pv-fade 0.13s ease;
+}
+
+/* ── overlay ───────────────────────────────────────────────────────────── */
+#pv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8980;
+  background: rgba(0,0,0,.42);
+  animation: pv-fade 0.18s ease;
+}
+
+/* ── bottom sheet ──────────────────────────────────────────────────────── */
+#pv-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9000;
+  background: var(--sl-color-bg);
+  border-top: 1px solid var(--sl-color-hairline-shade);
+  border-radius: 16px 16px 0 0;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: pv-rise 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.pv-handle {
+  flex-shrink: 0;
+  width: 38px;
+  height: 4px;
+  background: var(--sl-color-hairline-shade);
+  border-radius: 2px;
+  margin: 10px auto 2px;
+}
+.pv-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 20px 40px;
+}
+
+/* ── close button ──────────────────────────────────────────────────────── */
+.pv-close-btn {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--sl-color-gray-3);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.1s, color 0.1s;
+}
+.pv-close-btn:hover,
+.pv-close-btn:focus-visible {
+  background: var(--sl-color-bg-nav);
+  color: var(--sl-color-text);
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 1px;
+}
+.pv-sheet-x {
+  top: 8px;
+  right: 14px;
+}
+
+/* ── definition panel ──────────────────────────────────────────────────── */
+.pv-def-panel {
+  padding: 14px 38px 14px 16px;
+}
+.pv-def-term {
+  display: block;
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+  color: var(--sl-color-text-accent);
+  margin-bottom: 5px;
+}
+.pv-def-body {
+  margin: 0;
+  color: var(--sl-color-text);
+  line-height: 1.6;
+}
+
+/* ── animations ────────────────────────────────────────────────────────── */
+@keyframes pv-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pv-rise {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}

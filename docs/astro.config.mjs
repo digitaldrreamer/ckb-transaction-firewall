@@ -17,6 +17,14 @@ export default defineConfig({
 					tag: 'link',
 					attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
 				},
+				{
+					tag: 'link',
+					attrs: { rel: 'stylesheet', href: '/preview.css' },
+				},
+				{
+					tag: 'script',
+					attrs: { src: '/preview.js', defer: true },
+				},
 			],
 			logo: {
 				src: '../assets/logo.png',
