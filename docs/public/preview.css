@@ -152,6 +152,20 @@
   padding: 0;
 }
 
+/* ── syntax highlighting tokens ───────────────────────────────────────── */
+/* light (default) */
+.pv-h-kw  { color: #0550ae; }
+.pv-h-typ { color: #116329; }
+.pv-h-str { color: #032f62; }
+.pv-h-cmt { color: #6e7781; font-style: italic; }
+.pv-h-num { color: #0550ae; }
+
+html[data-theme='dark'] .pv-h-kw  { color: #79b8ff; }
+html[data-theme='dark'] .pv-h-typ { color: #85e89d; }
+html[data-theme='dark'] .pv-h-str { color: #9ecbff; }
+html[data-theme='dark'] .pv-h-cmt { color: #8b949e; font-style: italic; }
+html[data-theme='dark'] .pv-h-num { color: #79b8ff; }
+
 /* ── GitHub links ──────────────────────────────────────────────────────── */
 /* inline link at the bottom of the desktop popover */
 .pv-gh-link {

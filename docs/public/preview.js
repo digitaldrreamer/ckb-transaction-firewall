@@ -276,6 +276,46 @@
       .replace(/"/g, '&quot;');
   }
 
+  /* ── minimal syntax tokenizer (TypeScript + Rust) ───────────────────── */
+  var TS_KW = /^(export|import|interface|type|const|let|var|function|async|await|return|if|else|for|while|class|extends|new|true|false|null|undefined|void|readonly|static|from|of|in|public|private|protected|abstract|declare|namespace|enum|implements|keyof|typeof)\b/;
+  var RS_KW = /^(pub|fn|let|const|return|if|else|for|while|loop|match|struct|enum|impl|use|mod|crate|self|super|mut|where|async|await|true|false|move|ref|type|trait|dyn|unsafe|extern|static)\b/;
+
+  function tokenize(code, lang) {
+    var isRust = lang === 'rust';
+    var KW = isRust ? RS_KW : TS_KW;
+    var out = '', s = code, m;
+
+    while (s.length) {
+      // line comment
+      if ((m = s.match(/^\/\/[^\n]*/)))
+        { out += '<span class="pv-h-cmt">' + esc(m[0]) + '</span>'; s = s.slice(m[0].length); continue; }
+      // block comment
+      if ((m = s.match(/^\/\*[\s\S]*?\*\//)))
+        { out += '<span class="pv-h-cmt">' + esc(m[0]) + '</span>'; s = s.slice(m[0].length); continue; }
+      // double-quoted string
+      if ((m = s.match(/^"(?:[^"\\]|\\.)*"/)))
+        { out += '<span class="pv-h-str">' + esc(m[0]) + '</span>'; s = s.slice(m[0].length); continue; }
+      // single-quoted string / char literal
+      if ((m = s.match(/^'(?:[^'\\]|\\.)*'/)))
+        { out += '<span class="pv-h-str">' + esc(m[0]) + '</span>'; s = s.slice(m[0].length); continue; }
+      // template literal (TS only)
+      if (!isRust && (m = s.match(/^`(?:[^`\\]|\\.)*`/)))
+        { out += '<span class="pv-h-str">' + esc(m[0]) + '</span>'; s = s.slice(m[0].length); continue; }
+      // keyword
+      if ((m = s.match(KW)))
+        { out += '<span class="pv-h-kw">' + esc(m[0]) + '</span>'; s = s.slice(m[0].length); continue; }
+      // PascalCase type / constructor
+      if ((m = s.match(/^[A-Z][A-Za-z0-9_]*/)))
+        { out += '<span class="pv-h-typ">' + esc(m[0]) + '</span>'; s = s.slice(m[0].length); continue; }
+      // hex / decimal number
+      if ((m = s.match(/^0x[0-9a-fA-F]+|\b\d+/)))
+        { out += '<span class="pv-h-num">' + esc(m[0]) + '</span>'; s = s.slice(m[0].length); continue; }
+      // anything else — one character verbatim
+      out += esc(s[0]); s = s.slice(1);
+    }
+    return out;
+  }
+
   /* Track the last input type via pointerdown — more reliable than the
      media query alone on hybrid devices and iOS Safari. Seed from the
      media query so the very first interaction is already correct. */
@@ -323,6 +363,7 @@
     var file  = trigger.dataset.pvFile  || '';
     var lines = trigger.dataset.pvLines || '';
     var code  = trigger.dataset.pvCode  || null;
+    var lang  = trigger.dataset.pvLang  || '';
     var fileName = file.split('/').pop();
 
     var div = document.createElement('div');
@@ -337,7 +378,7 @@
 
     var body;
     if (code) {
-      body = '<pre><code>' + esc(code) + '</code></pre>';
+      body = '<pre><code>' + tokenize(code, lang) + '</code></pre>';
     } else {
       body = '<p class="pv-def-body" style="padding:10px 14px;margin:0">' +
         'Source file: <code style="font-size:0.8em">' + esc(file) + '</code></p>';
