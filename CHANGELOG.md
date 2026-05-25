@@ -121,7 +121,7 @@
 - Integration tests: local devnet as default for CI; testnet for periodic smoke.
 - Module READMEs: emergency scope + registry dep-selection invariants; pinned public error codes in unit test doc.
 - `CHANGELOG` consolidated under one date; scripts README wording tweak.
-- `notes/governance.md`: split frozen lifecycle vs v2 refinement items to avoid contradictory “open decisions” list.
+- `notes/governance.md`: split frozen lifecycle vs v2 refinement items to avoid contradictory "open decisions" list.
 
 ### CI
 
@@ -253,7 +253,7 @@
 - Added permutation, nine-header median grid, no-header zero-median, duplicate-timestamp boundary, and single-header median VM tests (`firewall_lock_tests.rs`).
 - Expanded `tests/unit/fixtures/README.md` with third-party testdata explanation.
 - Documented SHA-256 and byte size for `always_failure_lock` in `tests/unit/fixtures/README.md` (matches `ckb-script` 0.118.0 `testdata/always_failure`).
-- Added explicit “Replacing this fixture” checklist to `tests/unit/fixtures/README.md` (update size, SHA-256, `ckb-script` version line, run tests, changelog).
+- Added explicit "Replacing this fixture" checklist to `tests/unit/fixtures/README.md` (update size, SHA-256, `ckb-script` version line, run tests, changelog).
 
 ## 2026-05-12
 
@@ -310,14 +310,35 @@
 
 ### `ckb-transaction-firewall-sdk` (Rust) v0.3.0
 
-- Initial publishable crate on crates.io.
-- Multi-registry: `FirewallConfig { registries: Vec<RegistrySpec> }` with `typeIdValue`-based dep matching.
-- `check_transaction(cfg, tx, now_secs)` for full pre-flight against live cell deps.
-- `preflight_check(outputs, payloads, now_secs)` for checks against pre-parsed payloads.
-- `is_blacklisted(target, payloads, now_secs)` for point checks.
-- `build_firewall_lock_script` and `build_firewall_spend_cell_deps` builder helpers.
-- Optional `serde` feature and `testnet` feature (testnet constants; outpoints are placeholders until canonical deployment is published).
-- BLKL v2 only; v1 support dropped.
+- Modular rewrite: flat `lib.rs` split into `errors`, `types`, `registry`, `builder`, `firewall`, and `testnet` modules. All public symbols re-exported from the crate root for ergonomic `use`.
+- Multi-registry: `FirewallConfig { registries: Vec<RegistrySpec> }`. `RegistrySpec` identifies a registry cell dep by `code_hash`, `hash_type`, and `type_id_value` (bytes 34–66 of the 66-byte v2 registry type args) — survives governance-lock upgrades. Required/optional flag per spec.
+- `check_transaction(cfg, tx, now_secs)`: full pre-flight against live cell deps in an `UnsignedTxLike`.
+- `preflight_check(outputs, payloads, now_secs)`: check against already-parsed `RegistryPayload` slices.
+- `is_blacklisted(target, payloads, now_secs)`: point check, returns `bool`.
+- `parse_registry_payload(data)`: now public; BLKL v2 only (v1 hard-rejected, matching the contract and TypeScript SDK).
+- `encode_registry_payload(payload)` and `encode_governance_header(gh)`: public encoding helpers. `encode_registry_payload` returns `Result` and validates identifier length ≤ 255 before encoding.
+- Builder module: `build_firewall_lock_args(config)`, `build_firewall_lock_script(config)`, `build_firewall_spend_cell_deps(config)` — encode the v2 `FirewallLockArgs` byte layout and assemble cell deps for spending firewall-protected cells.
+- `error_codes` module: all 13 on-chain codes (5–17) as `pub const i8`, names matching the frozen v1 contract mapping (`InvalidArgsLayout=5`, `UnsupportedVersion=6`, `UnsupportedFlags=7`, `MissingRegistryCellDep=8` … `MissingInnerLockCellDep=13`, `InvalidInnerLockScript=14`, `InnerLockRejected=15`, `OutputScriptParseFailed=16`, `AmbiguousRegistryCellDep=17`).
+- `FirewallError` implements `Display` and `std::error::Error`.
+- Optional `serde` feature: derives `Serialize`/`Deserialize` on all public types.
+- Optional `testnet` feature: exposes `testnet` module with `RPC_URL`, governance constants, and placeholder contract outpoints.
+- Dep-matching uses exact 66-byte type args length (not `>= 66`), matching the on-chain resolver.
+- `parse_entries` bounds-checks entry count against remaining buffer before `Vec::with_capacity` to prevent OOM on malicious input.
+- Governance header parsing bounded within `[offset, offset + gov_len)` so a malformed `gov_header_len` cannot read into the entry section.
+- 20+ unit tests; new `error_code_values_match_contract` test pins all 13 constants against the contract source.
+- Crate metadata: `description`, `repository`, `keywords`, `categories` for crates.io publication.
+
+### Docs site
+
+- All "GOV1 v2" references updated to "GOV1 v3" across architecture, blacklist-registry, and governance pages; GOV1 v2 is no longer accepted by the on-chain contracts.
+- Signing preimage corrected to the 5-field 136-byte blake2b preimage (`proposalIdHash || voteDigestHash || oldRoot || newRoot || reviewWindowEndMs`) in two locations.
+- `rust-sdk.md` rewritten from a "coming soon" stub to full v0.3.0 API reference covering all public functions, feature flags, and error codes.
+- Overview page Rust tab updated from placeholder to a working `check_transaction` snippet.
+- CHANGELOG entries added for `@ckb-firewall/sdk` v0.3.2, `@ckb-firewall/cli` v0.2.3, and `ckb-transaction-firewall-sdk` v0.3.0.
+- Stale JSON key names in testnet deployment notes fixed (`registryScript` → `registrySpec`, `blacklistRegistryTypeScriptDeployOutPoint` → `blacklistRegistryDeployOutPoint`).
+- Governance-lock tx hash suffix in testnet-deployment page corrected.
+- **Glossary page** added under Reference: 37 terms covering binary formats (BLKL, GOV1, FirewallLockArgs), contracts, architecture concepts, SDK types, and governance vocabulary.
+- **Interactive preview system**: all docs pages now auto-mark the first occurrence of each glossary term with a dotted underline. Hovering (desktop) shows a definition popover; tapping (mobile) shows a bottom sheet. Extended to inline `<code>` symbols (TypeScript SDK types/functions, Rust SDK types, contract entry points) which show actual source snippets on hover/tap. File-path references show a file-location panel. Self-contained TypeScript and Rust syntax highlighter with no CDN dependency.
 
 ## 2026-05-15
 
@@ -325,4 +346,3 @@
 
 - Bump `@ckb-firewall/cli` to 0.1.2 and `@ckb-firewall/sdk` to 0.2.5.
 - Add npm package links to Starlight getting-started and CLI reference pages.
-
