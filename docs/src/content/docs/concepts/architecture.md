@@ -38,14 +38,14 @@ The registry is a single live cell whose data is a BLKL v2 binary payload. It co
 - A governance header (signer pubkeys, threshold, validator Merkle root)
 - A sorted list of blacklisted identifiers with optional expiry timestamps
 
-The cell's type script is the `blacklist-registry` contract, which enforces: correct payload structure, sort order, governance-lock identity on the cell, and GOV1 v2 witness binding on every update. Its Type ID is the stable identity — the type_id_value in the registry type args stays fixed across governance updates.
+The cell's type script is the `blacklist-registry` contract, which enforces: correct payload structure, sort order, governance-lock identity on the cell, and GOV1 v3 witness binding on every update. Its Type ID is the stable identity — the type_id_value in the registry type args stays fixed across governance updates.
 
 ## Governance updates
 
 Registry updates replace the registry cell entirely. A governance transaction:
 1. Consumes the old registry cell as input
 2. Produces a new registry cell as output with updated BLKL data
-3. Carries a GOV1 v2 witness (in `WitnessArgs.input_type`) committing to the proposal ID, vote digest, old root, and new root
+3. Carries a GOV1 v3 witness (in `WitnessArgs.input_type`) committing to the proposal ID, vote digest, old root, new root, and review window end timestamp
 4. Carries governance signer entries (in `WitnessArgs.lock`) that the governance-lock script verifies against the on-chain committee pubkeys from the BLKL header
 
 Only one update can be in-flight at a time — the registry is a single consumed-and-recreated cell.
