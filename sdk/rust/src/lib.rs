@@ -35,6 +35,19 @@ pub struct ScriptLike {
     pub args: Vec<u8>,
 }
 
+/// Identifies a registry cell dep by its type-script code hash, hash type, and
+/// the 32-byte Type ID value stored at bytes 34–66 of the type-script args.
+/// Mirrors `RegistrySpecLike` in the TypeScript SDK.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistrySpec {
+    pub code_hash: [u8; 32],
+    pub hash_type: HashType,
+    /// Bytes 34–66 of the registry cell's type-script args (the Type ID value).
+    pub type_id_value: [u8; 32],
+    /// If true, a missing registry dep is an error; if false it is silently skipped.
+    pub required: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct CellDepLike {
     pub type_script: Option<ScriptLike>,
@@ -55,12 +68,13 @@ pub struct UnsignedTxLike {
 
 #[derive(Debug, Clone)]
 pub struct FirewallConfig {
-    pub registry_script: ScriptLike,
+    pub registries: Vec<RegistrySpec>,
 }
 
 #[derive(Debug, Clone)]
 pub struct RegistryEntry {
     pub identifier: Vec<u8>,
+    /// Unix seconds. 0 means the entry never expires.
     pub expires_at: u64,
 }
 
@@ -80,20 +94,38 @@ pub struct RegistryPayload {
     pub governance_header: Option<GovernanceHeader>,
 }
 
-fn resolve_registry_dep<'a>(
+fn dep_matches_spec(dep: &CellDepLike, spec: &RegistrySpec) -> bool {
+    let ts = match &dep.type_script {
+        Some(ts) => ts,
+        None => return false,
+    };
+    ts.code_hash == spec.code_hash
+        && ts.hash_type == spec.hash_type
+        && ts.args.len() >= 66
+        && ts.args[34..66] == spec.type_id_value
+}
+
+fn resolve_registry_deps<'a>(
     deps: &'a [CellDepLike],
-    expected: &ScriptLike,
-) -> Result<&'a CellDepLike, FirewallError> {
-    let mut matched: Option<&CellDepLike> = None;
-    for dep in deps {
-        if dep.type_script.as_ref() == Some(expected) {
-            if matched.is_some() {
-                return Err(FirewallError::AmbiguousRegistryCellDep);
+    specs: &[RegistrySpec],
+) -> Result<Vec<Option<&'a CellDepLike>>, FirewallError> {
+    let mut resolved = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let mut matched: Option<&CellDepLike> = None;
+        for dep in deps {
+            if dep_matches_spec(dep, spec) {
+                if matched.is_some() {
+                    return Err(FirewallError::AmbiguousRegistryCellDep);
+                }
+                matched = Some(dep);
             }
-            matched = Some(dep);
         }
+        if matched.is_none() && spec.required {
+            return Err(FirewallError::MissingRegistryCellDep);
+        }
+        resolved.push(matched);
     }
-    matched.ok_or(FirewallError::MissingRegistryCellDep)
+    Ok(resolved)
 }
 
 fn parse_entries(data: &[u8], offset: usize, count: usize) -> Result<(Vec<RegistryEntry>, usize), FirewallError> {
@@ -163,7 +195,11 @@ fn parse_governance_header(data: &[u8], offset: usize, gov_len: usize) -> Result
     })
 }
 
-fn parse_registry_payload(data: &[u8]) -> Result<RegistryPayload, FirewallError> {
+/// Parse a raw BLKL registry payload (v1 or v2).
+///
+/// Returns the parsed [`RegistryPayload`] on success, or [`FirewallError::InvalidRegistryData`]
+/// if the data is malformed or an unsupported version.
+pub fn parse_registry_payload(data: &[u8]) -> Result<RegistryPayload, FirewallError> {
     if data.len() < 9 {
         return Err(FirewallError::InvalidRegistryData);
     }
@@ -198,7 +234,10 @@ fn parse_registry_payload(data: &[u8]) -> Result<RegistryPayload, FirewallError>
                 data[entries_start], data[entries_start + 1],
                 data[entries_start + 2], data[entries_start + 3],
             ]) as usize;
-            let (entries, _) = parse_entries(data, entries_start + 4, count)?;
+            let (entries, end) = parse_entries(data, entries_start + 4, count)?;
+            if end != data.len() {
+                return Err(FirewallError::InvalidRegistryData);
+            }
             Ok(RegistryPayload { version: 2, entries, governance_header: Some(governance_header) })
         }
         _ => Err(FirewallError::InvalidRegistryData),
@@ -221,21 +260,32 @@ fn is_blacklisted(entries: &[RegistryEntry], target: &[u8], now_secs: u64) -> bo
     false
 }
 
-pub fn check_transaction(cfg: &FirewallConfig, tx: &UnsignedTxLike) -> Result<(), FirewallError> {
-    let dep = resolve_registry_dep(&tx.cell_deps, &cfg.registry_script)?;
-    let payload = parse_registry_payload(&dep.data)?;
-    let now_secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+/// Pre-flight blacklist check for an unsigned CKB transaction.
+///
+/// Resolves all registry cell deps specified in `cfg`, parses each registry
+/// payload, and checks every transaction output's lock and type args against
+/// the active (non-expired) blacklist entries.
+///
+/// `now_secs` is the current time in Unix seconds. Pass the chain's median
+/// time for consensus-accurate expiry evaluation, or system time for
+/// off-chain pre-flight use.
+pub fn check_transaction(
+    cfg: &FirewallConfig,
+    tx: &UnsignedTxLike,
+    now_secs: u64,
+) -> Result<(), FirewallError> {
+    let resolved = resolve_registry_deps(&tx.cell_deps, &cfg.registries)?;
 
-    for out in &tx.outputs {
-        if is_blacklisted(&payload.entries, &out.lock_args, now_secs) {
-            return Err(FirewallError::BlacklistedLockArgs);
-        }
-        if let Some(type_args) = &out.type_args {
-            if is_blacklisted(&payload.entries, type_args, now_secs) {
-                return Err(FirewallError::BlacklistedTypeArgs);
+    for slot in resolved.into_iter().flatten() {
+        let payload = parse_registry_payload(&slot.data)?;
+        for out in &tx.outputs {
+            if is_blacklisted(&payload.entries, &out.lock_args, now_secs) {
+                return Err(FirewallError::BlacklistedLockArgs);
+            }
+            if let Some(type_args) = &out.type_args {
+                if is_blacklisted(&payload.entries, type_args, now_secs) {
+                    return Err(FirewallError::BlacklistedTypeArgs);
+                }
             }
         }
     }
@@ -247,11 +297,29 @@ pub fn check_transaction(cfg: &FirewallConfig, tx: &UnsignedTxLike) -> Result<()
 mod tests {
     use super::*;
 
-    fn test_script(tag: u8) -> ScriptLike {
-        ScriptLike {
-            code_hash: [tag; 32],
+    fn spec(tag: u8) -> RegistrySpec {
+        let mut type_id = [0u8; 32];
+        type_id[0] = tag;
+        let mut code_hash = [0u8; 32];
+        code_hash[0] = tag;
+        RegistrySpec {
+            code_hash,
             hash_type: HashType::Type,
-            args: vec![tag],
+            type_id_value: type_id,
+            required: true,
+        }
+    }
+
+    fn dep_for_spec(s: &RegistrySpec, data: Vec<u8>) -> CellDepLike {
+        let mut args = vec![0u8; 66];
+        args[34..66].copy_from_slice(&s.type_id_value);
+        CellDepLike {
+            type_script: Some(ScriptLike {
+                code_hash: s.code_hash,
+                hash_type: s.hash_type.clone(),
+                args,
+            }),
+            data,
         }
     }
 
@@ -268,12 +336,23 @@ mod tests {
         out
     }
 
-    // Minimal v2 registry: no signers, zero validator root.
+    fn build_registry_v1_with_expiry(ids: &[(&[u8], u64)]) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(b"BLKL");
+        out.push(1);
+        out.extend_from_slice(&(ids.len() as u32).to_le_bytes());
+        for (id, exp) in ids {
+            out.push(id.len() as u8);
+            out.extend_from_slice(id);
+            out.extend_from_slice(&exp.to_le_bytes());
+        }
+        out
+    }
+
     fn build_registry_v2(ids: &[&[u8]]) -> Vec<u8> {
-        // governance header: gh_version(1)=1 | signer_count(1)=0 | threshold(1)=0 | validator_count(2 LE)=0 | merkle_root(32)=0s
         let gov_header: Vec<u8> = {
-            let mut h = vec![0x01u8, 0x00, 0x00, 0x00, 0x00]; // version, signer_count, threshold, validator_count LE
-            h.extend_from_slice(&[0u8; 32]); // merkle_root
+            let mut h = vec![0x01u8, 0x00, 0x00, 0x00, 0x00];
+            h.extend_from_slice(&[0u8; 32]);
             h
         };
         let gov_len = gov_header.len() as u16;
@@ -291,101 +370,70 @@ mod tests {
         out
     }
 
-    fn build_registry(ids: &[&[u8]]) -> Vec<u8> {
-        build_registry_v2(ids)
+    fn cfg1(s: RegistrySpec) -> FirewallConfig {
+        FirewallConfig { registries: vec![s] }
     }
 
     #[test]
     fn reject_missing_dep() {
-        let cfg = FirewallConfig {
-            registry_script: test_script(1),
-        };
-        let tx = UnsignedTxLike {
-            cell_deps: vec![],
-            outputs: vec![],
-        };
-        let err = check_transaction(&cfg, &tx).unwrap_err();
+        let s = spec(1);
+        let tx = UnsignedTxLike { cell_deps: vec![], outputs: vec![] };
+        let err = check_transaction(&cfg1(s), &tx, 0).unwrap_err();
         assert_eq!(err, FirewallError::MissingRegistryCellDep);
         assert_eq!(err.code(), 8);
     }
 
     #[test]
     fn reject_blacklisted_lock_args() {
-        let cfg = FirewallConfig {
-            registry_script: test_script(1),
-        };
+        let s = spec(1);
+        let dep = dep_for_spec(&s, build_registry_v2(&[&[0xaa, 0xbb]]));
         let tx = UnsignedTxLike {
-            cell_deps: vec![CellDepLike {
-                type_script: Some(test_script(1)),
-                data: build_registry(&[&[0xaa, 0xbb]]),
-            }],
-            outputs: vec![TxOutputLike {
-                lock_args: vec![0xaa, 0xbb],
-                type_args: None,
-            }],
+            cell_deps: vec![dep],
+            outputs: vec![TxOutputLike { lock_args: vec![0xaa, 0xbb], type_args: None }],
         };
-        let err = check_transaction(&cfg, &tx).unwrap_err();
+        let err = check_transaction(&cfg1(s), &tx, 0).unwrap_err();
         assert_eq!(err, FirewallError::BlacklistedLockArgs);
         assert_eq!(err.code(), 11);
     }
 
     #[test]
     fn reject_ambiguous_registry_dep() {
-        let cfg = FirewallConfig {
-            registry_script: test_script(1),
-        };
-        let dep = CellDepLike {
-            type_script: Some(test_script(1)),
-            data: build_registry(&[&[0xaa]]),
-        };
+        let s = spec(1);
+        let dep = dep_for_spec(&s, build_registry_v2(&[&[0xaa]]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep.clone(), dep],
-            outputs: vec![TxOutputLike {
-                lock_args: vec![0x00],
-                type_args: None,
-            }],
+            outputs: vec![TxOutputLike { lock_args: vec![0x00], type_args: None }],
         };
-        let err = check_transaction(&cfg, &tx).unwrap_err();
+        let err = check_transaction(&cfg1(s), &tx, 0).unwrap_err();
         assert_eq!(err, FirewallError::AmbiguousRegistryCellDep);
         assert_eq!(err.code(), 17);
     }
 
     #[test]
     fn reject_registry_not_sorted() {
-        let cfg = FirewallConfig {
-            registry_script: test_script(1),
-        };
+        let s = spec(1);
+        let dep = dep_for_spec(&s, build_registry_v2(&[&[0xbb], &[0xaa]]));
         let tx = UnsignedTxLike {
-            cell_deps: vec![CellDepLike {
-                type_script: Some(test_script(1)),
-                data: build_registry(&[&[0xbb], &[0xaa]]),
-            }],
-            outputs: vec![TxOutputLike {
-                lock_args: vec![0x00],
-                type_args: None,
-            }],
+            cell_deps: vec![dep],
+            outputs: vec![TxOutputLike { lock_args: vec![0x00], type_args: None }],
         };
-        let err = check_transaction(&cfg, &tx).unwrap_err();
+        let err = check_transaction(&cfg1(s), &tx, 0).unwrap_err();
         assert_eq!(err, FirewallError::RegistryNotSorted);
         assert_eq!(err.code(), 10);
     }
 
     #[test]
     fn reject_blacklisted_type_args() {
-        let cfg = FirewallConfig {
-            registry_script: test_script(1),
-        };
+        let s = spec(1);
+        let dep = dep_for_spec(&s, build_registry_v2(&[&[0x55, 0x66]]));
         let tx = UnsignedTxLike {
-            cell_deps: vec![CellDepLike {
-                type_script: Some(test_script(1)),
-                data: build_registry(&[&[0x55, 0x66]]),
-            }],
+            cell_deps: vec![dep],
             outputs: vec![TxOutputLike {
                 lock_args: vec![0x11, 0x22],
                 type_args: Some(vec![0x55, 0x66]),
             }],
         };
-        let err = check_transaction(&cfg, &tx).unwrap_err();
+        let err = check_transaction(&cfg1(s), &tx, 0).unwrap_err();
         assert_eq!(err, FirewallError::BlacklistedTypeArgs);
         assert_eq!(err.code(), 12);
     }
@@ -393,7 +441,7 @@ mod tests {
     #[test]
     fn parse_v1_registry_backward_compat() {
         let data = build_registry_v1(&[&[0x01], &[0x02]]);
-        let payload = super::parse_registry_payload(&data).unwrap();
+        let payload = parse_registry_payload(&data).unwrap();
         assert_eq!(payload.version, 1);
         assert_eq!(payload.entries.len(), 2);
         assert!(payload.governance_header.is_none());
@@ -402,10 +450,9 @@ mod tests {
     #[test]
     fn parse_v2_registry_with_governance_header() {
         let data = build_registry_v2(&[&[0xaa, 0xbb]]);
-        let payload = super::parse_registry_payload(&data).unwrap();
+        let payload = parse_registry_payload(&data).unwrap();
         assert_eq!(payload.version, 2);
         assert_eq!(payload.entries.len(), 1);
-        assert!(payload.governance_header.is_some());
         let gh = payload.governance_header.unwrap();
         assert_eq!(gh.signer_count, 0);
     }
@@ -413,9 +460,106 @@ mod tests {
     #[test]
     fn reject_unknown_version() {
         let mut data = build_registry_v1(&[]);
-        data[4] = 0x03; // unsupported version
+        data[4] = 0x03;
         assert_eq!(
-            super::parse_registry_payload(&data).unwrap_err(),
+            parse_registry_payload(&data).unwrap_err(),
+            FirewallError::InvalidRegistryData,
+        );
+    }
+
+    #[test]
+    fn expire_check_active() {
+        let s = spec(1);
+        // expires_at = 1000, now_secs = 999 → entry is still active → blacklisted
+        let dep = dep_for_spec(&s, build_registry_v1_with_expiry(&[(&[0xaa], 1000)]));
+        let tx = UnsignedTxLike {
+            cell_deps: vec![dep],
+            outputs: vec![TxOutputLike { lock_args: vec![0xaa], type_args: None }],
+        };
+        assert_eq!(
+            check_transaction(&cfg1(s), &tx, 999).unwrap_err(),
+            FirewallError::BlacklistedLockArgs,
+        );
+    }
+
+    #[test]
+    fn expire_check_expired() {
+        let s = spec(1);
+        // expires_at = 1000, now_secs = 1000 → entry is expired → not blacklisted
+        let dep = dep_for_spec(&s, build_registry_v1_with_expiry(&[(&[0xaa], 1000)]));
+        let tx = UnsignedTxLike {
+            cell_deps: vec![dep],
+            outputs: vec![TxOutputLike { lock_args: vec![0xaa], type_args: None }],
+        };
+        assert!(check_transaction(&cfg1(s), &tx, 1000).is_ok());
+    }
+
+    #[test]
+    fn permanent_entry_always_blacklisted() {
+        let s = spec(1);
+        // expires_at = 0 → permanent, never expires
+        let dep = dep_for_spec(&s, build_registry_v1_with_expiry(&[(&[0xbb], 0)]));
+        let tx = UnsignedTxLike {
+            cell_deps: vec![dep],
+            outputs: vec![TxOutputLike { lock_args: vec![0xbb], type_args: None }],
+        };
+        assert_eq!(
+            check_transaction(&cfg1(s), &tx, u64::MAX).unwrap_err(),
+            FirewallError::BlacklistedLockArgs,
+        );
+    }
+
+    #[test]
+    fn multi_registry_both_checked() {
+        let s1 = spec(1);
+        let s2 = spec(2);
+        let dep1 = dep_for_spec(&s1, build_registry_v2(&[&[0x11]]));
+        let dep2 = dep_for_spec(&s2, build_registry_v2(&[&[0x22]]));
+        let firewall_cfg = FirewallConfig { registries: vec![s1, s2] };
+        // output is blacklisted in registry 2
+        let tx = UnsignedTxLike {
+            cell_deps: vec![dep1, dep2],
+            outputs: vec![TxOutputLike { lock_args: vec![0x22], type_args: None }],
+        };
+        assert_eq!(
+            check_transaction(&firewall_cfg, &tx, 0).unwrap_err(),
+            FirewallError::BlacklistedLockArgs,
+        );
+    }
+
+    #[test]
+    fn multi_registry_missing_required() {
+        let s1 = spec(1);
+        let s2 = spec(2); // required, no matching dep provided
+        let dep1 = dep_for_spec(&s1, build_registry_v2(&[]));
+        let firewall_cfg = FirewallConfig { registries: vec![s1, s2] };
+        let tx = UnsignedTxLike { cell_deps: vec![dep1], outputs: vec![] };
+        assert_eq!(
+            check_transaction(&firewall_cfg, &tx, 0).unwrap_err(),
+            FirewallError::MissingRegistryCellDep,
+        );
+    }
+
+    #[test]
+    fn multi_registry_optional_miss_ok() {
+        let s1 = spec(1);
+        let mut s2 = spec(2);
+        s2.required = false; // optional — missing dep is allowed
+        let dep1 = dep_for_spec(&s1, build_registry_v2(&[]));
+        let firewall_cfg = FirewallConfig { registries: vec![s1, s2] };
+        let tx = UnsignedTxLike {
+            cell_deps: vec![dep1],
+            outputs: vec![TxOutputLike { lock_args: vec![0x99], type_args: None }],
+        };
+        assert!(check_transaction(&firewall_cfg, &tx, 0).is_ok());
+    }
+
+    #[test]
+    fn v2_trailing_data_rejected() {
+        let mut data = build_registry_v2(&[&[0xaa]]);
+        data.push(0xff); // trailing garbage byte
+        assert_eq!(
+            parse_registry_payload(&data).unwrap_err(),
             FirewallError::InvalidRegistryData,
         );
     }
