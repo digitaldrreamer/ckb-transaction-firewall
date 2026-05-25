@@ -1,11 +1,20 @@
 [package]
 name = "ckb-transaction-firewall-sdk"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
+description = "Off-chain pre-flight blacklist check for CKB transactions"
+repository = "https://github.com/digitaldrreamer/ckb-transaction-firewall"
+keywords = ["ckb", "nervos", "firewall", "blacklist"]
+categories = ["cryptography::cryptocurrencies"]
 
 [lib]
 name = "ckb_transaction_firewall_sdk"
 path = "src/lib.rs"
 
+[features]
+serde = ["dep:serde"]
+testnet = []
+
 [dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
