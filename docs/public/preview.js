@@ -517,12 +517,14 @@
 
   /* ── event delegation ───────────────────────────────────────────────── */
   function onMouseOver(e) {
+    if (isTouch()) return; // synthesized by tap — handled by onClick instead
     var t = e.target.closest('.pv-trigger');
     if (!t) return;
     cancelHide(); scheduleShow(t);
   }
 
   function onMouseOut(e) {
+    if (isTouch()) return;
     if (!e.target.closest('.pv-trigger')) return;
     scheduleHide();
   }
@@ -544,6 +546,7 @@
   }
 
   function onFocusIn(e) {
+    if (isTouch()) return; // touch uses click, not focus events
     var t = e.target;
     if (t.classList.contains('pv-trigger')) { cancelHide(); scheduleShow(t); return; }
     if (!t.closest('#pv-pop')) scheduleHide();
