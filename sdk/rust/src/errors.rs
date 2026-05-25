@@ -58,15 +58,17 @@ impl std::error::Error for FirewallError {}
 
 /// On-chain error codes for the CKB Transaction Firewall lock script.
 ///
-/// Codes 8–12 and 17 can be surfaced by SDK preflight.
-/// Codes 5–7 and 13–16 are enforced exclusively by the on-chain contract.
+/// These are the frozen v1 codes defined in
+/// `contracts/firewall-lock/src/main.rs`. Codes 8–12 and 17 can be surfaced
+/// by SDK preflight; codes 5–7 and 13–16 are enforced exclusively by the
+/// on-chain contract and are provided here for diagnostic purposes only.
 pub mod error_codes {
-    /// Inner lock script rejected the spend (on-chain only).
-    pub const INNER_LOCK_REJECTED: i8 = 5;
-    /// Flags byte is invalid — both check bits clear or reserved bits set (on-chain only).
-    pub const INVALID_FLAGS: i8 = 6;
-    /// Lock args are too short to be a valid firewall lock (on-chain only).
-    pub const LOCK_ARGS_TOO_SHORT: i8 = 7;
+    /// Lock args byte layout is invalid — too short or mismatched inner_args_len (on-chain only).
+    pub const INVALID_ARGS_LAYOUT: i8 = 5;
+    /// Registry data uses an unsupported version (on-chain only).
+    pub const UNSUPPORTED_VERSION: i8 = 6;
+    /// Flags byte has no check bits set, or has reserved bits set (on-chain only).
+    pub const UNSUPPORTED_FLAGS: i8 = 7;
     /// No registry cell dep matched the required spec.
     pub const MISSING_REGISTRY_CELL_DEP: i8 = 8;
     /// Registry cell data is malformed or uses an unsupported version.
@@ -77,14 +79,14 @@ pub mod error_codes {
     pub const BLACKLISTED_LOCK_ARGS: i8 = 11;
     /// An output's type args are in the active blacklist.
     pub const BLACKLISTED_TYPE_ARGS: i8 = 12;
-    /// Governance signature count is below threshold (on-chain only).
-    pub const GOVERNANCE_THRESHOLD_NOT_MET: i8 = 13;
-    /// A governance signature is invalid (on-chain only).
-    pub const INVALID_GOVERNANCE_SIGNATURE: i8 = 14;
-    /// Governance Merkle proof is invalid (on-chain only).
-    pub const INVALID_MERKLE_PROOF: i8 = 15;
-    /// Review window has not elapsed yet — enforced via CKB `since` (on-chain only).
-    pub const REVIEW_WINDOW_ACTIVE: i8 = 16;
+    /// Inner lock cell dep is missing (on-chain only).
+    pub const MISSING_INNER_LOCK_CELL_DEP: i8 = 13;
+    /// Inner lock script hash type is unrecognised (on-chain only).
+    pub const INVALID_INNER_LOCK_SCRIPT: i8 = 14;
+    /// Inner lock script rejected the spend — bad signature or witness (on-chain only).
+    pub const INNER_LOCK_REJECTED: i8 = 15;
+    /// Failed to load or parse a transaction output script (on-chain only).
+    pub const OUTPUT_SCRIPT_PARSE_FAILED: i8 = 16;
     /// More than one cell dep matched the same registry spec.
     pub const AMBIGUOUS_REGISTRY_CELL_DEP: i8 = 17;
 }

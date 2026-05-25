@@ -18,7 +18,8 @@ pub(crate) fn parse_governance_header(
     let signer_count = data[offset + 1] as usize;
     let threshold = data[offset + 2];
     let pubkeys_end = offset + 3 + signer_count * 33;
-    if data.len() < pubkeys_end + 2 + 32 {
+    // Bound all governance-header reads within [offset, offset + gov_len).
+    if pubkeys_end + 2 + 32 > offset + gov_len {
         return Err(FirewallError::InvalidRegistryData);
     }
     let mut pubkeys = Vec::with_capacity(signer_count);
@@ -46,6 +47,12 @@ pub(crate) fn parse_entries(
     count: usize,
 ) -> Result<(Vec<RegistryEntry>, usize), FirewallError> {
     let mut off = offset;
+    // Each entry is at minimum 9 bytes (1-byte id_len + 0-byte id + 8-byte expires_at).
+    // Reject impossible counts before allocating to prevent OOM on malicious input.
+    let max_possible = data.len().saturating_sub(off) / 9;
+    if count > max_possible {
+        return Err(FirewallError::InvalidRegistryData);
+    }
     let mut entries = Vec::with_capacity(count);
     for _ in 0..count {
         if off >= data.len() {
@@ -137,9 +144,12 @@ pub fn encode_governance_header(gh: &GovernanceHeader) -> Vec<u8> {
 /// Produces a BLKL v2 payload. Entries must already be sorted in ascending
 /// lexicographic order; this function does not re-sort them.
 ///
+/// Returns [`FirewallError::InvalidRegistryData`] if any entry identifier
+/// exceeds 255 bytes (the wire format stores identifier length as one byte).
+///
 /// Layout: `BLKL(4) | version(1)=0x02 | gov_header_len(2 LE) | gov_header |
 /// entry_count(4 LE) | [id_len(1) | id | expires_at(8 LE)]×N`
-pub fn encode_registry_payload(payload: &RegistryPayload) -> Vec<u8> {
+pub fn encode_registry_payload(payload: &RegistryPayload) -> Result<Vec<u8>, FirewallError> {
     let gov_bytes = match &payload.governance_header {
         Some(gh) => encode_governance_header(gh),
         None => {
@@ -157,9 +167,12 @@ pub fn encode_registry_payload(payload: &RegistryPayload) -> Vec<u8> {
     out.extend_from_slice(&gov_bytes);
     out.extend_from_slice(&(payload.entries.len() as u32).to_le_bytes());
     for entry in &payload.entries {
+        if entry.identifier.len() > u8::MAX as usize {
+            return Err(FirewallError::InvalidRegistryData);
+        }
         out.push(entry.identifier.len() as u8);
         out.extend_from_slice(&entry.identifier);
         out.extend_from_slice(&entry.expires_at.to_le_bytes());
     }
-    out
+    Ok(out)
 }

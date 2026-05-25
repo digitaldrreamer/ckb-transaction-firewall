@@ -78,7 +78,7 @@ pub use firewall::{check_transaction, is_blacklisted, preflight_check};
 mod tests {
     use super::*;
 
-    // ── test helpers ──────────────────────────────────────────────────────────
+    // ── test helpers ─────────────────────────────────────────────────────────
 
     fn spec(tag: u8) -> RegistrySpec {
         let mut type_id = [0u8; 32];
@@ -89,6 +89,7 @@ mod tests {
     }
 
     fn dep_for_spec(s: &RegistrySpec, data: Vec<u8>) -> CellDepLike {
+        // Registry type args are exactly 66 bytes; type_id_value at [34..66].
         let mut args = vec![0u8; 66];
         args[34..66].copy_from_slice(&s.type_id_value);
         CellDepLike {
@@ -114,6 +115,7 @@ mod tests {
                 .map(|(id, exp)| RegistryEntry { identifier: id.to_vec(), expires_at: *exp })
                 .collect(),
         })
+        .unwrap()
     }
 
     fn cfg1(s: RegistrySpec) -> FirewallConfig {
@@ -313,6 +315,29 @@ mod tests {
         );
     }
 
+    // ── dep matching: exact 66-byte type args ─────────────────────────────────────
+
+    #[test]
+    fn dep_with_wrong_args_length_not_matched() {
+        let s = spec(1);
+        // Build a dep whose type args are 67 bytes (not exactly 66) — should not match.
+        let mut args = vec![0u8; 67];
+        args[34..66].copy_from_slice(&s.type_id_value);
+        let dep = CellDepLike {
+            type_script: Some(ScriptLike {
+                code_hash: s.code_hash,
+                hash_type: s.hash_type.clone(),
+                args,
+            }),
+            data: registry(&[]),
+        };
+        let tx = UnsignedTxLike { cell_deps: vec![dep], outputs: vec![] };
+        assert_eq!(
+            check_transaction(&cfg1(s), &tx, 0).unwrap_err(),
+            FirewallError::MissingRegistryCellDep,
+        );
+    }
+
     // ── builder tests ─────────────────────────────────────────────────────────
 
     #[test]
@@ -333,8 +358,6 @@ mod tests {
             inner_args: vec![0x11, 0x22, 0x33],
         };
         let args = build_firewall_lock_args(&config).unwrap();
-        // version=2, flags=1, count=1, code_hash(32), hash_type=1, type_id(32), required=1,
-        // inner_code_hash(32), inner_hash_type=2, inner_args_len=3 LE, inner_args(3)
         assert_eq!(args[0], 0x02); // version
         assert_eq!(args[1], 0x01); // flags
         assert_eq!(args[2], 0x01); // registry_count
@@ -400,7 +423,7 @@ mod tests {
                 RegistryEntry { identifier: vec![0x02], expires_at: 9999 },
             ],
         };
-        let encoded = encode_registry_payload(&original);
+        let encoded = encode_registry_payload(&original).unwrap();
         let decoded = parse_registry_payload(&encoded).unwrap();
         assert_eq!(decoded.version, 2);
         assert_eq!(decoded.entries.len(), 2);
@@ -410,6 +433,22 @@ mod tests {
         assert_eq!(gh.pubkeys.len(), 2);
         assert_eq!(gh.validator_count, 3);
         assert_eq!(gh.validator_merkle_root, [0xee; 32]);
+    }
+
+    #[test]
+    fn encode_registry_payload_rejects_long_id() {
+        let payload = RegistryPayload {
+            version: 2,
+            governance_header: None,
+            entries: vec![RegistryEntry {
+                identifier: vec![0u8; 256], // 256 > u8::MAX
+                expires_at: 0,
+            }],
+        };
+        assert_eq!(
+            encode_registry_payload(&payload).unwrap_err(),
+            FirewallError::InvalidRegistryData,
+        );
     }
 
     // ── preflight_check / is_blacklisted ──────────────────────────────────────
@@ -431,5 +470,24 @@ mod tests {
             preflight_check(&bad_outputs, &[payload], 0).unwrap_err(),
             FirewallError::BlacklistedLockArgs,
         );
+    }
+
+    // ── error code constants ──────────────────────────────────────────────────
+
+    #[test]
+    fn error_code_values_match_contract() {
+        assert_eq!(error_codes::INVALID_ARGS_LAYOUT, 5);
+        assert_eq!(error_codes::UNSUPPORTED_VERSION, 6);
+        assert_eq!(error_codes::UNSUPPORTED_FLAGS, 7);
+        assert_eq!(error_codes::MISSING_REGISTRY_CELL_DEP, 8);
+        assert_eq!(error_codes::INVALID_REGISTRY_DATA, 9);
+        assert_eq!(error_codes::REGISTRY_NOT_SORTED, 10);
+        assert_eq!(error_codes::BLACKLISTED_LOCK_ARGS, 11);
+        assert_eq!(error_codes::BLACKLISTED_TYPE_ARGS, 12);
+        assert_eq!(error_codes::MISSING_INNER_LOCK_CELL_DEP, 13);
+        assert_eq!(error_codes::INVALID_INNER_LOCK_SCRIPT, 14);
+        assert_eq!(error_codes::INNER_LOCK_REJECTED, 15);
+        assert_eq!(error_codes::OUTPUT_SCRIPT_PARSE_FAILED, 16);
+        assert_eq!(error_codes::AMBIGUOUS_REGISTRY_CELL_DEP, 17);
     }
 }

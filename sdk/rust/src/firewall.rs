@@ -9,9 +9,10 @@ fn dep_matches_spec(dep: &CellDepLike, spec: &RegistrySpec) -> bool {
         Some(ts) => ts,
         None => return false,
     };
+    // On-chain resolver requires exactly 66 bytes (not >=) for v2 registry type args.
     ts.code_hash == spec.code_hash
         && ts.hash_type == spec.hash_type
-        && ts.args.len() >= 66
+        && ts.args.len() == 66
         && ts.args[34..66] == spec.type_id_value
 }
 
