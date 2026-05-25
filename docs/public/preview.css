@@ -14,10 +14,7 @@
   outline: 2px solid var(--sl-color-accent-high);
   outline-offset: 1px;
 }
-.pv-trigger:focus {
-  outline: 2px solid var(--sl-color-accent-high);
-  outline-offset: 1px;
-}
+.pv-trigger:focus { outline: 2px solid var(--sl-color-accent-high); outline-offset: 1px; }
 
 /* ── shared hidden ─────────────────────────────────────────────────────── */
 .pv-hidden { display: none !important; }
@@ -26,7 +23,7 @@
 #pv-pop {
   position: absolute;
   z-index: 9000;
-  width: min(380px, calc(100vw - 20px));
+  width: min(460px, calc(100vw - 20px));
   background: var(--sl-color-bg);
   border: 1px solid var(--sl-color-hairline-shade);
   border-radius: 10px;
@@ -48,9 +45,7 @@
 /* ── bottom sheet ──────────────────────────────────────────────────────── */
 #pv-sheet {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: 0; left: 0; right: 0;
   z-index: 9000;
   background: var(--sl-color-bg);
   border-top: 1px solid var(--sl-color-hairline-shade);
@@ -63,8 +58,7 @@
 }
 .pv-handle {
   flex-shrink: 0;
-  width: 38px;
-  height: 4px;
+  width: 38px; height: 4px;
   background: var(--sl-color-hairline-shade);
   border-radius: 2px;
   margin: 10px auto 2px;
@@ -79,21 +73,16 @@
 /* ── close button ──────────────────────────────────────────────────────── */
 .pv-close-btn {
   position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 26px;
-  height: 26px;
+  top: 7px; right: 7px;
+  width: 26px; height: 26px;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--sl-color-gray-3);
-  font-size: 20px;
-  line-height: 1;
+  font-size: 20px; line-height: 1;
   cursor: pointer;
   border-radius: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   transition: background-color 0.1s, color 0.1s;
 }
 .pv-close-btn:hover,
@@ -103,15 +92,10 @@
   outline: 2px solid var(--sl-color-accent);
   outline-offset: 1px;
 }
-.pv-sheet-x {
-  top: 8px;
-  right: 14px;
-}
+.pv-sheet-x { top: 8px; right: 14px; }
 
 /* ── definition panel ──────────────────────────────────────────────────── */
-.pv-def-panel {
-  padding: 14px 38px 14px 16px;
-}
+.pv-def-panel { padding: 14px 38px 14px 16px; }
 .pv-def-term {
   display: block;
   font-size: var(--sl-text-sm);
@@ -119,10 +103,53 @@
   color: var(--sl-color-text-accent);
   margin-bottom: 5px;
 }
-.pv-def-body {
-  margin: 0;
+.pv-def-body { margin: 0; color: var(--sl-color-text); line-height: 1.6; }
+
+/* ── code panel ────────────────────────────────────────────────────────── */
+.pv-code-panel { overflow: hidden; }
+
+.pv-code-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 7px 38px 7px 12px;
+  background: var(--sl-color-bg-nav);
+  border-bottom: 1px solid var(--sl-color-hairline);
+  font-family: var(--sl-font-mono);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+.pv-code-file  { font-weight: 700; color: var(--sl-color-text); }
+.pv-code-lines { color: var(--sl-color-accent); }
+.pv-code-repo  { color: var(--sl-color-gray-3); margin-left: auto; font-size: 0.68rem; }
+.pv-code-path  {
+  color: var(--sl-color-gray-3);
+  font-size: 0.67rem;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* code block inside popover */
+.pv-code-panel pre {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  max-height: 300px;
+  overflow: auto;
+  font-size: 0.76rem !important;
+  line-height: 1.52 !important;
+  padding: 10px 14px !important;
+  background: var(--sl-color-bg-sidebar) !important;
+  tab-size: 2;
+}
+.pv-code-panel pre code {
+  font-family: var(--sl-font-mono);
   color: var(--sl-color-text);
-  line-height: 1.6;
+  background: none;
+  border: none;
+  padding: 0;
 }
 
 /* ── animations ────────────────────────────────────────────────────────── */
