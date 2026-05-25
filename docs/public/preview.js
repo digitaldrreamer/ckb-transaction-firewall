@@ -276,8 +276,37 @@
       .replace(/"/g, '&quot;');
   }
 
-  function isTouch() {
-    return window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+  /* Track the last input type via pointerdown — more reliable than the
+     media query alone on hybrid devices and iOS Safari. Seed from the
+     media query so the very first interaction is already correct. */
+  var lastPointerType = window.matchMedia('(hover: none) and (pointer: coarse)').matches
+    ? 'touch' : 'mouse';
+  document.addEventListener('pointerdown', function (e) {
+    lastPointerType = e.pointerType; // 'mouse' | 'touch' | 'pen'
+  }, { passive: true, capture: true });
+
+  function isTouch() { return lastPointerType === 'touch'; }
+
+  /* ── GitHub link helpers ────────────────────────────────────────────── */
+  var GH_BASE = 'https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/';
+  var LINK_ICON = '<svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true" style="display:inline;vertical-align:-1px;margin-left:4px"><path d="M1.5 9.5 9 2m0 0H4m5 0v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function githubUrl(trigger) {
+    var file = trigger.dataset.pvFile;
+    if (!file) return null;
+    var url = GH_BASE + file;
+    var lines = trigger.dataset.pvLines;
+    if (lines) {
+      var parts = lines.split('-');
+      url += '#L' + parts[0];
+      if (parts[1]) url += '-L' + parts[1];
+    }
+    return url;
+  }
+
+  function hasGhLink(trigger) {
+    var t = trigger.dataset.pvType;
+    return t === 'code' || t === 'file';
   }
 
   /* ── panel builders ─────────────────────────────────────────────────── */
@@ -360,6 +389,16 @@
 
     while (popEl.children.length > 1) popEl.removeChild(popEl.lastChild);
     popEl.appendChild(panel);
+    if (hasGhLink(trigger)) {
+      var url = githubUrl(trigger);
+      if (url) {
+        var a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.className = 'pv-gh-link';
+        a.innerHTML = 'See in GitHub' + LINK_ICON;
+        popEl.appendChild(a);
+      }
+    }
     popEl.classList.remove('pv-hidden');
 
     var tr = trigger.getBoundingClientRect();
@@ -431,6 +470,16 @@
     var body = sheetEl.querySelector('.pv-sheet-body');
     while (body.firstChild) body.removeChild(body.firstChild);
     body.appendChild(panel);
+    if (hasGhLink(trigger)) {
+      var url = githubUrl(trigger);
+      if (url) {
+        var a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.className = 'pv-gh-btn';
+        a.innerHTML = 'See in GitHub' + LINK_ICON;
+        body.appendChild(a);
+      }
+    }
     overlayEl.classList.remove('pv-hidden');
     sheetEl.classList.remove('pv-hidden');
     sheetEl.querySelector('.pv-close-btn').focus();

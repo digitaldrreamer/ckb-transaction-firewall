@@ -152,6 +152,37 @@
   padding: 0;
 }
 
+/* ── GitHub links ──────────────────────────────────────────────────────── */
+/* inline link at the bottom of the desktop popover */
+.pv-gh-link {
+  display: block;
+  padding: 6px 14px 7px;
+  font-size: 0.71rem;
+  color: var(--sl-color-accent);
+  text-decoration: none;
+  border-top: 1px solid var(--sl-color-hairline);
+  text-align: right;
+  transition: background-color 0.1s;
+}
+.pv-gh-link:hover { background: var(--sl-color-bg-nav); text-decoration: underline; }
+
+/* full-width button at the bottom of the mobile sheet */
+.pv-gh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 18px 0 4px;
+  padding: 11px 20px;
+  background: var(--sl-color-accent);
+  color: var(--sl-color-white, #fff);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.pv-gh-btn:hover { opacity: 0.88; }
+
 /* ── animations ────────────────────────────────────────────────────────── */
 @keyframes pv-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pv-rise {
