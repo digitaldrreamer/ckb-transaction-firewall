@@ -33,16 +33,15 @@ import {
   REVIEW_WINDOW_MS,
 } from "../dist/lib/proposals.js";
 import { bytesToHex, hexToBytes } from "../dist/lib/blkl.js";
-import { ckbBlake2b, buildGov1WitnessV2, buildGovernanceSigWitness, buildWitnessArgs } from "../dist/lib/witness.js";
+import { ckbBlake2b, buildGov1WitnessV3, buildGovernanceSigWitness, buildWitnessArgs } from "../dist/lib/witness.js";
 import { computeMerkleProof, computeMerkleRoot } from "../dist/lib/validator-set.js";
-import { TESTNET_GOVERNANCE_PUBKEYS } from "../dist/lib/defaults.js";
 
 // ── test constants ────────────────────────────────────────────────────────────
 
-// Testnet governance keys (privkeys 0x01..0x05, same as TESTNET_GOVERNANCE_PUBKEYS)
+// Deterministic test-only governance keys.
 const PRIV_KEYS = Array.from({ length: 5 }, (_, i) => new Uint8Array(32).fill(i + 1));
 const PUB_KEYS  = PRIV_KEYS.map((pk) => bytesToHex(new Uint8Array(secp256k1.getPublicKey(pk, true))));
-const VALIDATOR_SET = TESTNET_GOVERNANCE_PUBKEYS.map((pk) => bytesToHex(new Uint8Array(pk)));
+const VALIDATOR_SET = PUB_KEYS;
 
 // Minimal BLKL v2 payload with a governance header containing 5 testnet signers.
 function buildTestRegistryHex() {
@@ -53,8 +52,8 @@ function buildTestRegistryHex() {
   gh[off++] = 0x01; // gh_version
   gh[off++] = 5;    // signer_count
   gh[off++] = 3;    // threshold
-  for (const pk of TESTNET_GOVERNANCE_PUBKEYS) {
-    gh.set(pk, off); off += 33;
+  for (const pk of PUB_KEYS) {
+    gh.set(hexToBytes(pk), off); off += 33;
   }
   gh[off++] = 5; gh[off++] = 0; // validator_count = 5
   gh.set(merkleRoot, off);
@@ -113,8 +112,15 @@ function castVote(proposal, privKey, voteChoice = "yes") {
   return { pubkey, vote: voteChoice, timestamp, signature: bytesToHex(sigBytes), merkleLeafIndex, merkleProof };
 }
 
-function signProposal(proposal, privKey, signerIndex) {
-  const msgHash = signingMessage(proposal);
+function signProposal(
+  proposal,
+  privKey,
+  signerIndex,
+  oldRoot = new Uint8Array(32),
+  newRoot = new Uint8Array(32),
+  reviewWindowEndMs = 0n,
+) {
+  const msgHash = signingMessage(proposal, oldRoot, newRoot, reviewWindowEndMs);
   const sigRaw = secp256k1.sign(msgHash, privKey, { lowS: true, format: "recovered" });
   const sigBytes = new Uint8Array(65);
   sigBytes.set(sigRaw.slice(1), 0);
@@ -134,11 +140,6 @@ test("P7-1: full governance round-trip produces a well-formed tx JSON", () => {
   }
   proposal.voteDigestHash = computeVoteDigestHash(proposal.votes);
 
-  // 3 signatures
-  for (let i = 0; i < 3; i++) {
-    proposal.signatures.push(signProposal(proposal, PRIV_KEYS[i], i));
-  }
-
   // Build the GOV1 witness (mirrors execute.ts logic)
   const registryHex = REGISTRY_HEX;
   const oldBlkl = hexToBytes(registryHex);
@@ -146,8 +147,14 @@ test("P7-1: full governance round-trip produces a well-formed tx JSON", () => {
   const voteDigestBytes = hexToBytes(proposal.voteDigestHash);
   const oldRoot = ckbBlake2b(oldBlkl);
   const newRoot = ckbBlake2b(oldBlkl); // no-op update for test
+  const reviewWindowEndMs = 0n;
 
-  const gov1 = buildGov1WitnessV2({ proposalIdHash: proposalIdBytes, voteDigestHash: voteDigestBytes, oldRoot, newRoot });
+  // 3 signatures
+  for (let i = 0; i < 3; i++) {
+    proposal.signatures.push(signProposal(proposal, PRIV_KEYS[i], i, oldRoot, newRoot, reviewWindowEndMs));
+  }
+
+  const gov1 = buildGov1WitnessV3({ proposalIdHash: proposalIdBytes, voteDigestHash: voteDigestBytes, oldRoot, newRoot, reviewWindowEndMs });
   const sigWitness = buildGovernanceSigWitness(
     proposal.signatures.slice(0, 3).map((s) => ({ index: s.signerIndex, sig: hexToBytes(s.signature) }))
   );
@@ -155,9 +162,9 @@ test("P7-1: full governance round-trip produces a well-formed tx JSON", () => {
 
   // GOV1 binding sanity checks
   const gov1Bytes = hexToBytes(bytesToHex(gov1));
-  assert.equal(gov1Bytes.length, 133);
+  assert.equal(gov1Bytes.length, 141);
   assert.deepEqual(Array.from(gov1Bytes.slice(0, 4)), [0x47, 0x4f, 0x56, 0x31]); // GOV1
-  assert.equal(gov1Bytes[4], 0x02); // version
+  assert.equal(gov1Bytes[4], 0x03); // version
 
   assert.ok(witnessBytes.length > 0);
   assert.ok(proposal.votes.length >= 3);
@@ -212,7 +219,7 @@ test("P7-4: signer index beyond committee size is detectable", () => {
   const badSig = { signerIndex: 99, signature: "0x" + "aa".repeat(65), timestamp: new Date().toISOString() };
   proposal.signatures.push(badSig);
 
-  const committeeSize = TESTNET_GOVERNANCE_PUBKEYS.length; // 5
+  const committeeSize = VALIDATOR_SET.length; // 5
   const hasOutOfRange = proposal.signatures.some((s) => s.signerIndex >= committeeSize);
   assert.ok(hasOutOfRange);
 });

@@ -16,9 +16,9 @@ function makeTypeArgs(typeIdValue: string): string {
 }
 
 const SPEC: RegistrySpecLike = {
-  codeHash: "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+  codeHash: "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
   hashType: "type",
-  typeIdValue: "0xcd5d844661356e465c27b7d693e84f20e884da63153d2f6f40381ceb0807761c",
+  typeIdValue: "0xc70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
   required: true,
 };
 
