@@ -136,7 +136,7 @@ const lock = buildFirewallLockScript({
 });
 ```
 
-See [`sdk/cli/README.md`](./sdk/cli/README.md) and [`sdk/typescript/`](./sdk/typescript/) for full option documentation.
+See [`sdk/cli/README.md`](./sdk/cli/README.md) and [`sdk/typescript/`](./sdk/typescript/) for full option documentation. For multi-registry deployments or deploying and configuring your own blacklist registry, see [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/).
 
 ---
 
@@ -185,6 +185,7 @@ Full outpoints and Type IDs: [`notes/deployments/testnet.registry.json`](./notes
 | [Wallet integration](https://ckb-firewall.drreamer.digital/getting-started/wallet-integration/) | Step-by-step for wallet developers |
 | [Governance runbook](https://ckb-firewall.drreamer.digital/operations/governance-runbook/) | Multi-party update coordination |
 | [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/) | Live outpoints and registry values |
+| [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/) | Multi-registry deployment and self-managed blacklist registries |
 | [BLKL format](https://ckb-firewall.drreamer.digital/reference/blkl-format/) | Binary registry payload layout |
 | [Firewall lock args](https://ckb-firewall.drreamer.digital/reference/firewall-lock-args/) | Lock script args encoding |
 | [CLI reference](https://ckb-firewall.drreamer.digital/reference/cli/) | All commands and options |
