@@ -378,7 +378,7 @@
 
     var body;
     if (code) {
-      body = '<pre><code>' + tokenize(code, lang) + '</code></pre>';
+      body = '<pre><code>' + esc(code) + '</code></pre>';
     } else {
       body = '<p class="pv-def-body" style="padding:10px 14px;margin:0">' +
         'Source file: <code style="font-size:0.8em">' + esc(file) + '</code></p>';

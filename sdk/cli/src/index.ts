@@ -27,7 +27,7 @@ function printBanner(): void {
 program
   .name("ckb-firewall")
   .description("Manage the CKB Transaction Firewall blacklist registry")
-  .version("0.2.3")
+  .version("0.3.0")
   .addHelpCommand(false);
 
 // ── inspect ──────────────────────────────────────────────────────────────────

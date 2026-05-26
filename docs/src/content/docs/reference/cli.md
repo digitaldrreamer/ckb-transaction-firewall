@@ -86,9 +86,9 @@ ckb-firewall vote --proposal abc123 --vote yes
 # prompts for private key
 ```
 
-Options: `--proposal`, `--vote` (`yes`, `no`, `abstain`), `--key <32-byte-hex>`
+Options: `--proposal`, `--vote` (`yes`, `no`, `abstain`), `--rpc-url`, `--registry-tx`, `--registry-index`
 
-If `--key` is omitted, the CLI prompts with masked input.
+The CLI prompts for the validator private key with masked input.
 
 **What this command does:**
 1. Derives the compressed public key from the provided private key
@@ -111,7 +111,9 @@ ckb-firewall sign --proposal abc123 --signer-index 0
 # prompts for private key
 ```
 
-Options: `--proposal`, `--signer-index` (`0`–`4`), `--key <32-byte-hex>`
+Options: `--proposal`, `--signer-index`, `--rpc-url`, `--registry-tx`, `--registry-index`
+
+The CLI prompts for the signer private key with masked input.
 
 ---
 
