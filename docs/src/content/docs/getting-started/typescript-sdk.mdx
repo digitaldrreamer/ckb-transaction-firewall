@@ -48,7 +48,7 @@ import { fetchRegistryPayload, preflightCheck } from "@ckb-firewall/sdk";
 
 const registry = await fetchRegistryPayload(
   "https://testnet.ckb.dev",
-  "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3",
+  "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4",
   0
 );
 
@@ -72,9 +72,9 @@ import { TransactionFirewall } from "@ckb-firewall/sdk";
 const firewall = new TransactionFirewall({
   registries: [
     {
-      codeHash: "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+      codeHash: "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
       hashType: "type",
-      typeIdValue: "0xcd5d844661356e465c27b7d693e84f20e884da63153d2f6f40381ceb0807761c",
+      typeIdValue: "0xc70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
       required: true,
     },
   ],
@@ -83,7 +83,7 @@ const firewall = new TransactionFirewall({
 const result = firewall.checkTransaction({
   cellDeps: [
     {
-      type: { codeHash: "0xbbfbcf51...", hashType: "type", args: registryTypeArgs },
+      type: { codeHash: "0x5812b3f0...", hashType: "type", args: registryTypeArgs },
       data: registryBlklPayloadHex,
     },
   ],
@@ -101,9 +101,9 @@ The registry cell outpoint changes on every governance update. If you don't have
 import { findRegistryCell, fetchRegistryPayload } from "@ckb-firewall/sdk";
 
 const { txHash, index } = await findRegistryCell("https://testnet.ckb.dev", {
-  codeHash: "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+  codeHash: "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
   hashType: "type",
-  typeIdValue: "0xcd5d844661356e465c27b7d693e84f20e884da63153d2f6f40381ceb0807761c",
+  typeIdValue: "0xc70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
   required: true,
 });
 
@@ -154,9 +154,9 @@ const lockScript = buildFirewallLockScript({
   flags: 0x03,           // check lock_args AND type_args
   registries: [
     {
-      codeHash:    "0xbbfbcf51...",
+      codeHash:    "0x5812b3f0...",
       hashType:    "type",
-      typeIdValue: "0xcd5d8446...",
+      typeIdValue: "0xc70a072c...",
       required:    true,
     },
   ],
@@ -185,7 +185,7 @@ const cellDeps = buildFirewallSpendCellDeps({
   },
   registryOutPoints: [
     {
-      txHash: "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3",
+      txHash: "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4",
       index: 0,
     },
   ],

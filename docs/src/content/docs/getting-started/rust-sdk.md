@@ -149,14 +149,14 @@ ckb-transaction-firewall-sdk = { version = "0.3", features = ["serde"] }
 
 ### `testnet`
 
-Exposes the `testnet` module with the RPC URL and governance constants. **The contract outpoints in this module are placeholders** until the crate is updated to reflect the canonical testnet deployment in `notes/deployments/testnet.registry.json`. Use the JSON file directly for now.
+Exposes the `testnet` module with the RPC URL, canonical testnet registry spec, contract outpoints, and governance constants.
 
 ```rust
 #[cfg(feature = "testnet")]
 use ckb_transaction_firewall_sdk::testnet;
 
 let rpc = testnet::RPC_URL; // "https://testnet.ckb.dev"
-let spec = testnet::registry_spec(); // NOTE: placeholder values
+let spec = testnet::registry_spec();
 ```
 
 ## `now_secs` and expiry

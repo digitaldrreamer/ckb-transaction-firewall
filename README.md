@@ -12,7 +12,7 @@
 > The firewall checks your **outputs, not your counterparties.**  
 > It prevents a protected cell from sending to blacklisted destinations — at consensus, inside the lock script — regardless of what your application code does.
 
-**Deployed to CKB testnet.** Registry cell [`0x0e96b7c0`](https://testnet.explorer.nervos.org/transaction/0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3) · All outpoints in [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
+**Deployed to CKB testnet.** Registry cell [`0x685dc49b`](https://testnet.explorer.nervos.org/transaction/0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4) · All outpoints in [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
 
 ---
 
@@ -102,7 +102,7 @@ import { fetchRegistryPayload, preflightCheck, buildFirewallLockScript } from "@
 // Fetch the live registry
 const registry = await fetchRegistryPayload(
   "https://testnet.ckb.dev",
-  "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3",
+  "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4",
   0
 );
 
@@ -125,9 +125,9 @@ const lock = buildFirewallLockScript({
   firewallHashType: "type",
   flags: 0x03,
   registries: [{
-    codeHash:    "0xbbfbcf51b88c57c9c1d6414de4a7e4f9dae133625dfab71588c8bc5d05b71096",
+    codeHash:    "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
     hashType:    "type",
-    typeIdValue: "0xcd5d844661356e465c27b7d693e84f20e884da63153d2f6f40381ceb0807761c",
+    typeIdValue: "0xc70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
     required:    true,
   }],
   innerCodeHash: "0x9be62e0423d4278b15c071bb881a4ebf936f7e46b3df0f152de50ae416f54465",
@@ -150,15 +150,15 @@ See [`sdk/cli/README.md`](./sdk/cli/README.md) and [`sdk/typescript/`](./sdk/typ
 
 ---
 
-## Deployed contracts (testnet, 2026-05-20)
+## Deployed contracts (testnet, 2026-05-26)
 
 | Contract | Tx | Index |
 |---|---|---|
-| `governance-lock` | `0xe2129b25...` | 0 |
+| `governance-lock` | `0x410864a6...` | 0 |
 | `firewall-lock` | `0x128193cc...` | 0 |
-| `blacklist-registry` | `0x128193cc...` | 1 |
+| `blacklist-registry` | `0x410864a6...` | 1 |
 | `spawn-aware-secp256k1` | `0x0fe5d476...` | 0 |
-| Registry cell | `0x0e96b7c0...` | 0 |
+| Registry cell | `0x685dc49b...` | 0 |
 
 Full outpoints and Type IDs: [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
 

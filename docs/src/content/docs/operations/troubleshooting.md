@@ -99,7 +99,7 @@ The `execute` command reports that the stored `voteDigestHash` does not match th
 
 The `vote` command says the private key is not an authorized validator.
 
-The validator set on testnet is 5 members with private keys `[0x01 × 32]` through `[0x05 × 32]`. Votes from other keys are rejected because the key would fail the Merkle membership proof against the on-chain validator Merkle root.
+The validator set on testnet is 5 members with a 3-of-5 governance threshold. Votes from other keys are rejected because the key would fail the Merkle membership proof against the on-chain validator Merkle root.
 
 ## Registry cell not found after governance execute
 
