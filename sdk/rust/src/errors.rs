@@ -38,18 +38,24 @@ impl FirewallError {
 impl fmt::Display for FirewallError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FirewallError::MissingRegistryCellDep =>
-                write!(f, "missing registry cell dep (code {})", self.code()),
-            FirewallError::InvalidRegistryData =>
-                write!(f, "invalid registry data (code {})", self.code()),
-            FirewallError::RegistryNotSorted =>
-                write!(f, "registry entries not sorted (code {})", self.code()),
-            FirewallError::BlacklistedLockArgs =>
-                write!(f, "blacklisted lock args (code {})", self.code()),
-            FirewallError::BlacklistedTypeArgs =>
-                write!(f, "blacklisted type args (code {})", self.code()),
-            FirewallError::AmbiguousRegistryCellDep =>
-                write!(f, "ambiguous registry cell dep (code {})", self.code()),
+            FirewallError::MissingRegistryCellDep => {
+                write!(f, "missing registry cell dep (code {})", self.code())
+            }
+            FirewallError::InvalidRegistryData => {
+                write!(f, "invalid registry data (code {})", self.code())
+            }
+            FirewallError::RegistryNotSorted => {
+                write!(f, "registry entries not sorted (code {})", self.code())
+            }
+            FirewallError::BlacklistedLockArgs => {
+                write!(f, "blacklisted lock args (code {})", self.code())
+            }
+            FirewallError::BlacklistedTypeArgs => {
+                write!(f, "blacklisted type args (code {})", self.code())
+            }
+            FirewallError::AmbiguousRegistryCellDep => {
+                write!(f, "ambiguous registry cell dep (code {})", self.code())
+            }
         }
     }
 }

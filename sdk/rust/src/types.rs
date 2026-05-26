@@ -1,6 +1,58 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "serde")]
+mod serde_pubkeys_33 {
+    use serde::de::{Error, SeqAccess, Visitor};
+    use serde::ser::SerializeSeq;
+    use serde::{Deserializer, Serializer};
+    use std::fmt;
+
+    pub fn serialize<S>(pubkeys: &Vec<[u8; 33]>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(pubkeys.len()))?;
+        for pubkey in pubkeys {
+            seq.serialize_element(&pubkey.as_slice())?;
+        }
+        seq.end()
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<[u8; 33]>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct PubkeysVisitor;
+
+        impl<'de> Visitor<'de> for PubkeysVisitor {
+            type Value = Vec<[u8; 33]>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a sequence of 33-byte public keys")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut pubkeys = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+                while let Some(pubkey) = seq.next_element::<Vec<u8>>()? {
+                    if pubkey.len() != 33 {
+                        return Err(A::Error::custom("public key must be exactly 33 bytes"));
+                    }
+                    let mut out = [0u8; 33];
+                    out.copy_from_slice(&pubkey);
+                    pubkeys.push(out);
+                }
+                Ok(pubkeys)
+            }
+        }
+
+        deserializer.deserialize_seq(PubkeysVisitor)
+    }
+}
+
 /// CKB script hash type.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,6 +163,7 @@ pub struct RegistryEntry {
 pub struct GovernanceHeader {
     pub signer_count: u8,
     pub threshold: u8,
+    #[cfg_attr(feature = "serde", serde(with = "serde_pubkeys_33"))]
     pub pubkeys: Vec<[u8; 33]>,
     pub validator_count: u16,
     pub validator_merkle_root: [u8; 32],

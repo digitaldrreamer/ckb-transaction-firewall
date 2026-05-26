@@ -53,26 +53,28 @@
 //! - **`testnet`** — exposes the [`testnet`] module with testnet RPC URL,
 //!   governance constants, and deployed contract outpoints.
 
-pub mod errors;
-pub mod types;
-pub mod registry;
 pub mod builder;
+pub mod errors;
 pub mod firewall;
+pub mod registry;
+pub mod types;
 
 #[cfg(feature = "testnet")]
 pub mod testnet;
 
 // ── flat re-exports for ergonomic `use ckb_transaction_firewall_sdk::*` ──────
 
+pub use builder::{
+    build_firewall_lock_args, build_firewall_lock_script, build_firewall_spend_cell_deps,
+};
 pub use errors::{error_codes, FirewallError};
+pub use firewall::{check_transaction, is_blacklisted, preflight_check};
+pub use registry::{encode_governance_header, encode_registry_payload, parse_registry_payload};
 pub use types::{
     CellDepLike, DepType, FirewallConfig, FirewallLockConfig, FirewallSpendDepsConfig,
     GovernanceHeader, HashType, OutPointLike, RegistryEntry, RegistryPayload, RegistrySpec,
     ScriptLike, TransactionCellDep, TxOutputLike, UnsignedTxLike,
 };
-pub use registry::{encode_governance_header, encode_registry_payload, parse_registry_payload};
-pub use builder::{build_firewall_lock_args, build_firewall_lock_script, build_firewall_spend_cell_deps};
-pub use firewall::{check_transaction, is_blacklisted, preflight_check};
 
 #[cfg(test)]
 mod tests {
@@ -85,7 +87,12 @@ mod tests {
         type_id[0] = tag;
         let mut code_hash = [0u8; 32];
         code_hash[0] = tag;
-        RegistrySpec { code_hash, hash_type: HashType::Type, type_id_value: type_id, required: true }
+        RegistrySpec {
+            code_hash,
+            hash_type: HashType::Type,
+            type_id_value: type_id,
+            required: true,
+        }
     }
 
     fn dep_for_spec(s: &RegistrySpec, data: Vec<u8>) -> CellDepLike {
@@ -112,14 +119,19 @@ mod tests {
             governance_header: None,
             entries: ids
                 .iter()
-                .map(|(id, exp)| RegistryEntry { identifier: id.to_vec(), expires_at: *exp })
+                .map(|(id, exp)| RegistryEntry {
+                    identifier: id.to_vec(),
+                    expires_at: *exp,
+                })
                 .collect(),
         })
         .unwrap()
     }
 
     fn cfg1(s: RegistrySpec) -> FirewallConfig {
-        FirewallConfig { registries: vec![s] }
+        FirewallConfig {
+            registries: vec![s],
+        }
     }
 
     // ── check_transaction tests ───────────────────────────────────────────────
@@ -127,7 +139,10 @@ mod tests {
     #[test]
     fn reject_missing_dep() {
         let s = spec(1);
-        let tx = UnsignedTxLike { cell_deps: vec![], outputs: vec![] };
+        let tx = UnsignedTxLike {
+            cell_deps: vec![],
+            outputs: vec![],
+        };
         let err = check_transaction(&cfg1(s), &tx, 0).unwrap_err();
         assert_eq!(err, FirewallError::MissingRegistryCellDep);
         assert_eq!(err.code(), 8);
@@ -139,7 +154,10 @@ mod tests {
         let dep = dep_for_spec(&s, registry(&[&[0xaa, 0xbb]]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
-            outputs: vec![TxOutputLike { lock_args: vec![0xaa, 0xbb], type_args: None }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0xaa, 0xbb],
+                type_args: None,
+            }],
         };
         let err = check_transaction(&cfg1(s), &tx, 0).unwrap_err();
         assert_eq!(err, FirewallError::BlacklistedLockArgs);
@@ -152,7 +170,10 @@ mod tests {
         let dep = dep_for_spec(&s, registry(&[&[0xaa]]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep.clone(), dep],
-            outputs: vec![TxOutputLike { lock_args: vec![0x00], type_args: None }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0x00],
+                type_args: None,
+            }],
         };
         let err = check_transaction(&cfg1(s), &tx, 0).unwrap_err();
         assert_eq!(err, FirewallError::AmbiguousRegistryCellDep);
@@ -165,7 +186,10 @@ mod tests {
         let dep = dep_for_spec(&s, registry(&[&[0xbb], &[0xaa]]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
-            outputs: vec![TxOutputLike { lock_args: vec![0x00], type_args: None }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0x00],
+                type_args: None,
+            }],
         };
         let err = check_transaction(&cfg1(s), &tx, 0).unwrap_err();
         assert_eq!(err, FirewallError::RegistryNotSorted);
@@ -228,7 +252,10 @@ mod tests {
         let dep = dep_for_spec(&s, registry_with_expiry(&[(&[0xaa], 1000)]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
-            outputs: vec![TxOutputLike { lock_args: vec![0xaa], type_args: None }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0xaa],
+                type_args: None,
+            }],
         };
         assert_eq!(
             check_transaction(&cfg1(s), &tx, 999).unwrap_err(),
@@ -242,7 +269,10 @@ mod tests {
         let dep = dep_for_spec(&s, registry_with_expiry(&[(&[0xaa], 1000)]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
-            outputs: vec![TxOutputLike { lock_args: vec![0xaa], type_args: None }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0xaa],
+                type_args: None,
+            }],
         };
         assert!(check_transaction(&cfg1(s), &tx, 1000).is_ok());
     }
@@ -253,7 +283,10 @@ mod tests {
         let dep = dep_for_spec(&s, registry_with_expiry(&[(&[0xbb], 0)]));
         let tx = UnsignedTxLike {
             cell_deps: vec![dep],
-            outputs: vec![TxOutputLike { lock_args: vec![0xbb], type_args: None }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0xbb],
+                type_args: None,
+            }],
         };
         assert_eq!(
             check_transaction(&cfg1(s), &tx, u64::MAX).unwrap_err(),
@@ -267,10 +300,15 @@ mod tests {
         let s2 = spec(2);
         let dep1 = dep_for_spec(&s1, registry(&[&[0x11]]));
         let dep2 = dep_for_spec(&s2, registry(&[&[0x22]]));
-        let firewall_cfg = FirewallConfig { registries: vec![s1, s2] };
+        let firewall_cfg = FirewallConfig {
+            registries: vec![s1, s2],
+        };
         let tx = UnsignedTxLike {
             cell_deps: vec![dep1, dep2],
-            outputs: vec![TxOutputLike { lock_args: vec![0x22], type_args: None }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0x22],
+                type_args: None,
+            }],
         };
         assert_eq!(
             check_transaction(&firewall_cfg, &tx, 0).unwrap_err(),
@@ -283,8 +321,13 @@ mod tests {
         let s1 = spec(1);
         let s2 = spec(2);
         let dep1 = dep_for_spec(&s1, registry(&[]));
-        let firewall_cfg = FirewallConfig { registries: vec![s1, s2] };
-        let tx = UnsignedTxLike { cell_deps: vec![dep1], outputs: vec![] };
+        let firewall_cfg = FirewallConfig {
+            registries: vec![s1, s2],
+        };
+        let tx = UnsignedTxLike {
+            cell_deps: vec![dep1],
+            outputs: vec![],
+        };
         assert_eq!(
             check_transaction(&firewall_cfg, &tx, 0).unwrap_err(),
             FirewallError::MissingRegistryCellDep,
@@ -297,10 +340,15 @@ mod tests {
         let mut s2 = spec(2);
         s2.required = false;
         let dep1 = dep_for_spec(&s1, registry(&[]));
-        let firewall_cfg = FirewallConfig { registries: vec![s1, s2] };
+        let firewall_cfg = FirewallConfig {
+            registries: vec![s1, s2],
+        };
         let tx = UnsignedTxLike {
             cell_deps: vec![dep1],
-            outputs: vec![TxOutputLike { lock_args: vec![0x99], type_args: None }],
+            outputs: vec![TxOutputLike {
+                lock_args: vec![0x99],
+                type_args: None,
+            }],
         };
         assert!(check_transaction(&firewall_cfg, &tx, 0).is_ok());
     }
@@ -331,7 +379,10 @@ mod tests {
             }),
             data: registry(&[]),
         };
-        let tx = UnsignedTxLike { cell_deps: vec![dep], outputs: vec![] };
+        let tx = UnsignedTxLike {
+            cell_deps: vec![dep],
+            outputs: vec![],
+        };
         assert_eq!(
             check_transaction(&cfg1(s), &tx, 0).unwrap_err(),
             FirewallError::MissingRegistryCellDep,
@@ -367,7 +418,8 @@ mod tests {
         assert_eq!(args[68], 0x01); // required
         assert_eq!(&args[69..101], &[0x02; 32]); // inner_code_hash
         assert_eq!(args[101], 0x02); // inner_hash_type = Data1
-        assert_eq!(args[102], 0x03); assert_eq!(args[103], 0x00); // inner_args_len LE
+        assert_eq!(args[102], 0x03);
+        assert_eq!(args[103], 0x00); // inner_args_len LE
         assert_eq!(&args[104..107], &[0x11, 0x22, 0x33]); // inner_args
     }
 
@@ -419,8 +471,14 @@ mod tests {
                 validator_merkle_root: [0xee; 32],
             }),
             entries: vec![
-                RegistryEntry { identifier: vec![0x01], expires_at: 0 },
-                RegistryEntry { identifier: vec![0x02], expires_at: 9999 },
+                RegistryEntry {
+                    identifier: vec![0x01],
+                    expires_at: 0,
+                },
+                RegistryEntry {
+                    identifier: vec![0x02],
+                    expires_at: 9999,
+                },
             ],
         };
         let encoded = encode_registry_payload(&original).unwrap();
@@ -463,9 +521,15 @@ mod tests {
     #[test]
     fn preflight_check_standalone() {
         let payload = parse_registry_payload(&registry(&[&[0xca, 0xfe]])).unwrap();
-        let ok_outputs = vec![TxOutputLike { lock_args: vec![0x00], type_args: None }];
+        let ok_outputs = vec![TxOutputLike {
+            lock_args: vec![0x00],
+            type_args: None,
+        }];
         assert!(preflight_check(&ok_outputs, &[payload.clone()], 0).is_ok());
-        let bad_outputs = vec![TxOutputLike { lock_args: vec![0xca, 0xfe], type_args: None }];
+        let bad_outputs = vec![TxOutputLike {
+            lock_args: vec![0xca, 0xfe],
+            type_args: None,
+        }];
         assert_eq!(
             preflight_check(&bad_outputs, &[payload], 0).unwrap_err(),
             FirewallError::BlacklistedLockArgs,

@@ -50,7 +50,9 @@ pub fn build_firewall_lock_args(config: &FirewallLockConfig) -> Result<Vec<u8>, 
 ///
 /// The returned [`ScriptLike`] can be used directly as the lock script of a
 /// new CKB output cell.
-pub fn build_firewall_lock_script(config: &FirewallLockConfig) -> Result<ScriptLike, FirewallError> {
+pub fn build_firewall_lock_script(
+    config: &FirewallLockConfig,
+) -> Result<ScriptLike, FirewallError> {
     Ok(ScriptLike {
         code_hash: config.firewall_code_hash,
         hash_type: config.firewall_hash_type.clone(),
@@ -78,7 +80,10 @@ pub fn build_firewall_spend_cell_deps(config: &FirewallSpendDepsConfig) -> Vec<T
         dep_type: DepType::Code,
     });
     for op in &config.registry_out_points {
-        deps.push(TransactionCellDep { out_point: op.clone(), dep_type: DepType::Code });
+        deps.push(TransactionCellDep {
+            out_point: op.clone(),
+            dep_type: DepType::Code,
+        });
     }
     deps
 }

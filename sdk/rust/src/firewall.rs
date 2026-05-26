@@ -1,6 +1,9 @@
 use crate::errors::FirewallError;
 use crate::registry::parse_registry_payload;
-use crate::types::{CellDepLike, FirewallConfig, RegistryEntry, RegistryPayload, RegistrySpec, TxOutputLike, UnsignedTxLike};
+use crate::types::{
+    CellDepLike, FirewallConfig, RegistryEntry, RegistryPayload, RegistrySpec, TxOutputLike,
+    UnsignedTxLike,
+};
 
 // ── private helpers ───────────────────────────────────────────────────────────
 
@@ -63,7 +66,9 @@ fn search_entries(entries: &[RegistryEntry], target: &[u8], now_secs: u64) -> bo
 /// Uses binary search; entries must be in ascending lexicographic order (as
 /// enforced by [`parse_registry_payload`](crate::parse_registry_payload)).
 pub fn is_blacklisted(target: &[u8], registries: &[RegistryPayload], now_secs: u64) -> bool {
-    registries.iter().any(|reg| search_entries(&reg.entries, target, now_secs))
+    registries
+        .iter()
+        .any(|reg| search_entries(&reg.entries, target, now_secs))
 }
 
 /// Check a slice of transaction outputs against already-parsed registry payloads.

@@ -76,7 +76,10 @@ pub(crate) fn parse_entries(
             data[off + 7],
         ]);
         off += 8;
-        entries.push(RegistryEntry { identifier, expires_at });
+        entries.push(RegistryEntry {
+            identifier,
+            expires_at,
+        });
     }
     for i in 1..entries.len() {
         if entries[i].identifier <= entries[i - 1].identifier {
@@ -119,7 +122,11 @@ pub fn parse_registry_payload(data: &[u8]) -> Result<RegistryPayload, FirewallEr
     if end != data.len() {
         return Err(FirewallError::InvalidRegistryData);
     }
-    Ok(RegistryPayload { version: 2, entries, governance_header: Some(governance_header) })
+    Ok(RegistryPayload {
+        version: 2,
+        entries,
+        governance_header: Some(governance_header),
+    })
 }
 
 /// Encode a [`GovernanceHeader`] to bytes.
