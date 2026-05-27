@@ -10,6 +10,7 @@ import { executeCommand, executeDefaults } from "./commands/execute.js";
 import { exportCommand } from "./commands/export.js";
 import { importCommand } from "./commands/import.js";
 import { checkCommand, checkDefaults } from "./commands/check.js";
+import { guiCommand } from "./commands/gui.js";
 
 function printBanner(): void {
   cfonts.say("CKB FIREWALL|CLI", {
@@ -173,6 +174,17 @@ program
   .option("--force", "Overwrite an existing proposal without prompting")
   .action(async (file: string, opts: { force?: boolean }) => {
     await importCommand({ file, ...opts });
+  });
+
+// ── gui ───────────────────────────────────────────────────────────────────────
+
+program
+  .command("gui")
+  .description("Open the governance dashboard in a browser (read-only explorer)")
+  .option("--port <n>", "Local port to listen on", "7979")
+  .option("--no-open", "Print the URL but don't auto-open the browser")
+  .action(async (opts: { port?: string; noOpen?: boolean }) => {
+    await guiCommand(opts);
   });
 
 // Show banner on bare invocation before help prints.
