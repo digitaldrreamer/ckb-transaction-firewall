@@ -14,6 +14,43 @@ PACKAGE="@ckb-firewall/cli"
 BIN="ckb-firewall"
 MIN_NODE_MAJOR=20
 
+# ── joke API ──────────────────────────────────────────────────────────────────
+# Tries three joke APIs in order; silently skips each on failure.
+# Called once at the end of a successful install.
+fetch_joke(){
+  local joke="" resp="" setup="" delivery=""
+  # ── helper: extract a JSON string value by key (no jq required) ──────────
+  _jval(){ echo "$1" | grep -o '"'"$2"'":"[^"]*"' | sed 's/"'"$2"'":"//;s/"//' | head -1; }
+
+  # 1. JokeAPI v2 (sv443.net) — fetch once, parse setup + delivery
+  if command -v curl >/dev/null 2>&1; then
+    resp="$(curl -fsSL --max-time 5 \
+      'https://v2.jokeapi.dev/joke/Any?blacklistFlags=nsfw,racist,sexist&type=twopart' \
+      2>/dev/null)" || true
+    setup="$(_jval "$resp" "setup")"
+    delivery="$(_jval "$resp" "delivery")"
+    [ -n "$setup" ] && [ -n "$delivery" ] && joke="$setup"$'\n'"  ↳ $delivery"
+  fi
+
+  # 2. Official Joke API (appspot) — fetch once, parse setup + punchline
+  if [ -z "$joke" ] && command -v curl >/dev/null 2>&1; then
+    resp="$(curl -fsSL --max-time 5 \
+      'https://official-joke-api.appspot.com/random_joke' \
+      2>/dev/null)" || true
+    setup="$(_jval "$resp" "setup")"
+    delivery="$(_jval "$resp" "punchline")"
+    [ -n "$setup" ] && [ -n "$delivery" ] && joke="$setup"$'\n'"  ↳ $delivery"
+  fi
+
+  # 3. icanhazdadjoke (plain text)
+  if [ -z "$joke" ] && command -v curl >/dev/null 2>&1; then
+    joke="$(curl -fsSL --max-time 5 -H 'Accept: text/plain' \
+      'https://icanhazdadjoke.com/' 2>/dev/null)" || true
+  fi
+
+  [ -n "$joke" ] && printf '\n\033[2m%s\033[0m\n' "😂  $joke"
+}
+
 # Unique temp file; cleaned up automatically on exit.
 _TMPFILE="$(mktemp)"
 trap 'rm -f "$_TMPFILE"' EXIT
@@ -82,6 +119,12 @@ step "Installing $PACKAGE"
 
 NPM_GLOBAL_PREFIX="$(npm prefix -g)"
 NPM_GLOBAL_BIN="$NPM_GLOBAL_PREFIX/bin"
+
+# Capture previous version (if any) before installing.
+PREV_VERSION=""
+if command -v "$BIN" >/dev/null 2>&1; then
+  PREV_VERSION="$("$BIN" --version 2>/dev/null | head -1 | tr -d '[:space:]')" || true
+fi
 
 # Try a standard global install first. If it fails with a permission error,
 # fall back to a user-local prefix that never needs sudo.
@@ -171,15 +214,35 @@ fi
 
 # ── done ─────────────────────────────────────────────────────────────────────
 
+# Detect new version (may not be in PATH yet if PATH_OK=0).
+NEW_VERSION=""
+if command -v "$BIN" >/dev/null 2>&1; then
+  NEW_VERSION="$("$BIN" --version 2>/dev/null | head -1 | tr -d '[:space:]')" || true
+elif [ -f "$NPM_GLOBAL_BIN/$BIN" ]; then
+  NEW_VERSION="$("$NPM_GLOBAL_BIN/$BIN" --version 2>/dev/null | head -1 | tr -d '[:space:]')" || true
+fi
+
 echo
 if [ "$PATH_OK" -eq 1 ] && command -v "$BIN" >/dev/null 2>&1; then
-  green "Installation complete."
+  if [ -n "$PREV_VERSION" ] && [ "$PREV_VERSION" != "$NEW_VERSION" ]; then
+    green "Updated $BIN: $PREV_VERSION → $NEW_VERSION"
+  elif [ -n "$PREV_VERSION" ] && [ "$PREV_VERSION" = "$NEW_VERSION" ]; then
+    green "Already up to date: $BIN $NEW_VERSION"
+  else
+    green "Installed $BIN ${NEW_VERSION:-successfully}."
+  fi
   echo
   bold "Try it:"
   echo "  $BIN inspect          # view current testnet blacklist"
   echo "  $BIN add --help       # add an address (governance tx)"
   echo "  $BIN --help           # all commands"
+  fetch_joke
 else
-  yellow "Installation complete — restart your terminal, then run: $BIN --help"
+  if [ -n "$NEW_VERSION" ]; then
+    yellow "Installed $BIN $NEW_VERSION — restart your terminal, then run: $BIN --help"
+  else
+    yellow "Installation complete — restart your terminal, then run: $BIN --help"
+  fi
+  fetch_joke
 fi
 echo
