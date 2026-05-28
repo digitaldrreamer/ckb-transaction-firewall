@@ -1,0 +1,172 @@
+---
+title: Pre-flight Check (Rust SDK)
+description: Native Rust SDK for pre-flight blacklist checking — ckb-transaction-firewall-sdk v0.3.
+---
+
+The Rust SDK is a pure in-process pre-flight check for CKB transactions. It parses BLKL v2 registry payloads and rejects outputs whose lock or type args appear in the active blacklist — the same logic the on-chain firewall-lock contract enforces at consensus.
+
+Published on crates.io as [`ckb-transaction-firewall-sdk`](https://crates.io/crates/ckb-transaction-firewall-sdk).
+
+## Install
+
+```toml
+[dependencies]
+ckb-transaction-firewall-sdk = "0.3"
+```
+
+With optional features:
+
+```toml
+[dependencies]
+ckb-transaction-firewall-sdk = { version = "0.3", features = ["serde", "testnet"] }
+```
+
+## Pre-flight check
+
+```rust
+use ckb_transaction_firewall_sdk::{
+    check_transaction, FirewallConfig, RegistrySpec, HashType,
+    CellDepLike, ScriptLike, TxOutputLike, UnsignedTxLike,
+};
+
+let spec = RegistrySpec {
+    code_hash: /* blacklist-registry code hash */ [0u8; 32],
+    hash_type: HashType::Type,
+    type_id_value: /* bytes 34–66 of registry type args */ [0u8; 32],
+    required: true,
+};
+
+let cfg = FirewallConfig { registries: vec![spec] };
+
+let tx = UnsignedTxLike {
+    cell_deps: vec![/* live registry cell dep with BLKL v2 data */],
+    outputs: vec![TxOutputLike {
+        lock_args: recipient_lock_args,
+        type_args: None,
+    }],
+};
+
+let now_secs = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .unwrap()
+    .as_secs();
+
+match check_transaction(&cfg, &tx, now_secs) {
+    Ok(()) => { /* safe to sign and broadcast */ }
+    Err(e) => eprintln!("blocked: {} (code {})", e, e.code()),
+}
+```
+
+The registry dep is matched by `type_id_value` — bytes 34–66 of the 66-byte v2 type args — so the spec survives governance-lock upgrades without reconfiguration.
+
+`check_transaction` makes no RPC calls. You supply the live registry cell (fetched from your CKB node) as a `CellDepLike`, and the SDK parses its BLKL v2 payload in-process.
+
+## Multi-registry
+
+Firewall lock args can reference up to 255 registry cells. The effective blacklist is the union of all active entries across all resolved registries.
+
+```rust
+let cfg = FirewallConfig {
+    registries: vec![
+        RegistrySpec { /* primary registry */ required: true, .. },
+        RegistrySpec { /* supplementary watchlist */ required: false, .. },
+    ],
+};
+```
+
+Optional registries (`required: false`) are checked if present in `cell_deps` but do not cause an error if absent.
+
+## `preflight_check` — against pre-parsed payloads
+
+Use this when you have already parsed the registry payloads and want to check outputs without re-resolving deps:
+
+```rust
+use ckb_transaction_firewall_sdk::{preflight_check, parse_registry_payload};
+
+let payload = parse_registry_payload(&registry_cell_data_bytes)?;
+
+preflight_check(&outputs, &[payload], now_secs)?;
+```
+
+## `is_blacklisted` — point check
+
+```rust
+use ckb_transaction_firewall_sdk::{is_blacklisted, parse_registry_payload};
+
+let payload = parse_registry_payload(&registry_cell_data_bytes)?;
+
+if is_blacklisted(&lock_args_bytes, &[payload], now_secs) {
+    eprintln!("address is blacklisted");
+}
+```
+
+## Build a firewall lock script
+
+```rust
+use ckb_transaction_firewall_sdk::{build_firewall_lock_script, FirewallLockConfig, HashType, RegistrySpec};
+
+let config = FirewallLockConfig {
+    firewall_code_hash: /* deployed firewall-lock code hash */ [0u8; 32],
+    firewall_hash_type: HashType::Type,
+    flags: 0x03, // bit 0 = check lock_args, bit 1 = check type_args
+    registries: vec![RegistrySpec {
+        code_hash: [0u8; 32],
+        hash_type: HashType::Type,
+        type_id_value: [0u8; 32],
+        required: true,
+    }],
+    inner_code_hash: /* spawn-aware-secp256k1 code hash */ [0u8; 32],
+    inner_hash_type: HashType::Type,
+    inner_args: pubkey_hash_bytes, // 20-byte pubkey hash
+};
+
+let lock_script = build_firewall_lock_script(&config)?;
+// ScriptLike { code_hash, hash_type, args: encoded v2 FirewallLockArgs }
+```
+
+## Cell deps for spending
+
+```rust
+use ckb_transaction_firewall_sdk::{build_firewall_spend_cell_deps, FirewallSpendDepsConfig, OutPointLike};
+
+let cell_deps = build_firewall_spend_cell_deps(&FirewallSpendDepsConfig {
+    firewall_lock_out_point: OutPointLike { tx_hash: firewall_lock_tx, index: 0 },
+    inner_lock_out_point:    OutPointLike { tx_hash: inner_lock_tx,    index: 0 },
+    registry_out_points:     vec![OutPointLike { tx_hash: registry_tx, index: 0 }],
+});
+// Vec<TransactionCellDep> — add to your transaction
+```
+
+## Features
+
+### `serde`
+
+Derives `Serialize` / `Deserialize` on all public types.
+
+```toml
+ckb-transaction-firewall-sdk = { version = "0.3", features = ["serde"] }
+```
+
+### `testnet`
+
+Exposes the `testnet` module with the RPC URL, canonical testnet registry spec, contract outpoints, and governance constants.
+
+```rust
+#[cfg(feature = "testnet")]
+use ckb_transaction_firewall_sdk::testnet;
+
+let rpc = testnet::RPC_URL; // "https://testnet.ckb.dev"
+let spec = testnet::registry_spec();
+```
+
+## `now_secs` and expiry
+
+The `now_secs` parameter controls how time-based blacklist entries are evaluated. Entries with `expires_at > 0` are treated as inactive once `expires_at <= now_secs`.
+
+For off-chain pre-flight use `SystemTime::now()` as seconds. For consensus-accurate evaluation, use the chain's median block time from `header_deps`.
+
+## API reference
+
+Full type and function reference: [Rust SDK API](/reference/rust-sdk-api/).
+
+Result codes and their on-chain contract mapping: [Error codes](/reference/error-codes/).

@@ -1,0 +1,67 @@
+---
+title: GUI Mode
+description: Launch a browser-based governance interface for the CKB Transaction Firewall CLI.
+---
+
+import guiScreenshot from '../../../../../assets/gui-screenshot.png';
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution" label="Experimental">
+  GUI mode is an early-stage feature in an actively developed project. Expect rough edges — the interface may change significantly between releases and is not yet recommended for production governance flows.
+</Aside>
+
+`ckb-firewall gui` opens a local browser-based interface for the governance workflow. It runs entirely on your machine — a lightweight HTTP server serves the UI on loopback, and your private keys never leave localhost.
+
+It covers the same operations as the CLI commands (`propose`, `vote`, `sign`, `execute`) but presents them in a visual dashboard with a live view of the registry and all open proposals.
+
+## Launch
+
+```bash
+ckb-firewall gui
+```
+
+The server starts on port `7979` by default and opens `http://ckb-firewall.localhost` in your browser automatically. If port 80 is unavailable, it falls back to `http://ckb-firewall.localhost:7979` (or a random available port if 7979 is also in use).
+
+<figure>
+  <img src={guiScreenshot.src} alt="The Transaction Firewall governance dashboard showing the Overview tab with active registry entries and open proposals" />
+  <figcaption>The Overview tab shows registry size, open proposals, and any actions waiting on your key.</figcaption>
+</figure>
+
+Press `Ctrl+C` in the terminal to stop the server.
+
+## What's inside
+
+The interface has three tabs:
+
+- **Overview** — summary of open proposals, registry size, and any actions waiting on you
+- **Registry** — all current blacklist entries with expiry status
+- **Proposals** — full proposal list with voting and signing controls
+
+From any proposal you can vote, add a multisig signature, export the proposal JSON to share with other signers, or — once the threshold is met — build and download the on-chain transaction.
+
+## Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port <n>` | `7979` | Port the app server binds to |
+| `--no-open` | — | Start the server without opening the browser |
+
+```bash
+# Custom port, no auto-open
+ckb-firewall gui --port 8080 --no-open
+```
+
+## Portless URL
+
+On Linux, you can get the clean `http://ckb-firewall.localhost` URL (no port number) by granting Node the ability to bind port 80 without root:
+
+```bash
+sudo setcap cap_net_bind_service+eip $(which node)
+ckb-firewall gui
+```
+
+On macOS and Windows, running with `sudo`/Administrator is sufficient.
+
+## Security note
+
+The GUI server listens on all loopback addresses (`127.0.0.1` and `::1`) and enforces at the handler level that only connections from loopback are served. Private keys submitted through sign and vote forms are converted to bytes and zeroed immediately after the cryptographic operation — they are not stored or logged. Note that JavaScript strings are immutable; the key material briefly exists as a string in V8 heap during transmission and JSON parsing, and cannot be zeroed at that stage. For highest assurance, use an air-gapped machine.
