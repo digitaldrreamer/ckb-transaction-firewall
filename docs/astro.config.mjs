@@ -55,6 +55,7 @@ export default defineConfig({
 						link: '/guides/',
 						icon: 'list-format',
 						items: [
+							'guides/governance-how-to-use',
 							{
 								label: 'TypeScript SDK',
 								items: [
@@ -76,9 +77,8 @@ export default defineConfig({
 								],
 							},
 							{
-								label: 'Governance & Registry',
+								label: 'Governance',
 								items: [
-									'guides/governance-how-to-use',
 									'guides/governance-blacklist',
 								],
 							},
