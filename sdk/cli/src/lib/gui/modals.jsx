@@ -605,8 +605,8 @@ function VoteForm({ proposal, meta, onSubmit, onClose }) {
   return (
     <div className="tfw-form">
       <SecurityNote kind="warn">
-        Your private key is used <strong>only locally</strong> and zeroed immediately after signing.
-        It is never stored, logged, or transmitted.
+        Your private key is posted over loopback only and zeroed immediately after the cryptographic operation.
+        It is never stored, logged, or forwarded beyond localhost.
       </SecurityNote>
 
       <FormField label="Your vote">
@@ -709,7 +709,7 @@ function SignForm({ proposal, meta, onSubmit, onClose }) {
   return (
     <div className="tfw-form">
       <SecurityNote kind="warn">
-        Your private key is used only locally and zeroed immediately after signing. It is never stored, logged, or transmitted.
+        Your private key is posted over loopback only and zeroed immediately after the cryptographic operation. It is never stored, logged, or forwarded beyond localhost.
       </SecurityNote>
 
       <FormField label="Signer index" hint="0–4, your slot in the 5-key governance set">
