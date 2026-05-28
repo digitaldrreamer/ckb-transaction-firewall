@@ -50,6 +50,7 @@ export default defineConfig({
 							'getting-started/how-to-use',
 							'getting-started/blacklist-guide',
 							'getting-started/cli',
+							'getting-started/gui',
 							'getting-started/typescript-sdk',
 							'getting-started/wallet-integration',
 							'getting-started/rust-sdk',

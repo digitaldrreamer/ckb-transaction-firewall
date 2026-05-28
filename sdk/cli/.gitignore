@@ -1,0 +1,5 @@
+dist/
+node_modules/
+.gui-vendor-cache/
+# Original Open Design export — kept locally as vendor asset source but not committed
+src/lib/Transaction Firewall.html

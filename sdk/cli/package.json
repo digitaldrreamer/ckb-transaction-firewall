@@ -1,6 +1,6 @@
 {
   "name": "@ckb-firewall/cli",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "CLI for managing the CKB Transaction Firewall blacklist registry",
   "type": "module",
   "license": "MIT",
@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "postbuild": "node -e \"require('fs').chmodSync('dist/index.js', 0o755)\"",
+    "postbuild": "node -e \"require('fs').chmodSync('dist/index.js', 0o755)\" && node scripts/build-gui.js",
     "prepack": "npm run build",
     "test": "npm run build && node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
