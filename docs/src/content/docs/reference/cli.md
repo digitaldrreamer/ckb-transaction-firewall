@@ -129,6 +129,39 @@ Options: `--proposal`, `--rpc-url`, `--registry-tx`, `--registry-index`, `--tx-o
 
 ---
 
+### `gui`
+
+Launch the browser-based governance dashboard.
+
+```bash
+ckb-firewall gui
+ckb-firewall gui --port 8080
+ckb-firewall gui --no-open
+```
+
+Options:
+
+| Option | Default | Description |
+|---|---|---|
+| `--port` | `7979` | Port for the local app server |
+| `--no-open` | — | Start the server without opening a browser tab |
+
+The command attempts to bind port 80 and serve the dashboard at `http://ckb-firewall.localhost` (no port in the URL). If port 80 is unavailable it falls back to `http://ckb-firewall.localhost:<port>`. To get the portless URL without `sudo`, grant Node the capability to bind low ports:
+
+```bash
+# Linux
+sudo setcap cap_net_bind_service+eip $(which node)
+
+# macOS / Windows
+sudo ckb-firewall gui
+```
+
+Press `Ctrl+C` to stop the server. The server uses the same `--rpc-url` and registry defaults as `inspect`.
+
+For a walkthrough of the GUI interface see [GUI mode](/guides/cli-gui/).
+
+---
+
 ### `export`
 
 Export a proposal to a shareable JSON file for multi-party governance coordination.
