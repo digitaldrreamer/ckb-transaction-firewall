@@ -136,7 +136,7 @@ const lock = buildFirewallLockScript({
 });
 ```
 
-See [`sdk/cli/README.md`](./sdk/cli/README.md) and [`sdk/typescript/`](./sdk/typescript/) for full option documentation. For multi-registry deployments or deploying and configuring your own blacklist registry, see [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/).
+For full option documentation see [`sdk/typescript/`](./sdk/typescript/) and the [CLI reference](https://ckb-firewall.drreamer.digital/reference/cli/). For multi-registry deployments or deploying and configuring your own blacklist registry, see [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/).
 
 ---
 
@@ -182,6 +182,7 @@ Full outpoints and Type IDs: [`notes/deployments/testnet.registry.json`](./notes
 |---|---|
 | [Why this exists](https://ckb-firewall.drreamer.digital/concepts/why-this-exists/) | What the firewall does and does not do |
 | [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/) | Lock, registry, SDK, and governance |
+| [Guides](https://ckb-firewall.drreamer.digital/guides/) | Pre-flight checks, wallet integration, governance walkthrough |
 | [Wallet integration](https://ckb-firewall.drreamer.digital/guides/typescript-wallet-integration/) | Step-by-step for wallet developers |
 | [Governance runbook](https://ckb-firewall.drreamer.digital/operations/governance-runbook/) | Multi-party update coordination |
 | [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/) | Live outpoints and registry values |
