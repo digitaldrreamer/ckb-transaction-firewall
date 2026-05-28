@@ -152,8 +152,11 @@ The command attempts to bind port 80 and serve the dashboard at `http://ckb-fire
 # Linux
 sudo setcap cap_net_bind_service+eip $(which node)
 
-# macOS / Windows
+# macOS
 sudo ckb-firewall gui
+
+# Windows (run terminal as Administrator)
+ckb-firewall gui
 ```
 
 Press `Ctrl+C` to stop the server. The server uses the same `--rpc-url` and registry defaults as `inspect`.
