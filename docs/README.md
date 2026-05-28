@@ -23,23 +23,30 @@ npm run preview
 | Topic | URL |
 |-------|-----|
 | Home | https://ckb-firewall.drreamer.digital/ |
+| Tutorial | https://ckb-firewall.drreamer.digital/getting-started/tutorial/ |
+| Choose your path | https://ckb-firewall.drreamer.digital/getting-started/choose-your-path/ |
+| How to use (integration cookbook) | https://ckb-firewall.drreamer.digital/guides/governance-how-to-use/ |
+| Pre-flight check (TypeScript) | https://ckb-firewall.drreamer.digital/guides/typescript-preflight/ |
+| Wallet integration | https://ckb-firewall.drreamer.digital/guides/typescript-wallet-integration/ |
+| Pre-flight check (Rust) | https://ckb-firewall.drreamer.digital/guides/rust-preflight/ |
+| CLI walkthrough | https://ckb-firewall.drreamer.digital/guides/cli-walkthrough/ |
+| GUI mode | https://ckb-firewall.drreamer.digital/guides/cli-gui/ |
+| Blacklisting an address | https://ckb-firewall.drreamer.digital/guides/governance-blacklist/ |
+| Overview | https://ckb-firewall.drreamer.digital/concepts/overview/ |
 | Why this exists | https://ckb-firewall.drreamer.digital/concepts/why-this-exists/ |
 | Architecture | https://ckb-firewall.drreamer.digital/concepts/architecture/ |
 | Firewall lock | https://ckb-firewall.drreamer.digital/concepts/firewall-lock/ |
 | Blacklist registry | https://ckb-firewall.drreamer.digital/concepts/blacklist-registry/ |
 | Governance | https://ckb-firewall.drreamer.digital/concepts/governance/ |
 | Security model | https://ckb-firewall.drreamer.digital/concepts/security-model/ |
-| How to use | https://ckb-firewall.drreamer.digital/getting-started/how-to-use/ |
-| Overview | https://ckb-firewall.drreamer.digital/getting-started/overview/ |
-| CLI quickstart | https://ckb-firewall.drreamer.digital/getting-started/cli/ |
-| TypeScript SDK | https://ckb-firewall.drreamer.digital/getting-started/typescript-sdk/ |
-| Rust SDK | https://ckb-firewall.drreamer.digital/getting-started/rust-sdk/ |
-| Testnet deployment | https://ckb-firewall.drreamer.digital/operations/testnet-deployment/ |
-| Troubleshooting | https://ckb-firewall.drreamer.digital/operations/troubleshooting/ |
+| TypeScript SDK API | https://ckb-firewall.drreamer.digital/reference/sdk-api/ |
+| Rust SDK API | https://ckb-firewall.drreamer.digital/reference/rust-sdk-api/ |
+| CLI reference | https://ckb-firewall.drreamer.digital/reference/cli/ |
 | BLKL format | https://ckb-firewall.drreamer.digital/reference/blkl-format/ |
 | Firewall lock args | https://ckb-firewall.drreamer.digital/reference/firewall-lock-args/ |
 | GOV1 witness | https://ckb-firewall.drreamer.digital/reference/gov1-witness/ |
 | Error codes | https://ckb-firewall.drreamer.digital/reference/error-codes/ |
-| CLI reference | https://ckb-firewall.drreamer.digital/reference/cli/ |
+| Testnet deployment | https://ckb-firewall.drreamer.digital/operations/testnet-deployment/ |
+| Troubleshooting | https://ckb-firewall.drreamer.digital/operations/troubleshooting/ |
 
 Source files: `src/content/docs/`. Canonical testnet fixture JSON: [`../notes/deployments/testnet.registry.json`](../notes/deployments/testnet.registry.json).

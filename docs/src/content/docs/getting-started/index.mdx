@@ -1,28 +1,16 @@
 ---
 title: Getting Started
-description: Start here if you want to wire the firewall into a wallet, service, or CLI workflow.
+description: Start here — your first firewall integration in under 30 minutes.
 topic: getting-started
 ---
 
-import { CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-If you are integrating the firewall for the first time, this is the shortest path:
-
-<Steps>
-1. Read [How to Use](/getting-started/how-to-use/).
-2. Read the [overview](/getting-started/overview/).
-3. Pick the [TypeScript SDK](/getting-started/typescript-sdk/) or [Rust SDK](/getting-started/rust-sdk/).
-4. Use the [CLI quickstart](/getting-started/cli/) if you need to inspect or prepare registry updates.
-</Steps>
+Start with the tutorial to see the firewall in action end-to-end. Then pick your integration path.
 
 npm packages: [@ckb-firewall/cli](https://www.npmjs.com/package/@ckb-firewall/cli) · [@ckb-firewall/sdk](https://www.npmjs.com/package/@ckb-firewall/sdk)
 
-## Pages
-
 <CardGrid>
-	<LinkCard href="/getting-started/how-to-use/" title="How to use" description="The practical path for live registry data, SDK checks, and governance updates." />
-	<LinkCard href="/getting-started/overview/" title="Overview" description="What the firewall does and how the pieces fit together." />
-	<LinkCard href="/getting-started/cli/" title="CLI quickstart" description="Inspect the live registry and walk through governance commands." />
-	<LinkCard href="/getting-started/typescript-sdk/" title="TypeScript SDK" description="Pre-flight check unsigned transactions in JavaScript or TypeScript." />
-	<LinkCard href="/getting-started/rust-sdk/" title="Rust SDK" description="Run the same pre-flight policy from Rust code." />
+  <LinkCard href="/getting-started/tutorial/" title="Tutorial" description="Inspect the live registry, run a pre-flight check, and see the SDK block a blacklisted output." />
+  <LinkCard href="/getting-started/choose-your-path/" title="Choose your path" description="Pick the right tool — TypeScript SDK, Rust SDK, CLI, or GUI." />
 </CardGrid>

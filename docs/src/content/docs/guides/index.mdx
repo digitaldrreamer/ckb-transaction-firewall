@@ -1,0 +1,43 @@
+---
+title: Guides
+description: Task-oriented how-to guides for each component of the CKB Transaction Firewall.
+topic: guides
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Step-by-step guides organized by component. Each guide solves a specific task — pick the one that matches what you're doing.
+
+Not sure where to start? See [Choose your path](/getting-started/choose-your-path/).
+
+## Integration reference
+
+<CardGrid>
+  <LinkCard href="/guides/governance-how-to-use/" title="How to use the firewall" description="Fetch the registry, run pre-flight checks, build cell deps, and trigger governance — all in one place." />
+</CardGrid>
+
+## TypeScript SDK
+
+<CardGrid>
+  <LinkCard href="/guides/typescript-preflight/" title="Pre-flight check" description="Fetch the registry and reject blacklisted outputs before signing." />
+  <LinkCard href="/guides/typescript-wallet-integration/" title="Wallet integration" description="Wrap a secp256k1 wallet cell with the firewall lock." />
+</CardGrid>
+
+## Rust SDK
+
+<CardGrid>
+  <LinkCard href="/guides/rust-preflight/" title="Pre-flight check" description="In-process blacklist check with no network dependency." />
+</CardGrid>
+
+## CLI & GUI
+
+<CardGrid>
+  <LinkCard href="/guides/cli-walkthrough/" title="CLI walkthrough" description="Inspect the live registry and run governance commands." />
+  <LinkCard href="/guides/cli-gui/" title="GUI mode" description="Launch the browser-based governance dashboard." />
+</CardGrid>
+
+## Governance
+
+<CardGrid>
+  <LinkCard href="/guides/governance-blacklist/" title="Blacklisting an address" description="Full governance lifecycle — propose, vote, sign, execute." />
+</CardGrid>

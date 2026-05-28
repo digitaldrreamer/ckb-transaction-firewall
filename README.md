@@ -6,6 +6,7 @@
 
 [![npm sdk](https://img.shields.io/npm/v/@ckb-firewall/sdk?label=%40ckb-firewall%2Fsdk)](https://www.npmjs.com/package/@ckb-firewall/sdk)
 [![npm cli](https://img.shields.io/npm/v/@ckb-firewall/cli?label=%40ckb-firewall%2Fcli)](https://www.npmjs.com/package/@ckb-firewall/cli)
+[![crates.io](https://img.shields.io/crates/v/ckb-transaction-firewall-sdk)](https://crates.io/crates/ckb-transaction-firewall-sdk)
 [![Tests](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/digitaldrreamer/ckb-transaction-firewall/actions/workflows/tests.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
@@ -57,6 +58,72 @@ The SDK gives you a fast error before broadcast. The lock is what every node enf
 
 ## Quick start
 
+### TypeScript SDK
+
+```bash
+npm install @ckb-firewall/sdk
+```
+
+```typescript
+import { TransactionFirewall, fetchRegistryPayload } from "@ckb-firewall/sdk";
+
+const firewall = new TransactionFirewall({
+  registries: [{
+    codeHash:    "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
+    hashType:    "type",
+    typeIdValue: "0xc70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
+    required:    true,
+  }],
+});
+
+// Fetch the live registry cell from your CKB node
+const { type: registryType, data: registryData } = await fetchRegistryPayload(
+  "https://testnet.ckb.dev",
+  "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4",
+  0
+);
+
+// Check outputs before signing — synchronous, no RPC calls
+const result = firewall.checkTransaction({
+  cellDeps: [{ type: registryType, data: registryData }],
+  outputs:  [{ lockArgs: "0x..." }],
+});
+
+if (!result.ok) {
+  throw new Error(`Blocked: ${result.reason}`); // e.g. "BlacklistedLockArgs"
+}
+```
+
+See [`sdk/typescript/`](./sdk/typescript/) for the full API including `buildFirewallLockScript` for constructing firewall-protected lock scripts.
+
+### Rust SDK
+
+```toml
+[dependencies]
+ckb-transaction-firewall-sdk = "0.3"
+```
+
+```rust
+use ckb_transaction_firewall_sdk::{check_transaction, FirewallConfig, RegistrySpec, HashType};
+
+let cfg = FirewallConfig {
+    registries: vec![RegistrySpec {
+        code_hash:      [/* blacklist_registry code hash */0u8; 32],
+        hash_type:      HashType::Type,
+        type_id_value:  [/* bytes 34-66 of registry type args */0u8; 32],
+        required:       true,
+    }],
+};
+
+// Build your transaction, pass the live registry cell as a dep
+match check_transaction(&cfg, &tx, now_secs) {
+    Ok(()) => { /* safe to sign */ }
+    Err(e) => eprintln!("blocked: {} (code {})", e, e.code()),
+}
+```
+
+See [`sdk/rust/`](./sdk/rust/) for the full API.
+
 ### CLI
 
 ```bash
@@ -90,53 +157,7 @@ ckb-firewall sign --proposal <id> --signer-index 0
 ckb-firewall execute --proposal <id>
 ```
 
-### TypeScript SDK
-
-```bash
-npm install @ckb-firewall/sdk
-```
-
-```typescript
-import { fetchRegistryPayload, preflightCheck, buildFirewallLockScript } from "@ckb-firewall/sdk";
-
-// Fetch the live registry
-const registry = await fetchRegistryPayload(
-  "https://testnet.ckb.dev",
-  "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4",
-  0
-);
-
-// Check outputs before signing
-const decision = preflightCheck(
-  [{ lockArgs: "0x..." }],
-  [registry]
-);
-
-if (!decision.ok) {
-  throw new Error(`Blocked: ${decision.reason}`);
-}
-```
-
-Build a firewall-protected lock script:
-
-```typescript
-const lock = buildFirewallLockScript({
-  firewallCodeHash: "0x8192c9df809976ae9b093dd0d6b072a96101be8cffe61a7e9ac87c04e1f4dc54",
-  firewallHashType: "type",
-  flags: 0x03,
-  registries: [{
-    codeHash:    "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
-    hashType:    "type",
-    typeIdValue: "0xc70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
-    required:    true,
-  }],
-  innerCodeHash: "0x9be62e0423d4278b15c071bb881a4ebf936f7e46b3df0f152de50ae416f54465",
-  innerHashType: "type",
-  innerArgs: "0x<20-byte-pubkey-hash>",
-});
-```
-
-See [`sdk/cli/README.md`](./sdk/cli/README.md) and [`sdk/typescript/`](./sdk/typescript/) for full option documentation. For multi-registry deployments or deploying and configuring your own blacklist registry, see [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/).
+For multi-registry deployments or self-managed registries, see [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/).
 
 ---
 
@@ -178,17 +199,42 @@ Full outpoints and Type IDs: [`notes/deployments/testnet.registry.json`](./notes
 
 **https://ckb-firewall.drreamer.digital**
 
+**Concepts**
+
 | | |
 |---|---|
 | [Why this exists](https://ckb-firewall.drreamer.digital/concepts/why-this-exists/) | What the firewall does and does not do |
 | [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/) | Lock, registry, SDK, and governance |
-| [Wallet integration](https://ckb-firewall.drreamer.digital/getting-started/wallet-integration/) | Step-by-step for wallet developers |
-| [Governance runbook](https://ckb-firewall.drreamer.digital/operations/governance-runbook/) | Multi-party update coordination |
-| [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/) | Live outpoints and registry values |
-| [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/) | Multi-registry deployment and self-managed blacklist registries |
+| [Security model](https://ckb-firewall.drreamer.digital/concepts/security-model/) | What is and isn't protected |
+
+**Guides**
+
+| | |
+|---|---|
+| [Pre-flight check (TypeScript)](https://ckb-firewall.drreamer.digital/guides/typescript-preflight/) | Fetch the registry and reject blacklisted outputs before signing |
+| [Pre-flight check (Rust)](https://ckb-firewall.drreamer.digital/guides/rust-preflight/) | In-process blacklist check with no network dependency |
+| [Wallet integration](https://ckb-firewall.drreamer.digital/guides/typescript-wallet-integration/) | Wrap a secp256k1 wallet cell with the firewall lock |
+| [Blacklisting an address](https://ckb-firewall.drreamer.digital/guides/governance-blacklist/) | Full governance lifecycle — propose, vote, sign, execute |
+| [CLI walkthrough](https://ckb-firewall.drreamer.digital/guides/cli-walkthrough/) | Inspect the registry and run governance commands |
+
+**Reference**
+
+| | |
+|---|---|
+| [TypeScript SDK API](https://ckb-firewall.drreamer.digital/reference/sdk-api/) | All types, classes, and functions |
+| [Rust SDK API](https://ckb-firewall.drreamer.digital/reference/rust-sdk-api/) | All types and functions |
+| [CLI reference](https://ckb-firewall.drreamer.digital/reference/cli/) | All commands and options |
 | [BLKL format](https://ckb-firewall.drreamer.digital/reference/blkl-format/) | Binary registry payload layout |
 | [Firewall lock args](https://ckb-firewall.drreamer.digital/reference/firewall-lock-args/) | Lock script args encoding |
-| [CLI reference](https://ckb-firewall.drreamer.digital/reference/cli/) | All commands and options |
+| [Error codes](https://ckb-firewall.drreamer.digital/reference/error-codes/) | All SDK and on-chain error codes |
+
+**Operations**
+
+| | |
+|---|---|
+| [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/) | Live outpoints and registry values |
+| [Governance runbook](https://ckb-firewall.drreamer.digital/operations/governance-runbook/) | Multi-party update coordination |
+| [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/) | Multi-registry deployment and self-managed blacklist registries |
 
 ---
 

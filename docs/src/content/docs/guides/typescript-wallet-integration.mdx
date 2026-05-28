@@ -1,6 +1,6 @@
 ---
-title: Wallet Integration
-description: How to protect a CKB wallet cell with the firewall lock.
+title: Wallet Integration (TypeScript SDK)
+description: How to protect a CKB wallet cell with the firewall lock using the TypeScript SDK.
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
@@ -70,7 +70,7 @@ if (!decision.ok) {
 ```
 
 <Aside type="caution" title="Fetch a fresh registry outpoint before each check">
-The registry cell moves after every governance update. `findRegistryCell` queries the CKB indexer to always return the live cell — see [Finding the current registry outpoint](/getting-started/typescript-sdk/#finding-the-current-registry-outpoint) for the full spec values and details.
+The registry cell moves after every governance update. `findRegistryCell` queries the CKB indexer to always return the live cell — see [Finding the current registry outpoint](/guides/typescript-preflight/#finding-the-current-registry-outpoint) for the full spec values and details.
 </Aside>
 
 ## Cell deps for spending
