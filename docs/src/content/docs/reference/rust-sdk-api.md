@@ -21,13 +21,13 @@ pub enum HashType {
 }
 ```
 
-CKB script hash type. Serialises to the single-byte on-chain encoding: `Data=0`, `Type=1`, `Data1=2`.
+CKB script hash type. Serializes to the single-byte on-chain encoding: `Data=0`, `Type=1`, `Data1=2`.
 
 #### Methods
 
 ```rust
-fn to_byte(&self) -> u8
-fn from_byte(b: u8) -> Option<HashType>
+pub fn to_byte(&self) -> u8
+pub fn from_byte(b: u8) -> Option<HashType>
 ```
 
 ---
@@ -57,7 +57,7 @@ pub struct RegistrySpec {
 }
 ```
 
-Identifies a registry cell dep. `type_id_value` is bytes 34–66 of the 66-byte v2 registry type-script args (the Type ID value). Matching on `type_id_value` rather than full type-script equality means the spec survives governance-lock upgrades — the governance code hash at bytes 1–33 can change without invalidating this spec.
+Identifies a registry cell dep. `type_id_value` is bytes `34..66` (indices 34 to 65) of the 66-byte v2 registry type-script args (the Type ID value). Matching on `type_id_value` rather than full type-script equality means the spec survives governance-lock upgrades — the governance code hash at bytes `1..33` (indices 1 to 32) can change without invalidating this spec.
 
 When `required` is `true`, the absence of a matching cell dep is a `MissingRegistryCellDep` error. When `false`, the spec is silently skipped if no dep is found.
 
@@ -123,7 +123,7 @@ pub struct RegistryEntry {
 }
 ```
 
-A single blacklisted identifier. `expires_at == 0` means the entry never expires. Entries with `expires_at` in the past (compared against `now_secs`) are treated as inactive.
+A single blacklisted identifier. `expires_at == 0` means the entry never expires. Entries with `expires_at <= now_secs` are treated as inactive (expired).
 
 ---
 
@@ -276,7 +276,7 @@ pub fn is_blacklisted(
 ) -> bool
 ```
 
-Returns `true` if `lock_args` matches an active entry in any of the given registries. Entries with `expires_at` in the past are treated as inactive. Accepts multiple registry payloads and checks the union of all entries.
+Returns `true` if `lock_args` matches an active entry in any of the given registries. Entries with `expires_at <= now_secs` are treated as inactive. Accepts multiple registry payloads and checks the union of all entries.
 
 ---
 
