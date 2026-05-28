@@ -46,14 +46,42 @@ export default defineConfig({
 						icon: 'rocket',
 						items: [
 							'getting-started/tutorial',
-							'getting-started/overview',
-							'getting-started/how-to-use',
-							'getting-started/blacklist-guide',
-							'getting-started/cli',
-							'getting-started/gui',
-							'getting-started/typescript-sdk',
-							'getting-started/wallet-integration',
-							'getting-started/rust-sdk',
+							'getting-started/choose-your-path',
+						],
+					},
+					{
+						id: 'guides',
+						label: 'Guides',
+						link: '/guides/',
+						icon: 'list-format',
+						items: [
+							{
+								label: 'TypeScript SDK',
+								items: [
+									'guides/typescript-preflight',
+									'guides/typescript-wallet-integration',
+								],
+							},
+							{
+								label: 'Rust SDK',
+								items: [
+									'guides/rust-preflight',
+								],
+							},
+							{
+								label: 'CLI & GUI',
+								items: [
+									'guides/cli-walkthrough',
+									'guides/cli-gui',
+								],
+							},
+							{
+								label: 'Governance & Registry',
+								items: [
+									'guides/governance-how-to-use',
+									'guides/governance-blacklist',
+								],
+							},
 						],
 					},
 					{
@@ -63,6 +91,7 @@ export default defineConfig({
 						icon: 'open-book',
 						items: [
 							'concepts/why-this-exists',
+							'concepts/overview',
 							'concepts/architecture',
 							'concepts/firewall-lock',
 							'concepts/inner-lock',
@@ -77,12 +106,27 @@ export default defineConfig({
 						link: '/reference/',
 						icon: 'information',
 						items: [
-							'reference/sdk-api',
-							'reference/blkl-format',
-							'reference/firewall-lock-args',
-							'reference/gov1-witness',
+							{
+								label: 'TypeScript SDK',
+								items: ['reference/sdk-api'],
+							},
+							{
+								label: 'Rust SDK',
+								items: ['reference/rust-sdk-api'],
+							},
+							{
+								label: 'CLI',
+								items: ['reference/cli'],
+							},
+							{
+								label: 'Data Formats',
+								items: [
+									'reference/blkl-format',
+									'reference/firewall-lock-args',
+									'reference/gov1-witness',
+								],
+							},
 							'reference/error-codes',
-							'reference/cli',
 							'reference/glossary',
 						],
 					},

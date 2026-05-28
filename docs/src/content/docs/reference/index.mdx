@@ -1,19 +1,37 @@
 ---
 title: Reference
-description: Exact layouts, codes, and command details for the firewall stack.
+description: Exact layouts, codes, and API details for the firewall stack.
 topic: reference
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-Exact byte layouts, error codes, and CLI flags for implementation and debugging.
+Exact byte layouts, error codes, and API documentation for implementation and debugging.
 
-## Pages
+## SDKs
+
+<CardGrid>
+	<LinkCard href="/reference/sdk-api/" title="TypeScript SDK API" description="All types, functions, and classes exported by @ckb-firewall/sdk." />
+	<LinkCard href="/reference/rust-sdk-api/" title="Rust SDK API" description="All types, functions, and errors exported by ckb-transaction-firewall-sdk." />
+</CardGrid>
+
+## CLI
+
+<CardGrid>
+	<LinkCard href="/reference/cli/" title="CLI reference" description="Command and option reference for @ckb-firewall/cli." />
+</CardGrid>
+
+## Data Formats
 
 <CardGrid>
 	<LinkCard href="/reference/blkl-format/" title="BLKL format" description="Binary layout for the blacklist registry payload." />
 	<LinkCard href="/reference/firewall-lock-args/" title="Firewall lock args" description="How the lock encodes the registry and inner-lock identities." />
 	<LinkCard href="/reference/gov1-witness/" title="GOV1 witness" description="Witness layout used by registry update transactions." />
+</CardGrid>
+
+## Other
+
+<CardGrid>
 	<LinkCard href="/reference/error-codes/" title="Error codes" description="Stable contract and SDK error mappings." />
-	<LinkCard href="/reference/cli/" title="CLI reference" description="Command and option reference for @ckb-firewall/cli." />
+	<LinkCard href="/reference/glossary/" title="Glossary" description="Terms used throughout the documentation." />
 </CardGrid>
