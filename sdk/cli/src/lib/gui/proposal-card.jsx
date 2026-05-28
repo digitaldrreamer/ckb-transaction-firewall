@@ -34,7 +34,11 @@ function ProposalCard({ proposal, onOpen, onVote, onSign, onExecute, registry, c
   const stateClass = `tfw-card--${ds}`;
 
   return (
-    <div className={`tfw-card ${stateClass}${compact ? " tfw-card--compact" : ""}`} onClick={() => onOpen(p.id)}>
+    <button
+      type="button"
+      className={`tfw-card ${stateClass}${compact ? " tfw-card--compact" : ""}`}
+      onClick={() => onOpen(p.id)}
+    >
       <div className="tfw-card__rule" />
 
       <div className="tfw-card__head">
@@ -48,7 +52,7 @@ function ProposalCard({ proposal, onOpen, onVote, onSign, onExecute, registry, c
       {!compact && (
         <div className="tfw-card__body">
           <div className="tfw-card__rationale">
-            {p.rationale.length > 180 ? p.rationale.slice(0, 178) + "…" : p.rationale}
+            {(p.rationale || "").length > 180 ? (p.rationale || "").slice(0, 178) + "…" : (p.rationale || "")}
           </div>
 
           <div className="tfw-card__meta">
@@ -112,7 +116,7 @@ function ProposalCard({ proposal, onOpen, onVote, onSign, onExecute, registry, c
           </button>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 

@@ -94,9 +94,9 @@ function OverviewPage({ state, actions }) {
             title="Action required"
             count={action.length}
             action={
-              <a className="tfw-link" onClick={() => actions.setTab("proposals")}>
+              <button type="button" className="tfw-link" onClick={() => actions.setTab("proposals")}>
                 See all proposals →
-              </a>
+              </button>
             }
           />
           <div className="tfw-cards">
@@ -271,8 +271,9 @@ function RegistryPage({ state, actions }) {
             const isExp = exp && exp <= now;
             const rel = propsByAddr[e.identifier.toLowerCase()] || [];
             return (
-              <div
+              <button
                 key={i}
+                type="button"
                 className={`tfw-table__row${isExp ? " tfw-table__row--expired" : ""}`}
                 onClick={() => actions.openAddr(e.identifier)}
               >
@@ -309,7 +310,7 @@ function RegistryPage({ state, actions }) {
                     ))
                   )}
                 </div>
-              </div>
+              </button>
             );
           })}
           <div className="tfw-table__foot">

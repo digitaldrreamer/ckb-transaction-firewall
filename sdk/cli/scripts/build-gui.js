@@ -33,17 +33,17 @@ const VENDOR = [
   {
     name: "react.js",
     url: "https://unpkg.com/react@18.3.1/umd/react.production.min.js",
-    sha256: null, // set after first successful fetch to pin the version
+    sha256: "d949f1c3687aedadcedac85261865f29b17cd273997e7f6b2bfc53b2f9d4c4dd",
   },
   {
     name: "react-dom.js",
     url: "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js",
-    sha256: null,
+    sha256: "35f4f974f4b2bcd44da73963347f8952e341f83909e4498227d4e26b98f66f0d",
   },
   {
     name: "babel.js",
     url: "https://unpkg.com/@babel/standalone@7.27.1/babel.min.js",
-    sha256: null,
+    sha256: "17128ff779ecfd0b0b4934b6b3248d9284a5b22b5d11c46310561788c1e84963",
   },
 ];
 
@@ -51,7 +51,7 @@ function fetchFile(url) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     function get(u) {
-      https.get(u, { headers: { "User-Agent": "ckb-firewall-build/1" } }, (res) => {
+      const req = https.get(u, { headers: { "User-Agent": "ckb-firewall-build/1" } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           get(res.headers.location);
           return;
@@ -60,7 +60,9 @@ function fetchFile(url) {
         res.on("data", c => chunks.push(c));
         res.on("end", () => resolve(Buffer.concat(chunks)));
         res.on("error", reject);
-      }).on("error", reject);
+      });
+      req.on("error", reject);
+      req.setTimeout(30_000, () => { req.destroy(); reject(new Error("Timeout fetching " + u)); });
     }
     get(url);
   });
@@ -69,10 +71,19 @@ function fetchFile(url) {
 async function getVendor(v) {
   const cachePath = join(CACHE, v.name);
   if (existsSync(cachePath)) {
-    return readFileSync(cachePath, "utf8");
+    const content = readFileSync(cachePath);
+    if (v.sha256) {
+      const actual = createHash("sha256").update(content).digest("hex");
+      if (actual !== v.sha256) throw new Error("Integrity check failed for " + v.name + " (got " + actual + ")");
+    }
+    return content.toString("utf8");
   }
   process.stdout.write("  Fetching " + v.url + " … ");
   const buf = await fetchFile(v.url);
+  if (v.sha256) {
+    const actual = createHash("sha256").update(buf).digest("hex");
+    if (actual !== v.sha256) throw new Error("Integrity check failed for " + v.name + " (got " + actual + ")");
+  }
   writeFileSync(cachePath, buf);
   console.log("done (" + Math.round(buf.length / 1024) + " KB)");
   return buf.toString("utf8");

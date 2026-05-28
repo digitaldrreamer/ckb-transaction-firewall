@@ -20,7 +20,7 @@ It covers the same operations as the CLI commands (`propose`, `vote`, `sign`, `e
 ckb-firewall gui
 ```
 
-The server starts on port `7979` by default and opens `http://ckb-firewall.localhost` in your browser automatically. If port 80 is unavailable, it falls back to `http://ckb-firewall.localhost:7979`.
+The server starts on port `7979` by default and opens `http://ckb-firewall.localhost` in your browser automatically. If port 80 is unavailable, it falls back to `http://ckb-firewall.localhost:7979` (or a random available port if 7979 is also in use).
 
 <figure>
   <img src={guiScreenshot.src} alt="The Transaction Firewall governance dashboard showing the Overview tab with active registry entries and open proposals" />
@@ -64,4 +64,4 @@ On macOS and Windows, running with `sudo`/Administrator is sufficient.
 
 ## Security note
 
-The GUI server only binds to `127.0.0.1`. Private keys submitted through sign and vote forms are used for a single cryptographic operation and immediately discarded — they are not stored, logged, or transmitted anywhere outside your machine.
+The GUI server listens on all loopback addresses (`127.0.0.1` and `::1`) and enforces at the handler level that only connections from loopback are served. Private keys submitted through sign and vote forms are converted to bytes and zeroed immediately after the cryptographic operation — they are not stored or logged. Note that JavaScript strings are immutable; the key material briefly exists as a string in V8 heap during transmission and JSON parsing, and cannot be zeroed at that stage. For highest assurance, use an air-gapped machine.

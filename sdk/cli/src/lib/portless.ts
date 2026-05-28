@@ -105,6 +105,12 @@ export function createProxy(appPort: number, proxyPort = 80): Promise<ProxyHandl
       req: http.IncomingMessage,
       res: http.ServerResponse,
     ): void {
+      const remoteAddr = req.socket.remoteAddress ?? "";
+      if (remoteAddr !== "127.0.0.1" && remoteAddr !== "::1" && remoteAddr !== "::ffff:127.0.0.1") {
+        res.writeHead(403, { "Content-Type": "text/plain" });
+        res.end("Forbidden");
+        return;
+      }
       const proxyReq = http.request(
         {
           hostname: "127.0.0.1",

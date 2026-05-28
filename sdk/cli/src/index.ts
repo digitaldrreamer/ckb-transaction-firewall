@@ -180,7 +180,7 @@ program
 
 program
   .command("gui")
-  .description("Open the governance dashboard in a browser (read-only explorer)")
+  .description("Open the governance dashboard in a browser (propose, vote, sign, execute)")
   .option("--port <n>", "Local port to listen on", "7979")
   .option("--no-open", "Print the URL but don't auto-open the browser")
   .action(async (opts: { port?: string; noOpen?: boolean }) => {

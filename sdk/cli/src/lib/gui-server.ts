@@ -4,6 +4,9 @@ import type { AddressInfo } from "node:net";
 import { join, dirname as pathDirname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+const _require = createRequire(import.meta.url);
+const _cliVersion: string = (_require("../../package.json") as { version: string }).version;
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import {
   listProposals, loadProposal, saveProposal, getProposalsDir,
@@ -89,7 +92,7 @@ async function buildApiData(opts: GuiServerOptions): Promise<string> {
     meta: {
       rpcUrl: opts.rpcUrl,
       fetchedAt: new Date().toISOString(),
-      cliVersion: "0.3.1",
+      cliVersion: _cliVersion,
     },
   });
 }
@@ -101,7 +104,7 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
     let body = "";
     req.on("data", (chunk: Buffer) => {
       body += chunk.toString();
-      if (body.length > 128 * 1024) reject(new Error("Request body too large"));
+      if (body.length > 128 * 1024) req.destroy(new Error("Request body too large"));
     });
     req.on("end", () => { try { resolve(JSON.parse(body)); } catch { reject(new Error("Invalid JSON body")); } });
     req.on("error", reject);
@@ -333,11 +336,11 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
     const sb = hexToBytes(v.signature);
     if (sb.length !== 65) throw new Error(`Vote from ${v.pubkey.slice(0,14)}… has invalid sig length`);
     const msgHash = voteSigningMessage(proposal.proposalIdHash, v.vote, v.timestamp, v.pubkey);
-    const sig65 = new Uint8Array(65);
-    sig65[0] = sb[64] as number;
-    sig65.set(sb.subarray(0, 64), 1);
+    const sig65v = new Uint8Array(65);
+    sig65v[0] = sb[64] as number;
+    sig65v.set(sb.subarray(0, 64), 1);
     let recoveredPk: string;
-    try { recoveredPk = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash))); }
+    try { recoveredPk = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65v, msgHash))); }
     catch { throw new Error(`Vote from ${v.pubkey.slice(0,14)}… has unrecoverable signature`); }
     if (recoveredPk !== v.pubkey) throw new Error(`Vote from ${v.pubkey.slice(0,14)}… signature mismatch`);
   }
@@ -375,11 +378,11 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
     for (const s of proposal.signatures) {
       const sb = hexToBytes(s.signature);
       if (sb.length !== 65) throw new Error(`Sig from signer ${s.signerIndex} invalid length`);
-      const sig65 = new Uint8Array(65);
-      sig65[0] = sb[64] as number;
-      sig65.set(sb.subarray(0, 64), 1);
+      const sig65s = new Uint8Array(65);
+      sig65s[0] = sb[64] as number;
+      sig65s.set(sb.subarray(0, 64), 1);
       let rk: string;
-      try { rk = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash))); }
+      try { rk = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65s, msgHash))); }
       catch { throw new Error(`Sig from signer ${s.signerIndex} unrecoverable`); }
       const expected = bytesToHex(govHeader.pubkeys[s.signerIndex]!);
       if (rk !== expected) throw new Error(`Sig from signer ${s.signerIndex} does not match on-chain pubkey`);
@@ -441,6 +444,10 @@ function handleImport(body: unknown): object {
   });
   if (computed !== p.proposalIdHash)
     throw new Error("proposalIdHash integrity check failed — file may be tampered");
+
+  const expectedId = computed.slice(2, 14);
+  if (!/^[0-9a-f]{12}$/.test(String(p.id)) || String(p.id) !== expectedId)
+    throw new Error("id does not match proposalIdHash");
 
   const recomputedDigest = computeVoteDigestHash(p.votes as Proposal["votes"]);
   if (recomputedDigest !== p.voteDigestHash)
@@ -516,10 +523,11 @@ function _buildGuiHtml(apiDataJson: string): string {
     meta: Record<string, unknown>;
   };
 
+  const safeJson = (v: unknown) => JSON.stringify(v).replace(/<\/script/gi, "<\\/script");
   const liveScript = `<script>
-window.TFW_PROPOSALS = ${JSON.stringify(d.proposals ?? [])};
-window.TFW_REGISTRY_ENTRIES = ${JSON.stringify(d.registry?.entries ?? [])};
-window.TFW_META = ${JSON.stringify({
+window.TFW_PROPOSALS = ${safeJson(d.proposals ?? [])};
+window.TFW_REGISTRY_ENTRIES = ${safeJson(d.registry?.entries ?? [])};
+window.TFW_META = ${safeJson({
     threshold: 3,
     governanceSetSize: 5,
     reviewWindowHours: 72,
@@ -1509,6 +1517,13 @@ async function handleRequest(
   res: ServerResponse,
   opts: GuiServerOptions,
 ): Promise<void> {
+  const remoteAddr = req.socket.remoteAddress ?? "";
+  if (remoteAddr !== "127.0.0.1" && remoteAddr !== "::1" && remoteAddr !== "::ffff:127.0.0.1") {
+    res.writeHead(403, { "Content-Type": "text/plain" });
+    res.end("Forbidden");
+    return;
+  }
+
   const url = req.url ?? "/";
   const method = (req.method ?? "GET").toUpperCase();
 

@@ -352,8 +352,9 @@ function AddressDetailContent({ identifier, registry, proposals, actions }) {
           </div>
           <div className="tfw-list">
             {related.map(p => (
-              <div
+              <button
                 key={p.id}
+                type="button"
                 className="tfw-list-row tfw-list-row--clickable"
                 onClick={() => actions.openProposal(p.id)}
               >
@@ -365,7 +366,7 @@ function AddressDetailContent({ identifier, registry, proposals, actions }) {
                 <span style={{ marginLeft: "auto" }}>
                   <TFW_StatusBadge proposal={p} size="sm" />
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -752,16 +753,18 @@ function SignForm({ proposal, meta, onSubmit, onClose }) {
 // ─── Execute form ────────────────────────────────────────────────────────────
 function ExecuteForm({ proposal, onSubmit, onClose }) {
   const [submitting, setSubmitting] = React.useState(false);
-  const [done, setDone] = React.useState(false);
+  const [success, setSuccess] = React.useState(false);
+  const [error, setError] = React.useState("");
 
   const submit = () => {
+    setError("");
     setSubmitting(true);
     fetch('/api/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ proposalId: proposal.id }) })
       .then(r => r.json())
       .then(d => {
         setSubmitting(false);
-        if (!d.ok) { setDone({ error: d.error || 'Server error' }); return; }
+        if (!d.ok) { setError(d.error || 'Server error'); return; }
         const blob = new Blob([JSON.stringify(d.txJson, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -769,13 +772,13 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
         document.body.appendChild(a); a.click();
         document.body.removeChild(a); URL.revokeObjectURL(url);
         onSubmit(proposal.id);
-        setDone(true);
+        setSuccess(true);
         setTimeout(onClose, 1500);
       })
-      .catch(e => { setSubmitting(false); setDone({ error: e.message }); });
+      .catch(e => { setSubmitting(false); setError(e.message); });
   };
 
-  if (done) {
+  if (success) {
     return (
       <div className="tfw-form-success">
         <div className="tfw-form-success__glyph">↓</div>
@@ -813,6 +816,8 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
           <code className="tfw-mono">gov_execute_tx_{proposal.id}.json</code>
         </div>
       </div>
+
+      {error && <div className="tfw-field__err" style={{ marginTop: 12 }}>{error}</div>}
 
       <div className="tfw-form-actions">
         <button type="button" className="tfw-btn tfw-btn--ghost" onClick={onClose}>Cancel</button>

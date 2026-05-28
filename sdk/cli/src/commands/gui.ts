@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { spawn } from "node:child_process";
 import chalk from "chalk";
 import { startGuiServer } from "../lib/gui-server.js";
 import { inspectDefaults } from "./inspect.js";
@@ -18,7 +18,11 @@ export interface GuiOptions {
 
 export async function guiCommand(opts: GuiOptions): Promise<void> {
   const defs = inspectDefaults();
-  const appPort = opts.port ? parseInt(opts.port, 10) : 7979;
+  const appPort = opts.port !== undefined ? parseInt(opts.port, 10) : 7979;
+  if (isNaN(appPort) || appPort < 1 || appPort > 65535) {
+    console.error(chalk.red(`Invalid port: ${opts.port} (must be 1–65535)`));
+    process.exit(1);
+  }
 
   console.log();
   console.log(chalk.cyan("⬡"), chalk.bold("CKB Firewall GUI"), chalk.dim("— starting…"));
@@ -112,13 +116,18 @@ export async function guiCommand(opts: GuiOptions): Promise<void> {
 }
 
 function openBrowser(url: string): void {
-  const cmd =
-    process.platform === "darwin" ? `open "${url}"` :
-    process.platform === "win32"  ? `start "" "${url}"` :
-                                    `xdg-open "${url}"`;
-  exec(cmd, (err) => {
-    if (err) {
-      console.log(chalk.dim(`  (Could not open browser automatically — visit the URL above)`));
-    }
+  let cmd: string;
+  let args: string[];
+  if (process.platform === "darwin") {
+    cmd = "open"; args = [url];
+  } else if (process.platform === "win32") {
+    cmd = "cmd.exe"; args = ["/c", "start", "", url];
+  } else {
+    cmd = "xdg-open"; args = [url];
+  }
+  const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
+  child.on("error", () => {
+    console.log(chalk.dim(`  (Could not open browser automatically — visit the URL above)`));
   });
+  child.unref();
 }

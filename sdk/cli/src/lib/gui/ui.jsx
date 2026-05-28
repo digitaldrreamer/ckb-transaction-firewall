@@ -14,16 +14,21 @@ function trunc(s, n = 18) {
 function fmtDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
   return d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
 }
 
 function fmtDateShort(iso) {
   if (!iso) return "—";
-  return new Date(iso).toISOString().slice(0, 10);
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toISOString().slice(0, 10);
 }
 
 function relTime(iso) {
-  const ms = Date.now() - new Date(iso).getTime();
+  const d = new Date(iso);
+  if (!iso || isNaN(d.getTime())) return "—";
+  const ms = Date.now() - d.getTime();
   const abs = Math.abs(ms);
   const past = ms >= 0;
   const min = 60_000, hour = 60 * min, day = 24 * hour;
@@ -36,6 +41,7 @@ function relTime(iso) {
 }
 
 function reviewCountdown(iso) {
+  if (!iso || isNaN(new Date(iso).getTime())) return { text: "—", done: false };
   const ms = new Date(iso).getTime() - Date.now();
   if (ms <= 0) return { text: "complete", done: true };
   const totalMin = Math.floor(ms / 60_000);
@@ -54,7 +60,10 @@ function countYes(p) { return (p.votes || []).filter(v => v.vote === "yes").leng
 function countNo(p) { return (p.votes || []).filter(v => v.vote === "no").length; }
 function countAbstain(p) { return (p.votes || []).filter(v => v.vote === "abstain").length; }
 function sigCount(p) { return (p.signatures || []).length; }
-function reviewPassed(p) { return Date.now() >= new Date(p.reviewWindowEndsAt).getTime(); }
+function reviewPassed(p) {
+  const t = new Date(p.reviewWindowEndsAt).getTime();
+  return !isNaN(t) && Date.now() >= t;
+}
 function isReady(p) {
   return reviewPassed(p)
     && countYes(p) >= 3
