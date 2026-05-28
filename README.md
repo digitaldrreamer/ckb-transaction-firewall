@@ -182,7 +182,7 @@ Full outpoints and Type IDs: [`notes/deployments/testnet.registry.json`](./notes
 |---|---|
 | [Why this exists](https://ckb-firewall.drreamer.digital/concepts/why-this-exists/) | What the firewall does and does not do |
 | [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/) | Lock, registry, SDK, and governance |
-| [Wallet integration](https://ckb-firewall.drreamer.digital/getting-started/wallet-integration/) | Step-by-step for wallet developers |
+| [Wallet integration](https://ckb-firewall.drreamer.digital/guides/typescript-wallet-integration/) | Step-by-step for wallet developers |
 | [Governance runbook](https://ckb-firewall.drreamer.digital/operations/governance-runbook/) | Multi-party update coordination |
 | [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/) | Live outpoints and registry values |
 | [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/) | Multi-registry deployment and self-managed blacklist registries |
