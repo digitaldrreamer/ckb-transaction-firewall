@@ -109,6 +109,7 @@ function App() {
   const [modal, setModal] = useState(null); // { kind, payload }
   const [toasts, setToasts] = useState([]);
   const [now, setNow] = useState(Date.now());
+  const [connState, setConnState] = useState("ok");
 
   // tick once a minute to update countdowns
   useEffect(() => {
@@ -120,15 +121,18 @@ function App() {
   useEffect(() => {
     const refresh = () => fetch('/api/data')
       .then(r => r.json())
-      .then(d => dispatch({ type: "SET_DATA",
-        proposals: d.proposals || [],
-        registry: (d.registry && d.registry.entries) || [],
-        meta: Object.assign({}, d.meta || {}, {
-          registryTxHash: d.registry && d.registry.txHash,
-          registryError: d.registry && d.registry.error,
-        }),
-      }))
-      .catch(() => {});
+      .then(d => {
+        setConnState("ok");
+        dispatch({ type: "SET_DATA",
+          proposals: d.proposals || [],
+          registry: (d.registry && d.registry.entries) || [],
+          meta: Object.assign({}, d.meta || {}, {
+            registryTxHash: d.registry && d.registry.txHash,
+            registryError: d.registry && d.registry.error,
+          }),
+        });
+      })
+      .catch(() => setConnState("err"));
     const rid = setInterval(refresh, 15000);
     return () => clearInterval(rid);
   }, []);
@@ -232,9 +236,9 @@ function App() {
             onClick={actions.openCreate}
           >+ New proposal</button>
           <div className="tfw-conn">
-            <TFW_ConnectionDot state="ok" />
+            <TFW_ConnectionDot state={connState} />
             <div className="tfw-conn__text">
-              <div className="tfw-conn__line1">Connected</div>
+              <div className="tfw-conn__line1">{connState === "ok" ? "Connected" : "Disconnected"}</div>
               <div className="tfw-conn__line2">{TFW_trunc(state.meta?.rpcUrl || "unknown", 24)}</div>
             </div>
           </div>
