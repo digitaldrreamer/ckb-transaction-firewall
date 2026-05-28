@@ -193,7 +193,7 @@ function App() {
             </div>
             <div className="tfw-brand__text">
               <div className="tfw-brand__name">Transaction Firewall</div>
-              <div className="tfw-brand__sub">{state.meta?.cliVersion || "v0.3.1"} · 3-of-5 multisig</div>
+              <div className="tfw-brand__sub">{state.meta?.cliVersion || "v0.4.0"} · 3-of-5 multisig</div>
             </div>
           </div>
         </div>
