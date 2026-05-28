@@ -3,7 +3,7 @@ title: GUI Mode
 description: Launch a browser-based governance interface for the CKB Transaction Firewall CLI.
 ---
 
-import cliScreenshot from '../../../../../assets/cli-screenshot.png';
+import guiScreenshot from '../../../../../assets/gui-screenshot.png';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 <Aside type="caution" label="Experimental">
@@ -23,8 +23,8 @@ ckb-firewall gui
 The server starts on port `7979` by default and opens `http://ckb-firewall.localhost` in your browser automatically. If port 80 is unavailable, it falls back to `http://ckb-firewall.localhost:7979`.
 
 <figure>
-  <img src={cliScreenshot.src} alt="ckb-firewall CLI — the gui command is listed alongside the other governance commands" />
-  <figcaption>The GUI command is available alongside the full CLI toolkit.</figcaption>
+  <img src={guiScreenshot.src} alt="The Transaction Firewall governance dashboard showing the Overview tab with active registry entries and open proposals" />
+  <figcaption>The Overview tab shows registry size, open proposals, and any actions waiting on your key.</figcaption>
 </figure>
 
 Press `Ctrl+C` in the terminal to stop the server.
