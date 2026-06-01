@@ -11,6 +11,7 @@ import {
   loadProposal,
   saveProposal,
   voteSigningMessage,
+  computeVoteDigestHash,
 } from "../lib/proposals.js";
 import { bytesToHex, governanceTreasuryLockHash, hexToBytes, scriptToMoleculeBytes } from "../lib/blkl.js";
 import { getLiveCell, getLiveCellsByLock } from "../lib/rpc.js";
@@ -263,6 +264,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     process.exit(1);
   }
 
+  // ── ECDSA signature verification ─────────────────────────────────────────
   for (const v of proposal.votes) {
     const sigBytes = hexToBytes(v.signature);
     if (sigBytes.length !== 65) {
@@ -286,17 +288,39 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     }
   }
 
-  if (state.governanceHeader?.validatorCount) {
-    const rootHex = bytesToHex(state.governanceHeader.validatorMerkleRoot);
-    for (const v of proposal.votes) {
-      if (!Array.isArray(v.merkleProof) || typeof v.merkleLeafIndex !== "number") {
-        console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}... is missing a Merkle proof.`));
-        process.exit(1);
-      }
-      if (!verifyMerkleProof(rootHex, v.pubkey, v.merkleProof, v.merkleLeafIndex)) {
-        console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}... is not in the on-chain validator set.`));
-        process.exit(1);
-      }
+  // ── voteDigestHash integrity check ───────────────────────────────────────
+  // Recompute from the actual vote records in the proposal file. If the file was
+  // tampered with (votes added/removed/modified after signing), this catches it
+  // client-side before submitting a transaction that would fail on-chain.
+  const recomputedDigest = computeVoteDigestHash(proposal.votes);
+  if (recomputedDigest.toLowerCase() !== proposal.voteDigestHash.toLowerCase()) {
+    console.error(logSymbols.error, chalk.red("Vote digest mismatch — proposal vote data may have been tampered with."));
+    console.error(chalk.dim(`  Stored:     ${proposal.voteDigestHash}`));
+    console.error(chalk.dim(`  Recomputed: ${recomputedDigest}`));
+    process.exit(1);
+  }
+
+  // ── on-chain Merkle membership verification ───────────────────────────────
+  // Every vote must belong to the current on-chain validator set. These checks
+  // mirror what governance-lock runs at consensus — any failure here means the
+  // transaction would be rejected on-chain.
+  if (!state.governanceHeader) {
+    console.error(logSymbols.error, chalk.red("Could not parse governance header from registry cell — cannot verify vote authorization."));
+    process.exit(1);
+  }
+  if (state.governanceHeader.validatorCount === 0) {
+    console.error(logSymbols.error, chalk.red("Registry governance header has zero validators — cannot authorize votes."));
+    process.exit(1);
+  }
+  const rootHex = bytesToHex(state.governanceHeader.validatorMerkleRoot);
+  for (const v of proposal.votes) {
+    if (!Array.isArray(v.merkleProof) || typeof v.merkleLeafIndex !== "number") {
+      console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}... is missing a Merkle proof — re-cast this vote with the current CLI.`));
+      process.exit(1);
+    }
+    if (!verifyMerkleProof(rootHex, v.pubkey, v.merkleProof, v.merkleLeafIndex)) {
+      console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}... is not in the on-chain validator set.`));
+      process.exit(1);
     }
   }
 

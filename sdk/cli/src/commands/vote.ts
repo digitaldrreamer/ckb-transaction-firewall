@@ -120,8 +120,9 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
   }
   const { proof: merkleProof, leafIndex: merkleLeafIndex } = merkleResult!;
 
-  // Verify the local validator set matches the on-chain Merkle root so votes won't be
-  // silently rejected at execution time if the validator set has rotated.
+  // On-chain Merkle root check is mandatory. A vote recorded against a stale or wrong
+  // validator set will be rejected at execute time, so we must confirm on-chain state now.
+  // Network failure is not safe to ignore — fail hard rather than record an invalid vote.
   const localRoot = computeMerkleRoot(validatorSet);
   try {
     const registryIndexInt = Number.parseInt(opts.registryIndex, 10);
@@ -133,15 +134,19 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
       const onChainRoot = bytesToHex(govHeader.validatorMerkleRoot);
       if (onChainRoot.toLowerCase() !== localRoot.toLowerCase()) {
         console.error(logSymbols.error, chalk.red(
-          "Validator set mismatch: local TESTNET_GOVERNANCE_PUBKEYS do not match the on-chain Merkle root.",
+          "Validator set mismatch: your governance pubkeys do not match the on-chain Merkle root.",
         ));
-        console.error(chalk.dim("  This vote will be rejected at execution time. Update to the current validator set."));
+        console.error(chalk.dim("  The validator set may have been rotated. Update your local governance pubkeys before voting."));
         privateKeyBytes.fill(0);
         process.exit(1);
       }
     }
-  } catch {
-    console.log(chalk.dim("  Note: could not verify on-chain validator set — network unavailable, proceeding with local check."));
+  } catch (err) {
+    console.error(logSymbols.error, chalk.red("Cannot reach the CKB node — on-chain validator set verification is required before voting."));
+    console.error(chalk.dim(`  RPC: ${opts.rpcUrl}`));
+    console.error(chalk.dim(`  ${err instanceof Error ? err.message : String(err)}`));
+    privateKeyBytes.fill(0);
+    process.exit(1);
   }
 
   // Duplicate check by pubkey.
@@ -187,7 +192,7 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
 
   // format:"recovered" returns Uint8Array[recovery_id(1), r(32), s(32)]
   const sigRaw = secp256k1.sign(msgHash, privateKeyBytes, { lowS: true, format: "recovered" });
-  // Store as [r(32), s(32), recovery_id(1)] — matches ProposalSignature convention
+  // Store as [r(32), s(32), recovery_id(1)] for the on-chain vote witness.
   const sigBytes = new Uint8Array(65);
   sigBytes.set(sigRaw.slice(1), 0);
   sigBytes[64] = sigRaw[0] ?? 0;
@@ -196,15 +201,6 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
   const signature = bytesToHex(sigBytes);
 
   // ── record vote ──────────────────────────────────────────────────────────
-
-  // Block new votes once signing has started — adding a vote would change voteDigestHash
-  // and invalidate any signatures already collected.
-  if (proposal.signatures.length > 0) {
-    console.error(logSymbols.error, chalk.red(
-      "Cannot record vote — signing has already begun. Adding a vote would invalidate existing signatures.",
-    ));
-    process.exit(1);
-  }
 
   proposal.votes.push({ pubkey, vote, timestamp, signature, merkleLeafIndex, merkleProof });
   proposal.voteDigestHash = computeVoteDigestHash(proposal.votes);
@@ -224,8 +220,8 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
 
   if (approved) {
     console.log();
-    console.log(logSymbols.success, chalk.green("Vote threshold met — proposal approved for signing."));
-    console.log(`  Next: ${chalk.dim(`ckb-firewall sign --proposal ${proposal.id}`)}`);
+    console.log(logSymbols.success, chalk.green("Vote threshold met — proposal approved for execution."));
+    console.log(`  Next: ${chalk.dim(`ckb-firewall execute --proposal ${proposal.id}`)}`);
   } else {
     console.log(`  Need ${VOTE_THRESHOLD - yesCount} more yes vote(s).`);
   }
