@@ -121,6 +121,9 @@ function App() {
           meta: Object.assign({}, d.meta || {}, {
             registryTxHash: d.registry && d.registry.txHash,
             registryError: d.registry && d.registry.error,
+            treasury: (d.registry && d.registry.treasury) || null,
+            threshold: (d.registry && d.registry.threshold) || null,
+            governanceSetSize: (d.registry && d.registry.validatorCount) || null,
           }),
         });
       })
@@ -384,6 +387,7 @@ function App() {
         {modalProposal && (
           <TFW_ExecuteForm
             proposal={modalProposal}
+            meta={state.meta}
             onSubmit={(result) => {
               if (result.proposal) dispatch({ type: "UPDATE_PROPOSAL", proposal: result.proposal });
               addToast("success", "TX downloaded — broadcast it via ckb-cli to complete execution.");

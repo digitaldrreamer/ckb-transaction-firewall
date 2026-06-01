@@ -69,6 +69,8 @@ async function buildApiData(opts: GuiServerOptions): Promise<string> {
     txHash: string;
     index: number;
     version: number;
+    threshold: number | null;
+    validatorCount: number | null;
     treasury: Awaited<ReturnType<typeof loadTreasuryStatus>>;
     error: string | null;
   };
@@ -87,6 +89,8 @@ async function buildApiData(opts: GuiServerOptions): Promise<string> {
       txHash,
       index,
       version: payload.version,
+      threshold: governanceHeader?.threshold ?? null,
+      validatorCount: governanceHeader?.validatorCount ?? null,
       treasury: await loadTreasuryStatus(opts.rpcUrl, cell, governanceHeader),
       error: null,
       entries: payload.entries.map((e) => ({
@@ -99,6 +103,8 @@ async function buildApiData(opts: GuiServerOptions): Promise<string> {
       txHash: opts.registryTx,
       index: opts.registryIndex,
       version: 0,
+      threshold: null,
+      validatorCount: null,
       treasury: null,
       error: err instanceof Error ? err.message : String(err),
       entries: [],
@@ -636,7 +642,7 @@ function _buildGuiHtml(apiDataJson: string): string {
 
   const d = JSON.parse(apiDataJson) as {
     proposals: unknown[];
-    registry: { entries?: unknown[]; txHash?: string; error?: string | null; treasury?: unknown };
+    registry: { entries?: unknown[]; txHash?: string; error?: string | null; treasury?: unknown; threshold?: number | null; validatorCount?: number | null };
     meta: Record<string, unknown>;
   };
 
@@ -645,8 +651,8 @@ function _buildGuiHtml(apiDataJson: string): string {
 window.TFW_PROPOSALS = ${safeJson(d.proposals ?? [])};
 window.TFW_REGISTRY_ENTRIES = ${safeJson(d.registry?.entries ?? [])};
 window.TFW_META = ${safeJson({
-    threshold: 3,
-    governanceSetSize: 5,
+    threshold: d.registry?.threshold ?? 3,
+    governanceSetSize: d.registry?.validatorCount ?? 5,
     reviewWindowHours: 72,
     registryTxHash: d.registry?.txHash ?? null,
     registryError: d.registry?.error ?? null,

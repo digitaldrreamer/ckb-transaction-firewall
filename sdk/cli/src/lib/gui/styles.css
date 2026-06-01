@@ -310,6 +310,79 @@ a:focus, button:focus { outline: 2px solid var(--c-ink); outline-offset: 1px; }
 
 .tfw-page { display: flex; flex-direction: column; gap: 36px; }
 
+.tfw-treasury {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 18px 24px;
+  align-items: center;
+  padding: 16px 0;
+  border-top: 2px solid var(--c-rule);
+  border-bottom: 1px solid var(--c-hairline);
+}
+.tfw-treasury--compact {
+  margin-bottom: -8px;
+}
+.tfw-treasury--warn {
+  border-top-color: var(--c-red);
+  background: linear-gradient(90deg, rgba(183, 58, 37, 0.08), transparent);
+}
+.tfw-treasury__eyebrow {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--c-red);
+  text-transform: uppercase;
+  margin-bottom: 7px;
+}
+.tfw-treasury__line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  color: var(--c-ink-2);
+}
+.tfw-treasury__line strong {
+  font-family: var(--f-serif);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--c-ink);
+}
+.tfw-treasury__line span {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--c-ink-mute);
+}
+.tfw-treasury__meter {
+  height: 10px;
+  border: 1px solid var(--c-ink);
+  background: var(--c-paper);
+  position: relative;
+}
+.tfw-treasury__meter span {
+  display: block;
+  height: 100%;
+  background: var(--c-green);
+}
+.tfw-treasury--warn .tfw-treasury__meter span {
+  background: var(--c-red);
+}
+.tfw-treasury__donate {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  color: var(--c-red);
+  font-weight: 600;
+}
+.tfw-treasury__donate code {
+  color: var(--c-ink);
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
 .tfw-pagehead {
   display: flex;
   align-items: flex-end;
@@ -1310,6 +1383,15 @@ select.tfw-input {
   padding-top: 16px;
   border-top: 1px solid var(--c-hairline);
 }
+.tfw-advanced-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px dashed var(--c-hairline);
+  background: var(--c-paper-soft);
+}
 
 /* ── Forms ───────────────────────────────────────────────────────────────── */
 .tfw-form { display: flex; flex-direction: column; gap: 18px; }
@@ -1396,6 +1478,22 @@ select.tfw-input {
   justify-content: flex-end;
   padding-top: 8px;
   border-top: 1px solid var(--c-hairline);
+}
+
+.tfw-step {
+  border: 1px solid var(--c-hairline);
+  border-radius: 4px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tfw-step__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
 }
 
 .tfw-form-success {
@@ -1511,6 +1609,7 @@ body[data-density="compact"] .tfw-page { gap: 26px; }
   .tfw-hero__title { font-size: 42px; }
   .tfw-pagehead__title { font-size: 36px; }
   .tfw-pagehead { flex-direction: column; align-items: flex-start; }
+  .tfw-treasury { grid-template-columns: 1fr; }
   .tfw-stat__num { font-size: 38px; }
   .tfw-form-row { grid-template-columns: 1fr; }
   .tfw-radio-grp { grid-template-columns: 1fr; }

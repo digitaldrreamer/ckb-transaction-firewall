@@ -424,7 +424,7 @@ function CreateForm({ onSubmit, onClose }) {
         </div>
       </FormField>
 
-      <FormField label="Lock args" hint="0x-prefixed hex" error={errors.lockArgs}>
+      <FormField label="Lock args" hint="hex identifier of the CKB lock script to blacklist" error={errors.lockArgs}>
         <input
           type="text"
           className="tfw-input tfw-mono"
@@ -487,13 +487,22 @@ function CreateForm({ onSubmit, onClose }) {
           />
         </FormField>
         {action === "add" && (
-          <FormField label="Expires at" hint="unix timestamp, 0 = never">
+          <FormField
+            label="Expires at"
+            hint={expires && expires !== "0"
+              ? `Unix timestamp: ${expires}`
+              : "no expiry — entry is permanent"}
+          >
             <input
-              type="number"
-              className="tfw-input tfw-mono"
-              value={expires}
-              min="0"
-              onChange={e => setExpires(e.target.value)}
+              type="datetime-local"
+              className="tfw-input"
+              value={expires && expires !== "0"
+                ? new Date(Number(expires) * 1000).toISOString().slice(0, 16)
+                : ""}
+              min={new Date().toISOString().slice(0, 16)}
+              onChange={e => setExpires(e.target.value
+                ? String(Math.floor(new Date(e.target.value).getTime() / 1000))
+                : "0")}
             />
           </FormField>
         )}
@@ -614,24 +623,17 @@ function AnchorForm({ proposal, meta, onSubmit, onClose }) {
   const [toAddress, setToAddress] = React.useState("");
   const [proposalTx, setProposalTx] = React.useState(proposal.proposalCellTxHash || "");
   const [proposalIndex, setProposalIndex] = React.useState(String(proposal.proposalCellIndex ?? 0));
-  const [showRecordFields, setShowRecordFields] = React.useState(Boolean(proposal.proposalCellTxHash));
-  const [result, setResult] = React.useState(null);
+  // If already anchored, skip to step 2
+  const [step, setStep] = React.useState(proposal.proposalCellTxHash ? 2 : 1);
+  const [command, setCommand] = React.useState(null);
+  const [recordResult, setRecordResult] = React.useState(null);
   const [error, setError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const treasuryBacked = Boolean(meta?.treasury);
-  const hasOutpoint = showRecordFields && proposalTx.trim().length > 0;
 
-  const submit = () => {
+  const generateCommand = () => {
     setError("");
-    if (hasOutpoint && !/^0x[0-9a-fA-F]{64}$/.test(proposalTx.trim())) {
-      setError("Proposal tx must be 0x + 64 hex chars");
-      return;
-    }
-    if (hasOutpoint && !/^\d+$/.test(proposalIndex.trim())) {
-      setError("Proposal index must be a non-negative integer");
-      return;
-    }
-    if (!treasuryBacked && !hasOutpoint && !toAddress.trim()) {
+    if (!treasuryBacked && !toAddress.trim()) {
       setError("Payment recipient address is required for non-treasury registries.");
       return;
     }
@@ -640,14 +642,41 @@ function AnchorForm({ proposal, meta, onSubmit, onClose }) {
       body: JSON.stringify({
         proposalId: proposal.id,
         toAddress: treasuryBacked ? undefined : toAddress.trim(),
-        proposalTx: hasOutpoint ? proposalTx.trim() : undefined,
-        proposalIndex: hasOutpoint ? proposalIndex.trim() : undefined,
       }) })
       .then(r => r.json())
       .then(d => {
         setSubmitting(false);
         if (!d.ok) { setError(d.error || 'Server error'); return; }
-        setResult(d);
+        setCommand(d.command);
+        if (d.proposal) onSubmit(d.proposal);
+        setStep(2);
+      })
+      .catch(e => { setSubmitting(false); setError(e.message); });
+  };
+
+  const recordAnchor = () => {
+    setError("");
+    if (!/^0x[0-9a-fA-F]{64}$/.test(proposalTx.trim())) {
+      setError("Proposal tx must be 0x + 64 hex chars");
+      return;
+    }
+    if (!/^\d+$/.test(proposalIndex.trim())) {
+      setError("Proposal index must be a non-negative integer");
+      return;
+    }
+    setSubmitting(true);
+    fetch('/api/anchor', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proposalId: proposal.id,
+        proposalTx: proposalTx.trim(),
+        proposalIndex: proposalIndex.trim(),
+        toAddress: treasuryBacked ? undefined : toAddress.trim(),
+      }) })
+      .then(r => r.json())
+      .then(d => {
+        setSubmitting(false);
+        if (!d.ok) { setError(d.error || 'Server error'); return; }
+        setRecordResult(d);
         onSubmit(d.proposal);
       })
       .catch(e => { setSubmitting(false); setError(e.message); });
@@ -656,13 +685,12 @@ function AnchorForm({ proposal, meta, onSubmit, onClose }) {
   return (
     <div className="tfw-form">
       <SecurityNote kind="info">
-        {treasuryBacked
-          ? "This registry uses the on-chain treasury. Generate the command, run it in a terminal, then record the accepted tx hash."
-          : "This registry has no treasury metadata. Enter a recipient address to create a proposal cell manually."}
+        Anchoring writes a proposal cell on-chain that enforces the 72-hour review window via CKB consensus.
+        {!treasuryBacked && " This registry has no treasury — you'll need a recipient address for the proposal cell deposit."}
       </SecurityNote>
 
-      {!treasuryBacked && (
-        <FormField label="Address for proposal-cell payment" hint="Required only for non-treasury registries.">
+      {!treasuryBacked && step === 1 && (
+        <FormField label="Address for proposal-cell deposit" hint="who pays the on-chain capacity">
           <input
             className="tfw-input tfw-mono"
             value={toAddress}
@@ -674,91 +702,105 @@ function AnchorForm({ proposal, meta, onSubmit, onClose }) {
         </FormField>
       )}
 
-      {!showRecordFields && (
-        <button
-          type="button"
-          className="tfw-btn tfw-btn--ghost"
-          style={{ alignSelf: "flex-start" }}
-          onClick={() => setShowRecordFields(true)}
-        >
-          I already submitted an anchor
-        </button>
-      )}
-
-      {showRecordFields && (
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 120px", gap: 12 }}>
-          <FormField label="Accepted anchor tx hash" hint="Optional until after running the copied command">
-            <input
-              className="tfw-input tfw-mono"
-              value={proposalTx}
-              onChange={e => setProposalTx(e.target.value)}
-              placeholder="0x..."
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </FormField>
-          <FormField label="Cell index">
-            <input
-              className="tfw-input tfw-mono"
-              value={proposalIndex}
-              onChange={e => setProposalIndex(e.target.value)}
-              placeholder="0"
-              inputMode="numeric"
-            />
-          </FormField>
-        </div>
-      )}
-
-      {result && (
-        <div className="tfw-exec-preview">
-          <div className="tfw-exec-preview__row">
-            <span>Proposal hash</span>
-            <code className="tfw-mono" style={{ fontSize: "11px" }}>{TFW_trunc(result.proposalDataHash, 30)}</code>
+      {/* ── Step 1: generate the CLI command ── */}
+      <div className="tfw-step">
+        <div className="tfw-step__label">Step 1 — Generate the anchor command</div>
+        {command ? (
+          <>
+            <TFW_CodeBlock label={treasuryBacked ? "Run in your terminal" : "Run in your terminal (ckb-cli)"}>{command}</TFW_CodeBlock>
+            <div className="tfw-field__hint">
+              Copy and run the command above. Wait until the transaction is accepted on-chain, then complete Step 2.
+            </div>
+          </>
+        ) : step === 1 ? (
+          <>
+            <div className="tfw-field__hint">
+              This generates the CLI command to create the proposal cell. You will run it in a terminal.
+            </div>
+            <button
+              type="button"
+              className="tfw-btn tfw-btn--accent"
+              style={{ alignSelf: "flex-start" }}
+              onClick={generateCommand}
+              disabled={submitting}
+            >
+              {submitting ? "Preparing…" : "Generate anchor command"}
+            </button>
+          </>
+        ) : (
+          <div className="tfw-field__hint">
+            Already done.{" "}
+            <button type="button" className="tfw-link" onClick={() => setStep(1)}>Re-generate</button>
           </div>
-          <div className="tfw-exec-preview__row">
-            <span>Review delay</span>
-            <span className="tfw-mono">{result.reviewDelayMs} ms</span>
-          </div>
-          {result.proposal?.proposalCellTxHash && (
+        )}
+      </div>
+
+      {/* ── Step 2: record the accepted tx hash ── */}
+      <div className="tfw-step">
+        <div className="tfw-step__label">Step 2 — Record the accepted transaction</div>
+        {recordResult?.anchorVerified ? (
+          <div className="tfw-exec-preview">
             <div className="tfw-exec-preview__row">
-              <span>{result.anchorVerified ? "Verified cell" : "Stored cell"}</span>
+              <span>Verified cell</span>
               <code className="tfw-mono" style={{ fontSize: "11px" }}>
-                {TFW_trunc(result.proposal.proposalCellTxHash, 22)}:{result.proposal.proposalCellIndex ?? 0}
+                {TFW_trunc(recordResult.proposal.proposalCellTxHash, 22)}:{recordResult.proposal.proposalCellIndex ?? 0}
               </code>
             </div>
-          )}
-        </div>
-      )}
-
-      {result?.command && (
-        <TFW_CodeBlock label={result.treasuryBacked ? "Build typed treasury anchor" : "Create proposal cell"}>{result.command}</TFW_CodeBlock>
-      )}
-
-      {result?.command && !result.anchorVerified && (
-        <div className="tfw-field__hint" style={{ marginTop: 8 }}>
-          Copy and run this command, wait until the transaction is accepted, then paste its tx hash and output index above.
-        </div>
-      )}
+            <div className="tfw-exec-preview__row">
+              <span>Proposal hash</span>
+              <code className="tfw-mono" style={{ fontSize: "11px" }}>{TFW_trunc(recordResult.proposalDataHash, 30)}</code>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="tfw-field__hint">
+              After the anchor transaction is accepted, paste the tx hash below to verify and record it.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 120px", gap: 12 }}>
+              <FormField label="Accepted anchor tx hash">
+                <input
+                  className="tfw-input tfw-mono"
+                  value={proposalTx}
+                  onChange={e => setProposalTx(e.target.value)}
+                  placeholder="0x..."
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </FormField>
+              <FormField label="Output index">
+                <input
+                  className="tfw-input tfw-mono"
+                  value={proposalIndex}
+                  onChange={e => setProposalIndex(e.target.value)}
+                  placeholder="0"
+                  inputMode="numeric"
+                />
+              </FormField>
+            </div>
+            <button
+              type="button"
+              className="tfw-btn tfw-btn--accent"
+              style={{ alignSelf: "flex-start" }}
+              onClick={recordAnchor}
+              disabled={submitting || step === 1 && !command}
+            >
+              {submitting ? "Verifying…" : "Verify & record anchor"}
+            </button>
+          </>
+        )}
+      </div>
 
       {error && <div className="tfw-field__err" style={{ marginTop: 12 }}>{error}</div>}
 
       <div className="tfw-form-actions">
         <button type="button" className="tfw-btn tfw-btn--ghost" onClick={onClose}>Close</button>
-        <button
-          type="button"
-          className="tfw-btn tfw-btn--accent"
-          onClick={submit}
-          disabled={submitting}
-        >
-          {submitting ? "Checking..." : hasOutpoint ? "Check & record anchor" : "Generate anchor command"}
-        </button>
       </div>
     </div>
   );
 }
 
 // ─── Execute form ────────────────────────────────────────────────────────────
-function ExecuteForm({ proposal, onSubmit, onClose }) {
+function ExecuteForm({ proposal, meta, onSubmit, onClose }) {
   const [proposalTx, setProposalTx] = React.useState(proposal.proposalCellTxHash || "");
   const [proposalIndex, setProposalIndex] = React.useState(String(proposal.proposalCellIndex ?? 0));
   const [submitting, setSubmitting] = React.useState(false);
@@ -800,10 +842,10 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
       <div className="tfw-form-success">
         <div className="tfw-form-success__glyph">↓</div>
         <div className="tfw-form-success__title">Transaction downloaded</div>
-        <div className="tfw-form-success__sub">
-          Broadcast <code className="tfw-mono">gov_execute_tx_{proposal.id}.json</code> via ckb-cli
-          or your wallet to submit it to the network.
+        <div className="tfw-form-success__sub" style={{ marginBottom: 16 }}>
+          Broadcast <code className="tfw-mono">gov_execute_tx_{proposal.id}.json</code> to submit it to the CKB network:
         </div>
+        <TFW_CodeBlock label="Submit via ckb-cli">{`ckb-cli tx send --tx-file gov_execute_tx_${proposal.id}.json`}</TFW_CodeBlock>
       </div>
     );
   }
@@ -847,7 +889,7 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
         </div>
         <div className="tfw-exec-preview__row">
           <span>Yes votes</span>
-          <span className="tfw-mono">{TFW_countYes(proposal)} / 3</span>
+          <span className="tfw-mono">{TFW_countYes(proposal)} / {meta?.threshold || 3}</span>
         </div>
         <div className="tfw-exec-preview__row">
           <span>Output file</span>
