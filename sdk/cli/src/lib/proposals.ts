@@ -2,9 +2,9 @@ import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { ckbBlake2b } from "./witness.js";
-import { hexToBytes, bytesToHex } from "./blkl.js";
+import { bytesToHex } from "./blkl.js";
 
-export type ProposalAction = "add" | "remove";
+export type ProposalAction = "add" | "remove" | "set-treasury";
 export type ProposalStatus =
   | "pending-review"
   | "voting"
@@ -29,11 +29,6 @@ export interface ProposalVote {
   merkleProof: string[];    // sibling hashes (32 bytes each) leaf→root in the validator Merkle tree
 }
 
-export interface ProposalSignature {
-  signerIndex: number;
-  signature: string; // 0x-prefixed hex, 65 bytes (64 sig + 1 recovery id)
-  timestamp: string;
-}
 
 export interface Proposal {
   id: string;           // 12-char hex (6 bytes) from proposalIdHash, excluding 0x prefix (display only)
@@ -51,13 +46,18 @@ export interface Proposal {
   status: ProposalStatus;
   votes: ProposalVote[];
   voteDigestHash: string;
-  signatures: ProposalSignature[];
+  /** @deprecated Not used in execution. Kept for file-format compatibility with older proposal files. */
+  signatures: unknown[];
   txHash?: string;
+  treasuryLockScript?: { code_hash: string; hash_type: string; args: string };
+  proposalDataHash?: string;
+  reviewDelayMs?: string;
+  proposalCellTxHash?: string;
+  proposalCellIndex?: number;
 }
 
-// Threshold rules (simplified for testnet: 5 governance participants, need 3-of-5).
+// Threshold rules (simplified for testnet: 5 validators, need 3 yes votes).
 export const VOTE_THRESHOLD = 3;
-export const SIG_THRESHOLD = 3;
 export const REVIEW_WINDOW_MS = 72 * 60 * 60 * 1000; // 72 hours
 
 export function getProposalsDir(): string {
@@ -151,6 +151,7 @@ function proposalCanonical(fields: {
   rationale: string;
   proposer: string;
   submittedAt: string;
+  treasuryLockScript?: { code_hash: string; hash_type: string; args: string };
 }): Uint8Array {
   const str = JSON.stringify({
     action: fields.action,
@@ -162,6 +163,7 @@ function proposalCanonical(fields: {
     rationale: fields.rationale,
     proposer: fields.proposer,
     submittedAt: fields.submittedAt,
+    ...("treasuryLockScript" in fields ? { treasuryLockScript: fields.treasuryLockScript } : {}),
   });
   return new TextEncoder().encode(str);
 }
@@ -214,32 +216,6 @@ export function isVoteApproved(proposal: Proposal): boolean {
 export function isReadyToExecute(proposal: Proposal): boolean {
   return (
     isReviewWindowPassed(proposal) &&
-    isVoteApproved(proposal) &&
-    proposal.signatures.length >= SIG_THRESHOLD
+    isVoteApproved(proposal)
   );
-}
-
-// The message each governance signer signs (GOV1 v3, 136-byte preimage).
-// proposal_id_hash(32) || vote_digest_hash(32) || old_root(32) || new_root(32) || review_window_end_ms(8 LE u64)
-export function signingMessage(
-  proposal: Proposal,
-  oldRoot: Uint8Array,
-  newRoot: Uint8Array,
-  reviewWindowEndMs: bigint,
-): Uint8Array {
-  if (oldRoot.length !== 32) throw new Error(`oldRoot must be 32 bytes, got ${oldRoot.length}`);
-  if (newRoot.length !== 32) throw new Error(`newRoot must be 32 bytes, got ${newRoot.length}`);
-  const proposalBytes = hexToBytes(proposal.proposalIdHash);
-  const voteBytes = hexToBytes(proposal.voteDigestHash);
-  const combined = new Uint8Array(136);
-  combined.set(proposalBytes, 0);
-  combined.set(voteBytes, 32);
-  combined.set(oldRoot, 64);
-  combined.set(newRoot, 96);
-  let ms = reviewWindowEndMs;
-  for (let i = 0; i < 8; i++) {
-    combined[128 + i] = Number(ms & 0xffn);
-    ms >>= 8n;
-  }
-  return ckbBlake2b(combined);
 }

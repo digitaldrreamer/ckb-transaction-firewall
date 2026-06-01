@@ -1,16 +1,17 @@
-//! Governance Lock Script — secp256k1 multisig for registry update authorization.
+//! Governance Lock Script — validator vote authorization for registry updates.
 //!
 //! Args: version=0x01 (1 byte only). Static forever; pubkeys live in BLKL governance header.
 //!
 //! Verification logic (runs on update transactions only):
 //! 1. Parse BLKL v2 from the input registry cell data → governance header (pubkeys + threshold).
 //! 2. Load WitnessArgs at Source::GroupInput[0]:
-//!    - lock field: governance signer witness (signer_count + [signer_index + sig(65)] × N)
-//!    - input_type field: GOV1 v3 binding (141 bytes, also read by blacklist-registry)
-//! 3. Parse GOV1 v3: signing_message = blake2b(proposal_id_hash || vote_digest_hash || old_root || new_root || review_window_end_ms)
-//!    The input's `since` field MUST be an absolute median-time-past timestamp >= review_window_end_ms.
-//! 4. For each signer entry: recover pubkey via secp256k1 ECDSA, verify against header pubkeys.
-//! 5. Require valid_count >= threshold.
+//!    - lock field: validator vote witness
+//!    - input_type field: GOV1 v4 binding (also read by blacklist-registry)
+//! 3. Parse GOV1 v4 binding and enforce the proposal anchor relative-time delay.
+//!    The proposal input's `since` field MUST be a relative median-time-past delay >= review_delay_ms.
+//! 4. For each yes vote: recover pubkey via secp256k1 ECDSA and verify Merkle membership
+//!    against the validator root in the BLKL governance header.
+//! 5. Require yes_count >= threshold.
 
 #![no_std]
 #![cfg_attr(not(test), no_main)]
@@ -48,12 +49,11 @@ const ERR_SIG_VERIFICATION: i8 = 4;
 const ERR_THRESHOLD_NOT_MET: i8 = 5;
 const ERR_REVIEW_WINDOW_NOT_MET: i8 = 6;
 
-// CKB `since` field encoding for absolute median-time-past (timestamp) locks.
-// Bit 62 set = timestamp metric; bit 63 clear = absolute.
-const SINCE_LOCK_TYPE_FLAG: u64    = 1 << 63;
-const SINCE_METRIC_TYPE_MASK: u64  = 0x6000_0000_0000_0000;
-const SINCE_METRIC_TIMESTAMP: u64  = 0x4000_0000_0000_0000;
-const SINCE_VALUE_MASK: u64        = 0x00FF_FFFF_FFFF_FFFF;
+// CKB `since` field encoding for median-time-past timestamp locks.
+const SINCE_LOCK_TYPE_FLAG: u64 = 1 << 63;
+const SINCE_METRIC_TYPE_MASK: u64 = 0x6000_0000_0000_0000;
+const SINCE_METRIC_TIMESTAMP: u64 = 0x4000_0000_0000_0000;
+const SINCE_VALUE_MASK: u64 = 0x00FF_FFFF_FFFF_FFFF;
 
 fn blake2b_256(data: &[u8]) -> [u8; 32] {
     let mut out = [0u8; 32];
@@ -119,7 +119,8 @@ fn le_u32_at(buf: &[u8], off: usize) -> Result<usize, i8> {
 
 struct GovernanceHeader {
     threshold: u8,
-    pubkeys: Vec<[u8; 33]>,
+    validator_count: u16,
+    validator_merkle_root: [u8; 32],
 }
 
 /// Parses the BLKL v2 governance header from registry cell data.
@@ -137,40 +138,59 @@ fn parse_governance_header(data: &[u8]) -> Result<GovernanceHeader, i8> {
     }
     let gh = &data[7..7 + gov_header_len];
 
-    // gh_version(1) | signer_count(1) | threshold(1) | [pubkey(33)] × N | validator_count(2 LE) | merkle_root(32)
+    // v1: gh_version(1) | signer_count(1) | threshold(1) | [pubkey(33)] × N | validator_count(2 LE) | merkle_root(32)
+    // v2: v1 | treasury_lock_hash(32). Governance-lock ignores treasury metadata.
+    // v3: v1 | treasury_lock_script_len(2 LE) | treasury_lock_script. Governance-lock ignores treasury metadata.
     if gh.len() < 3 {
         return Err(ERR_INVALID_BLKL);
     }
-    if gh[0] != 0x01 {
+    if gh[0] != 0x01 && gh[0] != 0x02 && gh[0] != 0x03 {
         return Err(ERR_INVALID_BLKL);
     }
     let signer_count = gh[1] as usize;
     let threshold = gh[2];
-    if threshold == 0 || threshold as usize > signer_count {
-        return Err(ERR_INVALID_BLKL);
-    }
     let pubkeys_end = 3 + signer_count * 33;
     // Must have room for pubkeys + validator_count(2) + merkle_root(32)
     if pubkeys_end + 34 > gh.len() {
         return Err(ERR_INVALID_BLKL);
     }
-    let mut pubkeys = Vec::with_capacity(signer_count);
-    for i in 0..signer_count {
-        let start = 3 + i * 33;
-        let mut pk = [0u8; 33];
-        pk.copy_from_slice(&gh[start..start + 33]);
-        pubkeys.push(pk);
+    if gh[0] == 0x02 && pubkeys_end + 34 + 32 > gh.len() {
+        return Err(ERR_INVALID_BLKL);
     }
-    Ok(GovernanceHeader { threshold, pubkeys })
+    if gh[0] == 0x03 {
+        let script_len_offset = pubkeys_end + 34;
+        if script_len_offset + 2 > gh.len() {
+            return Err(ERR_INVALID_BLKL);
+        }
+        let script_len = le_u16_at(gh, script_len_offset)? as usize;
+        if script_len_offset + 2 + script_len != gh.len() {
+            return Err(ERR_INVALID_BLKL);
+        }
+    }
+    let validator_count = u16::from_le_bytes([gh[pubkeys_end], gh[pubkeys_end + 1]]);
+    if threshold == 0 || validator_count == 0 || threshold as u16 > validator_count {
+        return Err(ERR_INVALID_BLKL);
+    }
+    let mut validator_merkle_root = [0u8; 32];
+    validator_merkle_root.copy_from_slice(&gh[pubkeys_end + 2..pubkeys_end + 34]);
+    Ok(GovernanceHeader {
+        threshold,
+        validator_count,
+        validator_merkle_root,
+    })
 }
 
-struct SignerEntry {
-    signer_index: u8,
+struct VoteEntry {
+    pubkey: [u8; 33],
+    vote: u8,
+    timestamp: Vec<u8>,
     sig_bytes: [u8; 65], // r(32) + s(32) + recovery_id(1)
+    merkle_leaf_index: u32,
+    merkle_proof: Vec<[u8; 32]>,
 }
 
 struct WitnessFields {
-    signers: Vec<SignerEntry>,
+    votes: Vec<VoteEntry>,
     gov1_payload: Vec<u8>,
 }
 
@@ -202,71 +222,144 @@ fn load_witness_fields(index: usize, source: Source) -> Result<WitnessFields, i8
     let off_lock = le_u32_at(&buf, 4)?;
     let off_input_type = le_u32_at(&buf, 8)?;
     let off_output_type = le_u32_at(&buf, 12)?;
-    if !(16 <= off_lock && off_lock <= off_input_type && off_input_type <= off_output_type && off_output_type <= buf.len()) {
+    if !(16 <= off_lock
+        && off_lock <= off_input_type
+        && off_input_type <= off_output_type
+        && off_output_type <= buf.len())
+    {
         return Err(ERR_INVALID_WITNESS);
     }
 
     let lock_field = &buf[off_lock..off_input_type];
     let input_type_field = &buf[off_input_type..off_output_type];
 
-    // Governance signer witness from lock field:
-    // signer_count(1) | [signer_index(1) + sig(65)] × N
+    // Validator vote witness from lock field:
+    // vote_count(1) |
+    // [pubkey(33) | vote(1) | timestamp_len(2 LE) | timestamp |
+    //  sig(65) | merkle_leaf_index(4 LE) | proof_count(1) | proof_hash(32)*] × N
     let lock_data = decode_bytesopt(lock_field)?.ok_or(ERR_INVALID_WITNESS)?;
     if lock_data.is_empty() {
         return Err(ERR_INVALID_WITNESS);
     }
-    let signer_count = lock_data[0] as usize;
-    if lock_data.len() != 1 + signer_count * 66 {
-        return Err(ERR_INVALID_WITNESS);
-    }
-    let mut signers = Vec::with_capacity(signer_count);
+    let vote_count = lock_data[0] as usize;
+    let mut votes = Vec::with_capacity(vote_count);
     let mut off = 1;
-    for _ in 0..signer_count {
-        let signer_index = lock_data[off];
+    for _ in 0..vote_count {
+        if off + 33 + 1 + 2 > lock_data.len() {
+            return Err(ERR_INVALID_WITNESS);
+        }
+        let mut pubkey = [0u8; 33];
+        pubkey.copy_from_slice(&lock_data[off..off + 33]);
+        off += 33;
+        let vote = lock_data[off];
         off += 1;
+        let timestamp_len = u16::from_le_bytes([lock_data[off], lock_data[off + 1]]) as usize;
+        off += 2;
+        if off + timestamp_len + 65 + 4 + 1 > lock_data.len() {
+            return Err(ERR_INVALID_WITNESS);
+        }
+        let timestamp = lock_data[off..off + timestamp_len].to_vec();
+        off += timestamp_len;
         let mut sig_bytes = [0u8; 65];
         sig_bytes.copy_from_slice(&lock_data[off..off + 65]);
         off += 65;
-        signers.push(SignerEntry { signer_index, sig_bytes });
+        let merkle_leaf_index = u32::from_le_bytes([
+            lock_data[off],
+            lock_data[off + 1],
+            lock_data[off + 2],
+            lock_data[off + 3],
+        ]);
+        off += 4;
+        let proof_count = lock_data[off] as usize;
+        off += 1;
+        if off + proof_count * 32 > lock_data.len() {
+            return Err(ERR_INVALID_WITNESS);
+        }
+        let mut merkle_proof = Vec::with_capacity(proof_count);
+        for _ in 0..proof_count {
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(&lock_data[off..off + 32]);
+            off += 32;
+            merkle_proof.push(hash);
+        }
+        votes.push(VoteEntry {
+            pubkey,
+            vote,
+            timestamp,
+            sig_bytes,
+            merkle_leaf_index,
+            merkle_proof,
+        });
+    }
+    if off != lock_data.len() {
+        return Err(ERR_INVALID_WITNESS);
     }
 
-    // GOV1 v2 payload from input_type field.
+    // GOV1 v4 payload from input_type field.
     let gov1_payload = decode_bytesopt(input_type_field)?.ok_or(ERR_INVALID_WITNESS)?;
     if gov1_payload.is_empty() {
         return Err(ERR_INVALID_WITNESS);
     }
 
-    Ok(WitnessFields { signers, gov1_payload })
+    Ok(WitnessFields {
+        votes,
+        gov1_payload,
+    })
 }
 
-/// Parses a GOV1 v3 payload (141 bytes).
+struct Gov1Binding {
+    proposal_id_hash: [u8; 32],
+    vote_digest_hash: [u8; 32],
+    // old_root and new_root are verified by the blacklist-registry type script; governance-lock
+    // parses them to advance past the field offsets but does not recheck them here.
+    _old_root: [u8; 32],
+    _new_root: [u8; 32],
+    proposal_data_hash: [u8; 32],
+    review_delay_ms: u64,
+}
+
+/// Parses GOV1 v4 payloads.
 ///
-/// Layout: GOV1(4) | 0x03(1) | proposal_id_hash(32) | vote_digest_hash(32) | old_root(32) | new_root(32) | review_window_end_ms(8 LE u64)
-fn parse_gov1_hashes(
-    payload: &[u8],
-) -> Result<([u8; 32], [u8; 32], [u8; 32], [u8; 32], u64), i8> {
-    if payload.len() != 141 {
+/// Layout: GOV1(4) | 0x04(1) | proposal_id_hash(32) | vote_digest_hash(32)
+///   | old_root(32) | new_root(32) | proposal_data_hash(32) | review_delay_ms(8 LE u64)
+fn parse_gov1_binding(payload: &[u8]) -> Result<Gov1Binding, i8> {
+    if payload.len() != 173 {
         return Err(ERR_INVALID_WITNESS);
     }
     if &payload[0..4] != b"GOV1" {
         return Err(ERR_INVALID_WITNESS);
     }
-    if payload[4] != 0x03 {
+    if payload[4] != 0x04 {
         return Err(ERR_INVALID_WITNESS);
     }
     let mut proposal_id_hash = [0u8; 32];
     proposal_id_hash.copy_from_slice(&payload[5..37]);
     let mut vote_digest_hash = [0u8; 32];
     vote_digest_hash.copy_from_slice(&payload[37..69]);
-    let mut old_root = [0u8; 32];
-    old_root.copy_from_slice(&payload[69..101]);
-    let mut new_root = [0u8; 32];
-    new_root.copy_from_slice(&payload[101..133]);
-    let review_window_end_ms = u64::from_le_bytes([
-        payload[133], payload[134], payload[135], payload[136],
-        payload[137], payload[138], payload[139], payload[140],
+    let mut _old_root = [0u8; 32];
+    _old_root.copy_from_slice(&payload[69..101]);
+    let mut _new_root = [0u8; 32];
+    _new_root.copy_from_slice(&payload[101..133]);
+    let mut proposal_data_hash = [0u8; 32];
+    proposal_data_hash.copy_from_slice(&payload[133..165]);
+    let review_delay_ms = u64::from_le_bytes([
+        payload[165],
+        payload[166],
+        payload[167],
+        payload[168],
+        payload[169],
+        payload[170],
+        payload[171],
+        payload[172],
     ]);
-    Ok((proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms))
+    Ok(Gov1Binding {
+        proposal_id_hash,
+        vote_digest_hash,
+        _old_root,
+        _new_root,
+        proposal_data_hash,
+        review_delay_ms,
+    })
 }
 
 /// Loads the `since` field (first 8 bytes of a CellInput) for the given input index.
@@ -276,14 +369,16 @@ fn load_input_since(index: usize, source: Source) -> Result<u64, i8> {
     if raw.len() < 8 {
         return Err(ERR_INVALID_WITNESS);
     }
-    Ok(u64::from_le_bytes([raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7]]))
+    Ok(u64::from_le_bytes([
+        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
+    ]))
 }
 
-/// Checks that `since` encodes an absolute median-time-past timestamp >= `min_ms`.
-/// Rejects block-number or epoch since values, and relative since values.
-fn verify_since_timestamp(since: u64, min_ms: u64) -> Result<(), i8> {
-    if since & SINCE_LOCK_TYPE_FLAG != 0 {
-        return Err(ERR_REVIEW_WINDOW_NOT_MET); // relative since is not allowed
+/// Checks that `since` encodes a relative median-time-past delay >= `min_ms`.
+/// Consensus enforces the proposal input is at least this old.
+fn verify_relative_since_timestamp(since: u64, min_ms: u64) -> Result<(), i8> {
+    if since & SINCE_LOCK_TYPE_FLAG == 0 {
+        return Err(ERR_REVIEW_WINDOW_NOT_MET); // must be relative
     }
     if since & SINCE_METRIC_TYPE_MASK != SINCE_METRIC_TIMESTAMP {
         return Err(ERR_REVIEW_WINDOW_NOT_MET); // must be timestamp metric
@@ -293,6 +388,116 @@ fn verify_since_timestamp(since: u64, min_ms: u64) -> Result<(), i8> {
         return Err(ERR_REVIEW_WINDOW_NOT_MET);
     }
     Ok(())
+}
+
+fn load_cell_data_bytes_sys(index: usize, source: Source) -> Result<Vec<u8>, SysError> {
+    let mut cap = 512usize;
+    loop {
+        let mut buf = Vec::new();
+        buf.resize(cap, 0u8);
+        match load_cell_data(&mut buf, 0, index, source) {
+            Ok(n) => {
+                if n > cap {
+                    cap = n;
+                    continue;
+                }
+                buf.truncate(n);
+                return Ok(buf);
+            }
+            Err(SysError::LengthNotEnough(need)) => {
+                cap = need;
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+fn find_input_by_data_hash(target_hash: &[u8; 32]) -> Result<usize, i8> {
+    if *target_hash == [0u8; 32] {
+        return Err(ERR_INVALID_WITNESS);
+    }
+    let mut found: Option<usize> = None;
+    let mut i = 0usize;
+    loop {
+        match load_cell_data_bytes_sys(i, Source::Input) {
+            Ok(data) => {
+                if blake2b_256(&data) == *target_hash {
+                    if found.is_some() {
+                        return Err(ERR_INVALID_WITNESS);
+                    }
+                    found = Some(i);
+                }
+                i += 1;
+            }
+            Err(SysError::IndexOutOfBound) => break,
+            Err(_) => return Err(ERR_INVALID_WITNESS),
+        }
+    }
+    found.ok_or(ERR_INVALID_WITNESS)
+}
+
+fn hex_push(out: &mut Vec<u8>, bytes: &[u8]) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    out.extend_from_slice(b"0x");
+    for b in bytes {
+        out.push(HEX[(b >> 4) as usize]);
+        out.push(HEX[(b & 0x0f) as usize]);
+    }
+}
+
+fn vote_word(vote: u8) -> Result<&'static [u8], i8> {
+    match vote {
+        1 => Ok(b"yes"),
+        2 => Ok(b"no"),
+        3 => Ok(b"abstain"),
+        _ => Err(ERR_INVALID_WITNESS),
+    }
+}
+
+fn vote_signing_message(
+    proposal_id_hash: &[u8; 32],
+    vote: u8,
+    timestamp: &[u8],
+    pubkey: &[u8; 33],
+) -> Result<[u8; 32], i8> {
+    let mut canonical = Vec::new();
+    canonical.extend_from_slice(b"{\"domain\":\"ckb-firewall:vote\",\"proposalIdHash\":\"");
+    hex_push(&mut canonical, proposal_id_hash);
+    canonical.extend_from_slice(b"\",\"vote\":\"");
+    canonical.extend_from_slice(vote_word(vote)?);
+    canonical.extend_from_slice(b"\",\"timestamp\":\"");
+    canonical.extend_from_slice(timestamp);
+    canonical.extend_from_slice(b"\",\"pubkey\":\"");
+    hex_push(&mut canonical, pubkey);
+    canonical.extend_from_slice(b"\"}");
+    Ok(blake2b_256(&canonical))
+}
+
+fn merkle_node(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
+    let mut combined = [0u8; 64];
+    combined[..32].copy_from_slice(left);
+    combined[32..].copy_from_slice(right);
+    blake2b_256(&combined)
+}
+
+fn verify_merkle_proof(
+    root: &[u8; 32],
+    pubkey: &[u8; 33],
+    proof: &[[u8; 32]],
+    leaf_index: u32,
+) -> bool {
+    let mut current = blake2b_256(pubkey);
+    let mut idx = leaf_index;
+    for sibling in proof {
+        current = if idx % 2 == 0 {
+            merkle_node(&current, sibling)
+        } else {
+            merkle_node(sibling, &current)
+        };
+        idx /= 2;
+    }
+    &current == root
 }
 
 /// Recovers the compressed secp256k1 public key from a prehash and 65-byte compact signature.
@@ -336,52 +541,55 @@ fn program_entry() -> Result<(), i8> {
     let blkl_data = load_cell_data_bytes(0, Source::GroupInput)?;
     let header = parse_governance_header(&blkl_data)?;
 
-    // Load witness and extract signer entries + GOV1 v3 payload.
+    // Load witness and extract signer entries + GOV1 v4 payload.
     let witness = load_witness_fields(0, Source::GroupInput)?;
 
-    // Parse GOV1 v3 payload. The input's `since` field must be an absolute timestamp
-    // >= review_window_end_ms, enforcing the governance review window at consensus level.
-    // Preimage (136 bytes): proposal_id_hash || vote_digest_hash || old_root || new_root || review_window_end_ms
-    let (proposal_id_hash, vote_digest_hash, old_root, new_root, review_window_end_ms) =
-        parse_gov1_hashes(&witness.gov1_payload)?;
-    if proposal_id_hash == [0u8; 32] || vote_digest_hash == [0u8; 32] {
+    let gov1 = parse_gov1_binding(&witness.gov1_payload)?;
+    if gov1.proposal_id_hash == [0u8; 32] || gov1.vote_digest_hash == [0u8; 32] {
         return Err(ERR_INVALID_WITNESS);
     }
 
-    let since = load_input_since(0, Source::GroupInput)?;
-    verify_since_timestamp(since, review_window_end_ms)?;
+    let proposal_input_index = find_input_by_data_hash(&gov1.proposal_data_hash)?;
+    let since = load_input_since(proposal_input_index, Source::Input)?;
+    verify_relative_since_timestamp(since, gov1.review_delay_ms)?;
 
-    let mut preimage = [0u8; 136];
-    preimage[..32].copy_from_slice(&proposal_id_hash);
-    preimage[32..64].copy_from_slice(&vote_digest_hash);
-    preimage[64..96].copy_from_slice(&old_root);
-    preimage[96..128].copy_from_slice(&new_root);
-    preimage[128..136].copy_from_slice(&review_window_end_ms.to_le_bytes());
-    let signing_message = blake2b_256(&preimage);
+    // Verify yes votes and count unique valid validators.
+    let mut seen: Vec<[u8; 33]> = Vec::new();
+    let mut yes_count = 0usize;
 
-    // Verify each signer and count unique valid signatures.
-    let max_signers = header.pubkeys.len();
-    let mut seen = alloc::vec![false; max_signers];
-    let mut valid_count = 0usize;
-
-    for entry in &witness.signers {
-        let idx = entry.signer_index as usize;
-        if idx >= max_signers {
+    for entry in &witness.votes {
+        if entry.vote != 1 {
+            return Err(ERR_INVALID_WITNESS);
+        }
+        if entry.merkle_leaf_index as u16 >= header.validator_count {
             return Err(ERR_SIG_VERIFICATION);
         }
-        if seen[idx] {
+        if seen.iter().any(|pk| pk == &entry.pubkey) {
             return Err(ERR_SIG_VERIFICATION); // duplicate signer index
         }
-        seen[idx] = true;
-
-        let recovered = recover_pubkey(&signing_message, &entry.sig_bytes)?;
-        if recovered != header.pubkeys[idx] {
+        if !verify_merkle_proof(
+            &header.validator_merkle_root,
+            &entry.pubkey,
+            &entry.merkle_proof,
+            entry.merkle_leaf_index,
+        ) {
             return Err(ERR_SIG_VERIFICATION);
         }
-        valid_count += 1;
+        let signing_message = vote_signing_message(
+            &gov1.proposal_id_hash,
+            entry.vote,
+            &entry.timestamp,
+            &entry.pubkey,
+        )?;
+        let recovered = recover_pubkey(&signing_message, &entry.sig_bytes)?;
+        if recovered != entry.pubkey {
+            return Err(ERR_SIG_VERIFICATION);
+        }
+        seen.push(entry.pubkey);
+        yes_count += 1;
     }
 
-    if valid_count < header.threshold as usize {
+    if yes_count < header.threshold as usize {
         return Err(ERR_THRESHOLD_NOT_MET);
     }
 
@@ -391,6 +599,7 @@ fn program_entry() -> Result<(), i8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
     extern crate std;
 
     fn minimal_blkl_v2(pubkey: &[u8; 33], threshold: u8) -> Vec<u8> {
@@ -400,8 +609,8 @@ mod tests {
         gh.push(1); // signer_count
         gh.push(threshold);
         gh.extend_from_slice(pubkey);
-        gh.extend_from_slice(&[0x00, 0x00]); // validator_count
-        gh.extend_from_slice(&[0u8; 32]);     // merkle_root
+        gh.extend_from_slice(&1u16.to_le_bytes()); // validator_count
+        gh.extend_from_slice(&blake2b_256(pubkey)); // merkle_root for single validator
         let gh_len = gh.len() as u16;
 
         let mut data: Vec<u8> = Vec::new();
@@ -415,9 +624,9 @@ mod tests {
 
     fn dummy_pubkey() -> [u8; 33] {
         [
-            0x03, 0x1b, 0x84, 0xc5, 0x56, 0x7b, 0x12, 0x64, 0x40, 0x99, 0x5d, 0x3e,
-            0xd5, 0xaa, 0xba, 0x05, 0x65, 0xd7, 0x1e, 0x18, 0x34, 0x60, 0x48, 0x19,
-            0xff, 0x9c, 0x17, 0xf5, 0xe9, 0xd5, 0xdd, 0x07, 0x8f,
+            0x03, 0x1b, 0x84, 0xc5, 0x56, 0x7b, 0x12, 0x64, 0x40, 0x99, 0x5d, 0x3e, 0xd5, 0xaa,
+            0xba, 0x05, 0x65, 0xd7, 0x1e, 0x18, 0x34, 0x60, 0x48, 0x19, 0xff, 0x9c, 0x17, 0xf5,
+            0xe9, 0xd5, 0xdd, 0x07, 0x8f,
         ]
     }
 
@@ -427,8 +636,27 @@ mod tests {
         let data = minimal_blkl_v2(&pk, 1);
         let h = parse_governance_header(&data).expect("should parse");
         assert_eq!(h.threshold, 1);
-        assert_eq!(h.pubkeys.len(), 1);
-        assert_eq!(h.pubkeys[0], pk);
+        assert_eq!(h.validator_count, 1);
+        assert_eq!(h.validator_merkle_root, blake2b_256(&pk));
+    }
+
+    #[test]
+    fn test_parse_governance_header_v3_treasury_script() {
+        let pk = dummy_pubkey();
+        let mut data = minimal_blkl_v2(&pk, 1);
+        let gh_len = u16::from_le_bytes([data[5], data[6]]) as usize;
+        let mut gh = data[7..7 + gh_len].to_vec();
+        gh[0] = 0x03;
+        let treasury_script = vec![0x51u8; 53];
+        gh.extend_from_slice(&(treasury_script.len() as u16).to_le_bytes());
+        gh.extend_from_slice(&treasury_script);
+        data.splice(5..7, (gh.len() as u16).to_le_bytes());
+        data.splice(7..7 + gh_len, gh);
+
+        let h = parse_governance_header(&data).expect("should parse");
+        assert_eq!(h.threshold, 1);
+        assert_eq!(h.validator_count, 1);
+        assert_eq!(h.validator_merkle_root, blake2b_256(&pk));
     }
 
     #[test]
@@ -448,54 +676,57 @@ mod tests {
     #[test]
     fn test_parse_governance_header_zero_threshold() {
         // threshold=0 is invalid
-        let mut data = minimal_blkl_v2(&dummy_pubkey(), 0);
+        let data = minimal_blkl_v2(&dummy_pubkey(), 0);
         assert!(parse_governance_header(&data).is_err());
     }
 
     #[test]
-    fn test_parse_gov1_hashes_valid() {
-        let mut payload = [0u8; 141];
+    fn test_parse_gov1_v4_valid() {
+        let mut payload = [0u8; 173];
         payload[0..4].copy_from_slice(b"GOV1");
-        payload[4] = 0x03;
-        payload[5..37].fill(0x11);    // proposal_id_hash
-        payload[37..69].fill(0x22);   // vote_digest_hash
-        payload[69..101].fill(0x33);  // old_root
-        payload[101..133].fill(0x44); // new_root
-        payload[133..141].copy_from_slice(&1_000u64.to_le_bytes()); // review_window_end_ms
-        let (pid, vdh, _, _, rw) = parse_gov1_hashes(&payload).expect("should parse");
-        assert_eq!(pid, [0x11u8; 32]);
-        assert_eq!(vdh, [0x22u8; 32]);
-        assert_eq!(rw, 1_000u64);
+        payload[4] = 0x04;
+        payload[5..37].fill(0x11);
+        payload[37..69].fill(0x22);
+        payload[69..101].fill(0x33);
+        payload[101..133].fill(0x44);
+        payload[133..165].fill(0x55);
+        payload[165..173].copy_from_slice(&259_200_000u64.to_le_bytes());
+        let binding = parse_gov1_binding(&payload).expect("should parse");
+        assert_eq!(binding.proposal_id_hash, [0x11u8; 32]);
+        assert_eq!(binding.proposal_data_hash, [0x55u8; 32]);
+        assert_eq!(binding.review_delay_ms, 259_200_000u64);
     }
 
     #[test]
     fn test_parse_gov1_hashes_wrong_length() {
-        assert!(parse_gov1_hashes(&[0u8; 133]).is_err()); // v2 length no longer accepted
-        assert!(parse_gov1_hashes(&[0u8; 140]).is_err());
-        assert!(parse_gov1_hashes(&[0u8; 142]).is_err());
+        assert!(parse_gov1_binding(&[0u8; 133]).is_err()); // v2 length no longer accepted
+        assert!(parse_gov1_binding(&[0u8; 140]).is_err());
+        assert!(parse_gov1_binding(&[0u8; 142]).is_err());
+        assert!(parse_gov1_binding(&[0u8; 172]).is_err());
+        assert!(parse_gov1_binding(&[0u8; 174]).is_err());
     }
 
     #[test]
     fn test_parse_gov1_hashes_wrong_magic() {
-        let mut payload = [0u8; 141];
+        let mut payload = [0u8; 173];
         payload[0..4].copy_from_slice(b"NOPE");
-        payload[4] = 0x03;
+        payload[4] = 0x04;
         payload[5..37].fill(0x11);
         payload[37..69].fill(0x22);
-        assert!(parse_gov1_hashes(&payload).is_err());
+        assert!(parse_gov1_binding(&payload).is_err());
     }
 
     #[test]
     fn test_parse_gov1_hashes_wrong_version() {
-        let mut payload = [0u8; 141];
+        let mut payload = [0u8; 173];
         payload[0..4].copy_from_slice(b"GOV1");
-        payload[4] = 0x02; // v2 no longer accepted
-        assert!(parse_gov1_hashes(&payload).is_err());
+        payload[4] = 0x03; // v3 no longer accepted
+        assert!(parse_gov1_binding(&payload).is_err());
     }
 
     #[test]
     fn test_recover_pubkey_roundtrip() {
-        use k256::ecdsa::{SigningKey, signature::hazmat::PrehashSigner};
+        use k256::ecdsa::{signature::hazmat::PrehashSigner, SigningKey};
         // Private key = [0x01; 32] → signer 0 in testnet set
         let sk = SigningKey::from_bytes((&[0x01u8; 32]).into()).expect("valid key");
         let msg_hash = blake2b_256(b"test signing message");
@@ -509,77 +740,32 @@ mod tests {
         assert_eq!(recovered, expected_pk);
     }
 
-    // ── verify_since_timestamp ────────────────────────────────────────────────
-
     fn valid_since(ms: u64) -> u64 {
         SINCE_METRIC_TIMESTAMP | (ms & SINCE_VALUE_MASK)
     }
 
-    #[test]
-    fn test_since_valid_exact_min() {
-        let min_ms = 1_700_000_000_000u64;
-        assert!(verify_since_timestamp(valid_since(min_ms), min_ms).is_ok());
+    fn relative_since(ms: u64) -> u64 {
+        SINCE_LOCK_TYPE_FLAG | SINCE_METRIC_TIMESTAMP | (ms & SINCE_VALUE_MASK)
     }
 
     #[test]
-    fn test_since_valid_after_min() {
-        let min_ms = 1_700_000_000_000u64;
-        assert!(verify_since_timestamp(valid_since(min_ms + 3_600_000), min_ms).is_ok());
+    fn test_relative_since_valid_exact_delay() {
+        assert!(verify_relative_since_timestamp(relative_since(259_200_000), 259_200_000).is_ok());
     }
 
     #[test]
-    fn test_since_valid_min_zero() {
-        // review_window_end_ms = 0 means no delay required; any absolute timestamp passes.
-        assert!(verify_since_timestamp(valid_since(0), 0).is_ok());
+    fn test_relative_since_reject_absolute_timestamp() {
+        assert_eq!(
+            verify_relative_since_timestamp(valid_since(259_200_000), 259_200_000),
+            Err(ERR_REVIEW_WINDOW_NOT_MET),
+        );
     }
 
     #[test]
-    fn test_since_reject_relative_timestamp() {
-        // Bit 63 = 1 makes the lock relative; the chain would treat the value as a
-        // block-count / time-offset from the tip, not an absolute MTP constraint.
-        let min_ms = 1_700_000_000_000u64;
-        let since = SINCE_LOCK_TYPE_FLAG | SINCE_METRIC_TIMESTAMP | min_ms;
-        assert_eq!(verify_since_timestamp(since, min_ms), Err(ERR_REVIEW_WINDOW_NOT_MET));
-    }
-
-    #[test]
-    fn test_since_reject_relative_block_number() {
-        // Relative block-number since (bits 63=1, 62:61=00).
-        let since = SINCE_LOCK_TYPE_FLAG | 1_000u64;
-        assert_eq!(verify_since_timestamp(since, 0), Err(ERR_REVIEW_WINDOW_NOT_MET));
-    }
-
-    #[test]
-    fn test_since_reject_absolute_block_number_metric() {
-        // Absolute block-number since (bits 63=0, 62:61=00); value is a block height, not ms.
-        let since = 0x0000_0000_0000_0001u64; // block 1
-        assert_eq!(verify_since_timestamp(since, 0), Err(ERR_REVIEW_WINDOW_NOT_MET));
-    }
-
-    #[test]
-    fn test_since_reject_absolute_epoch_metric() {
-        // Absolute epoch since (bits 63=0, 62:61=01); value encodes epoch+index, not ms.
-        let since = 0x2000_0000_0000_0001u64;
-        assert_eq!(verify_since_timestamp(since, 0), Err(ERR_REVIEW_WINDOW_NOT_MET));
-    }
-
-    #[test]
-    fn test_since_reject_zero_since_with_nonzero_min() {
-        // since = 0 is absolute block 0 (block-number metric); rejected before timestamp check.
-        assert_eq!(verify_since_timestamp(0u64, 1), Err(ERR_REVIEW_WINDOW_NOT_MET));
-    }
-
-    #[test]
-    fn test_since_reject_timestamp_before_min() {
-        let min_ms = 1_700_000_000_000u64;
-        let since = valid_since(min_ms - 1);
-        assert_eq!(verify_since_timestamp(since, min_ms), Err(ERR_REVIEW_WINDOW_NOT_MET));
-    }
-
-    #[test]
-    fn test_since_reject_timestamp_far_before_min() {
-        let min_ms = 1_700_000_000_000u64;
-        let since = valid_since(0); // timestamp = 0 ms
-        assert_eq!(verify_since_timestamp(since, min_ms), Err(ERR_REVIEW_WINDOW_NOT_MET));
+    fn test_relative_since_reject_short_delay() {
+        assert_eq!(
+            verify_relative_since_timestamp(relative_since(259_199_999), 259_200_000),
+            Err(ERR_REVIEW_WINDOW_NOT_MET),
+        );
     }
 }

@@ -1,11 +1,11 @@
-// Modals: detail (proposal, address) and forms (create, vote, sign, execute, import)
+// Modals: detail (proposal, address) and forms (create, vote, anchor, execute, import)
 
 const {
   TFW_Badge, TFW_StatusBadge, TFW_ActionPill, TFW_SeverityChip,
-  TFW_VoteDots, TFW_SigDots, TFW_Address, TFW_ClassificationTag,
+  TFW_VoteDots, TFW_Address, TFW_ClassificationTag,
   TFW_CodeBlock, TFW_Stat,
   TFW_trunc, TFW_fmtDate, TFW_fmtDateShort, TFW_relTime, TFW_reviewCountdown,
-  TFW_countYes, TFW_countNo, TFW_countAbstain, TFW_sigCount,
+  TFW_countYes, TFW_countNo, TFW_countAbstain,
   TFW_reviewPassed, TFW_isReady, TFW_displayStatus,
 } = window;
 
@@ -53,8 +53,9 @@ function Modal({ open, onClose, eyebrow, title, subtitle, children, size = "md",
 }
 
 // ─── Proposal detail content ─────────────────────────────────────────────────
-function ProposalDetailContent({ proposal, registry, actions, onClose }) {
+function ProposalDetailContent({ proposal, registry, meta, actions, onClose }) {
   const p = proposal;
+  const [showAdvancedActions, setShowAdvancedActions] = React.useState(false);
   const reg = registry.find(e => e.identifier.toLowerCase() === p.lockArgs.toLowerCase());
   const now = Date.now() / 1000;
   const inReg = !!reg;
@@ -63,27 +64,21 @@ function ProposalDetailContent({ proposal, registry, actions, onClose }) {
   const yes = TFW_countYes(p);
   const no = TFW_countNo(p);
   const abs = TFW_countAbstain(p);
-  const sigs = TFW_sigCount(p);
   const review = TFW_reviewCountdown(p.reviewWindowEndsAt);
   const ds = TFW_displayStatus(p);
+  const yourPubkey = meta?.yourPubkey;
+  const hasVoted = yourPubkey
+    ? (p.votes || []).some(v => v.pubkey === yourPubkey)
+    : false;
+  const canVote = (p.status === "pending-review" || p.status === "voting") && !hasVoted;
+  const hasAdvancedActions = (
+    (!p.proposalCellTxHash && p.status !== "executed" && p.status !== "rejected") ||
+    TFW_isReady(p)
+  );
 
-  // pipeline steps
-  const steps = [
-    { key: "submit",   label: "Submitted",    done: true },
-    { key: "review",   label: "Review",       done: TFW_reviewPassed(p), active: !TFW_reviewPassed(p) },
-    { key: "vote",     label: "Vote",         done: yes >= 3, active: TFW_reviewPassed(p) && yes < 3 },
-    { key: "sign",     label: "Multisig",     done: sigs >= 3, active: TFW_reviewPassed(p) && yes >= 3 && sigs < 3 },
-    { key: "execute",  label: "Executed",     done: p.status === "executed", active: TFW_isReady(p) },
-  ];
-  if (p.status === "rejected") {
-    steps[2] = { key: "vote", label: "Vote", done: false, rejected: true };
-    steps[3] = { key: "sign", label: "Multisig", done: false };
-    steps[4] = { key: "execute", label: "Rejected", done: false, rejected: true };
-  }
-
-  // primary actions
+  // Primary validator actions
   const buttons = [];
-  if ((p.status === "pending-review" || p.status === "voting") && sigs === 0) {
+  if (canVote) {
     buttons.push(
       <button key="vote" type="button" className="tfw-btn tfw-btn--primary"
               onClick={() => { onClose(); actions.openVote(p.id); }}>
@@ -91,50 +86,16 @@ function ProposalDetailContent({ proposal, registry, actions, onClose }) {
       </button>
     );
   }
-  if (TFW_reviewPassed(p) && yes >= 3 && p.status !== "executed" && p.status !== "rejected" && !TFW_isReady(p)) {
-    buttons.push(
-      <button key="sign" type="button" className="tfw-btn tfw-btn--accent"
-              onClick={() => { onClose(); actions.openSign(p.id); }}>
-        Sign
-      </button>
-    );
-  }
-  if (TFW_isReady(p)) {
-    buttons.push(
-      <button key="exec" type="button" className="tfw-btn tfw-btn--accent"
-              onClick={() => { onClose(); actions.openExecute(p.id); }}>
-        Build &amp; download TX
-      </button>
-    );
-  }
   buttons.push(
     <button key="export" type="button" className="tfw-btn tfw-btn--ghost"
             onClick={() => actions.exportProposal(p)}>
-      ↓ Export JSON
+      Export JSON
     </button>
   );
 
   return (
     <div className="tfw-detail">
 
-      {/* Pipeline */}
-      <div className="tfw-pipeline">
-        {steps.map((s, i) => (
-          <React.Fragment key={s.key}>
-            <div className={`tfw-pipe-step${s.done ? " tfw-pipe-step--done" : ""}${s.active ? " tfw-pipe-step--active" : ""}${s.rejected ? " tfw-pipe-step--rejected" : ""}`}>
-              <div className="tfw-pipe-step__circle">
-                {s.done ? "✓" : s.rejected ? "✕" : i + 1}
-              </div>
-              <div className="tfw-pipe-step__label">{s.label}</div>
-            </div>
-            {i < steps.length - 1 && (
-              <div className={`tfw-pipe-conn${s.done ? " tfw-pipe-conn--done" : ""}`} />
-            )}
-          </React.Fragment>
-        ))}
-      </div>
-
-      {/* Top dossier */}
       <div className="tfw-dossier">
         <div className="tfw-dossier__row">
           <div className="tfw-dossier__label">ACTION</div>
@@ -187,11 +148,9 @@ function ProposalDetailContent({ proposal, registry, actions, onClose }) {
           <div className="tfw-dossier__val tfw-mono">{TFW_fmtDate(p.submittedAt)} ({TFW_relTime(p.submittedAt)})</div>
         </div>
         <div className="tfw-dossier__row">
-          <div className="tfw-dossier__label">REVIEW ENDS</div>
+          <div className="tfw-dossier__label">REVIEW</div>
           <div className="tfw-dossier__val tfw-mono">
-            {TFW_fmtDate(p.reviewWindowEndsAt)}
-            {!review.done && <span style={{ color: "var(--c-amber)", marginLeft: 8 }}>({review.text} left)</span>}
-            {review.done && <span style={{ color: "var(--c-green)", marginLeft: 8 }}>(complete)</span>}
+            {review.done ? "complete" : `${review.text} left`}
           </div>
         </div>
         {p.expiresAt && p.expiresAt !== "0" && (
@@ -257,44 +216,36 @@ function ProposalDetailContent({ proposal, registry, actions, onClose }) {
         )}
       </div>
 
-      {/* Signatures */}
-      <div className="tfw-detail-sec">
-        <div className="tfw-detail-sec__head">
-          SIGNATURES <span className="tfw-detail-sec__meta">{sigs} / 3 required</span>
-        </div>
-        {sigs === 0 ? (
-          <div className="tfw-detail-sec__empty">No signatures yet.</div>
-        ) : (
-          <div className="tfw-list">
-            {p.signatures.map((s, i) => (
-              <div key={i} className="tfw-list-row">
-                <div className="tfw-list-row__sigidx tfw-mono">SIGNER #{s.signerIndex}</div>
-                <code className="tfw-mono tfw-list-row__id">{TFW_trunc(s.signature, 34)}</code>
-                <span className="tfw-list-row__time">{TFW_fmtDate(s.timestamp)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* CLI commands */}
-      <div className="tfw-detail-sec">
-        <div className="tfw-detail-sec__head">CLI COMMANDS</div>
-        {(p.status === "pending-review" || p.status === "voting") && (
-          <TFW_CodeBlock label="Vote on this proposal">{`ckb-firewall vote --proposal ${p.id}`}</TFW_CodeBlock>
-        )}
-        {(p.status === "approved" || (TFW_reviewPassed(p) && yes >= 3)) && p.status !== "executed" && (
-          <TFW_CodeBlock label="Sign (3-of-5 required)">{`ckb-firewall sign --proposal ${p.id}`}</TFW_CodeBlock>
-        )}
-        {TFW_isReady(p) && (
-          <TFW_CodeBlock label="Execute on-chain">{`ckb-firewall execute --proposal ${p.id}`}</TFW_CodeBlock>
-        )}
-        <TFW_CodeBlock label="Export JSON">{`ckb-firewall export --proposal ${p.id} --out proposal-${p.id}.json`}</TFW_CodeBlock>
-        <TFW_CodeBlock label="Check this address in registry">{`ckb-firewall check --lock-args ${p.lockArgs}`}</TFW_CodeBlock>
-      </div>
-
       {/* Action bar */}
       <div className="tfw-detail-actions">{buttons}</div>
+
+      {hasAdvancedActions && (
+        <div className="tfw-detail-sec">
+          <button
+            type="button"
+            className="tfw-link"
+            onClick={() => setShowAdvancedActions(v => !v)}
+          >
+            {showAdvancedActions ? "Hide advanced actions" : "Show advanced actions"}
+          </button>
+          {showAdvancedActions && (
+            <div className="tfw-advanced-actions">
+              {!p.proposalCellTxHash && p.status !== "executed" && p.status !== "rejected" && (
+                <button type="button" className="tfw-btn tfw-btn--ghost"
+                        onClick={() => { onClose(); actions.openAnchor(p.id); }}>
+                  Anchor proposal
+                </button>
+              )}
+              {TFW_isReady(p) && (
+                <button type="button" className="tfw-btn tfw-btn--ghost"
+                        onClick={() => { onClose(); actions.openExecute(p.id); }}>
+                  Build execute transaction
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -605,8 +556,8 @@ function VoteForm({ proposal, meta, onSubmit, onClose }) {
   return (
     <div className="tfw-form">
       <SecurityNote kind="warn">
-        Your private key is posted over loopback only and zeroed immediately after the cryptographic operation.
-        It is never stored, logged, or forwarded beyond localhost.
+        Only keys in the registry governance voter set can vote. This is not a public user vote.
+        The private key is posted over loopback only, zeroed immediately after signing, and never stored.
       </SecurityNote>
 
       <FormField label="Your vote">
@@ -658,92 +609,148 @@ function VoteForm({ proposal, meta, onSubmit, onClose }) {
   );
 }
 
-// ─── Sign form ───────────────────────────────────────────────────────────────
-function SignForm({ proposal, meta, onSubmit, onClose }) {
-  const [idx, setIdx] = React.useState(String(meta.yourSignerIndex || 0));
-  const [pk, setPk] = React.useState("");
+// ─── Anchor form ─────────────────────────────────────────────────────────────
+function AnchorForm({ proposal, meta, onSubmit, onClose }) {
+  const [toAddress, setToAddress] = React.useState("");
+  const [proposalTx, setProposalTx] = React.useState(proposal.proposalCellTxHash || "");
+  const [proposalIndex, setProposalIndex] = React.useState(String(proposal.proposalCellIndex ?? 0));
+  const [showRecordFields, setShowRecordFields] = React.useState(Boolean(proposal.proposalCellTxHash));
+  const [result, setResult] = React.useState(null);
   const [error, setError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
-  const [success, setSuccess] = React.useState(false);
+  const treasuryBacked = Boolean(meta?.treasury);
+  const hasOutpoint = showRecordFields && proposalTx.trim().length > 0;
 
   const submit = () => {
     setError("");
-    const i = Number(idx);
-    if (!Number.isInteger(i) || i < 0 || i > 4) {
-      setError("Signer index must be 0–4");
+    if (hasOutpoint && !/^0x[0-9a-fA-F]{64}$/.test(proposalTx.trim())) {
+      setError("Proposal tx must be 0x + 64 hex chars");
       return;
     }
-    if ((proposal.signatures || []).some(s => s.signerIndex === i)) {
-      setError("Signer #" + i + " has already signed.");
+    if (hasOutpoint && !/^\d+$/.test(proposalIndex.trim())) {
+      setError("Proposal index must be a non-negative integer");
       return;
     }
-    if (!/^0x[0-9a-fA-F]{64}$/.test(pk.trim())) {
-      setError("Private key must be 0x + 64 hex chars");
+    if (!treasuryBacked && !hasOutpoint && !toAddress.trim()) {
+      setError("Payment recipient address is required for non-treasury registries.");
       return;
     }
     setSubmitting(true);
-    fetch('/api/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proposalId: proposal.id, signerIndex: i, privateKey: pk.trim() }) })
+    fetch('/api/anchor', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proposalId: proposal.id,
+        toAddress: treasuryBacked ? undefined : toAddress.trim(),
+        proposalTx: hasOutpoint ? proposalTx.trim() : undefined,
+        proposalIndex: hasOutpoint ? proposalIndex.trim() : undefined,
+      }) })
       .then(r => r.json())
       .then(d => {
         setSubmitting(false);
-        setPk("");
         if (!d.ok) { setError(d.error || 'Server error'); return; }
-        onSubmit({ proposalId: proposal.id, signerIndex: i, signature: d.signature || '', timestamp: new Date().toISOString() });
-        setSuccess(true);
-        setTimeout(onClose, 1100);
+        setResult(d);
+        onSubmit(d.proposal);
       })
-      .catch(e => { setSubmitting(false); setPk(""); setError(e.message); });
+      .catch(e => { setSubmitting(false); setError(e.message); });
   };
-
-  if (success) {
-    return (
-      <div className="tfw-form-success">
-        <div className="tfw-form-success__glyph">✓</div>
-        <div className="tfw-form-success__title">Signature added</div>
-        <div className="tfw-form-success__sub">Signature recorded.</div>
-      </div>
-    );
-  }
 
   return (
     <div className="tfw-form">
-      <SecurityNote kind="warn">
-        Your private key is posted over loopback only and zeroed immediately after the cryptographic operation. It is never stored, logged, or forwarded beyond localhost.
+      <SecurityNote kind="info">
+        {treasuryBacked
+          ? "This registry uses the on-chain treasury. Generate the command, run it in a terminal, then record the accepted tx hash."
+          : "This registry has no treasury metadata. Enter a recipient address to create a proposal cell manually."}
       </SecurityNote>
 
-      <FormField label="Signer index" hint="0–4, your slot in the 5-key governance set">
-        <input
-          type="number"
-          className="tfw-input tfw-mono"
-          min="0"
-          max="4"
-          value={idx}
-          onChange={e => setIdx(e.target.value)}
-        />
-      </FormField>
+      {!treasuryBacked && (
+        <FormField label="Address for proposal-cell payment" hint="Required only for non-treasury registries.">
+          <input
+            className="tfw-input tfw-mono"
+            value={toAddress}
+            onChange={e => setToAddress(e.target.value)}
+            placeholder="ckt1..."
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </FormField>
+      )}
 
-      <FormField label="Private key" hint="32 bytes, hex" error={error}>
-        <input
-          type="password"
-          className="tfw-input tfw-mono"
-          value={pk}
-          onChange={e => setPk(e.target.value)}
-          placeholder="0x… (64 hex chars)"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </FormField>
+      {!showRecordFields && (
+        <button
+          type="button"
+          className="tfw-btn tfw-btn--ghost"
+          style={{ alignSelf: "flex-start" }}
+          onClick={() => setShowRecordFields(true)}
+        >
+          I already submitted an anchor
+        </button>
+      )}
+
+      {showRecordFields && (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 120px", gap: 12 }}>
+          <FormField label="Accepted anchor tx hash" hint="Optional until after running the copied command">
+            <input
+              className="tfw-input tfw-mono"
+              value={proposalTx}
+              onChange={e => setProposalTx(e.target.value)}
+              placeholder="0x..."
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </FormField>
+          <FormField label="Cell index">
+            <input
+              className="tfw-input tfw-mono"
+              value={proposalIndex}
+              onChange={e => setProposalIndex(e.target.value)}
+              placeholder="0"
+              inputMode="numeric"
+            />
+          </FormField>
+        </div>
+      )}
+
+      {result && (
+        <div className="tfw-exec-preview">
+          <div className="tfw-exec-preview__row">
+            <span>Proposal hash</span>
+            <code className="tfw-mono" style={{ fontSize: "11px" }}>{TFW_trunc(result.proposalDataHash, 30)}</code>
+          </div>
+          <div className="tfw-exec-preview__row">
+            <span>Review delay</span>
+            <span className="tfw-mono">{result.reviewDelayMs} ms</span>
+          </div>
+          {result.proposal?.proposalCellTxHash && (
+            <div className="tfw-exec-preview__row">
+              <span>{result.anchorVerified ? "Verified cell" : "Stored cell"}</span>
+              <code className="tfw-mono" style={{ fontSize: "11px" }}>
+                {TFW_trunc(result.proposal.proposalCellTxHash, 22)}:{result.proposal.proposalCellIndex ?? 0}
+              </code>
+            </div>
+          )}
+        </div>
+      )}
+
+      {result?.command && (
+        <TFW_CodeBlock label={result.treasuryBacked ? "Build typed treasury anchor" : "Create proposal cell"}>{result.command}</TFW_CodeBlock>
+      )}
+
+      {result?.command && !result.anchorVerified && (
+        <div className="tfw-field__hint" style={{ marginTop: 8 }}>
+          Copy and run this command, wait until the transaction is accepted, then paste its tx hash and output index above.
+        </div>
+      )}
+
+      {error && <div className="tfw-field__err" style={{ marginTop: 12 }}>{error}</div>}
 
       <div className="tfw-form-actions">
-        <button type="button" className="tfw-btn tfw-btn--ghost" onClick={onClose}>Cancel</button>
+        <button type="button" className="tfw-btn tfw-btn--ghost" onClick={onClose}>Close</button>
         <button
           type="button"
           className="tfw-btn tfw-btn--accent"
           onClick={submit}
           disabled={submitting}
         >
-          {submitting ? "Signing…" : "Sign proposal"}
+          {submitting ? "Checking..." : hasOutpoint ? "Check & record anchor" : "Generate anchor command"}
         </button>
       </div>
     </div>
@@ -752,15 +759,25 @@ function SignForm({ proposal, meta, onSubmit, onClose }) {
 
 // ─── Execute form ────────────────────────────────────────────────────────────
 function ExecuteForm({ proposal, onSubmit, onClose }) {
+  const [proposalTx, setProposalTx] = React.useState(proposal.proposalCellTxHash || "");
+  const [proposalIndex, setProposalIndex] = React.useState(String(proposal.proposalCellIndex ?? 0));
   const [submitting, setSubmitting] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
   const [error, setError] = React.useState("");
 
   const submit = () => {
     setError("");
+    if (!/^0x[0-9a-fA-F]{64}$/.test(proposalTx.trim())) {
+      setError("Proposal tx must be 0x + 64 hex chars. Anchor the proposal cell first.");
+      return;
+    }
+    if (!/^\d+$/.test(proposalIndex.trim())) {
+      setError("Proposal index must be a non-negative integer.");
+      return;
+    }
     setSubmitting(true);
     fetch('/api/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proposalId: proposal.id }) })
+      body: JSON.stringify({ proposalId: proposal.id, proposalTx: proposalTx.trim(), proposalIndex: proposalIndex.trim() }) })
       .then(r => r.json())
       .then(d => {
         setSubmitting(false);
@@ -771,7 +788,7 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
         a.href = url; a.download = d.filename || ('gov_execute_tx_' + proposal.id + '.json');
         document.body.appendChild(a); a.click();
         document.body.removeChild(a); URL.revokeObjectURL(url);
-        onSubmit(proposal.id);
+        onSubmit(d);
         setSuccess(true);
         setTimeout(onClose, 1500);
       })
@@ -794,9 +811,30 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
   return (
     <div className="tfw-form">
       <SecurityNote kind="tip">
-        This verifies all 3 signatures, builds the on-chain transaction JSON, and downloads it.
+        This verifies the anchored proposal cell and validator votes, builds the on-chain transaction JSON, and downloads it.
         Submit it via <code className="tfw-mono">ckb-cli</code> or a CKB wallet.
       </SecurityNote>
+
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 120px", gap: 12 }}>
+        <FormField label="Proposal tx hash">
+          <input
+            className="tfw-input tfw-mono"
+            value={proposalTx}
+            onChange={e => setProposalTx(e.target.value)}
+            placeholder="0x..."
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </FormField>
+        <FormField label="Output index">
+          <input
+            className="tfw-input tfw-mono"
+            value={proposalIndex}
+            onChange={e => setProposalIndex(e.target.value)}
+            inputMode="numeric"
+          />
+        </FormField>
+      </div>
 
       <div className="tfw-exec-preview">
         <div className="tfw-exec-preview__row">
@@ -808,8 +846,8 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
           <code className="tfw-mono" style={{ fontSize: "11px" }}>{TFW_trunc(proposal.lockArgs, 28)}</code>
         </div>
         <div className="tfw-exec-preview__row">
-          <span>Signatures verified</span>
-          <span className="tfw-mono">{TFW_sigCount(proposal)} / 3</span>
+          <span>Yes votes</span>
+          <span className="tfw-mono">{TFW_countYes(proposal)} / 3</span>
         </div>
         <div className="tfw-exec-preview__row">
           <span>Output file</span>
@@ -873,7 +911,7 @@ function ImportForm({ onSubmit, onClose }) {
       <div className="tfw-form-success">
         <div className="tfw-form-success__glyph">↥</div>
         <div className="tfw-form-success__title">Proposal imported</div>
-        <div className="tfw-form-success__sub">Merged any new votes or signatures.</div>
+        <div className="tfw-form-success__sub">Merged any new votes.</div>
       </div>
     );
   }
@@ -882,7 +920,7 @@ function ImportForm({ onSubmit, onClose }) {
     <div className="tfw-form">
       <SecurityNote kind="info">
         Paste or upload a proposal JSON exported by another governance participant.
-        Votes and signatures will be merged.
+        Votes will be merged.
       </SecurityNote>
 
       <FormField label="Upload JSON file">
@@ -926,7 +964,7 @@ Object.assign(window, {
   TFW_AddressDetailContent: AddressDetailContent,
   TFW_CreateForm: CreateForm,
   TFW_VoteForm: VoteForm,
-  TFW_SignForm: SignForm,
+  TFW_AnchorForm: AnchorForm,
   TFW_ExecuteForm: ExecuteForm,
   TFW_ImportForm: ImportForm,
 });

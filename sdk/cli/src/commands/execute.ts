@@ -5,335 +5,331 @@ import logSymbols from "log-symbols";
 import ora from "ora";
 import inquirer from "inquirer";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
-import { parseRegistryPayload } from "@ckb-firewall/sdk";
-import { getLiveCell } from "../lib/rpc.js";
-import { resolveRegistryOutpoint } from "../lib/registry.js";
 import {
-  loadProposal,
-  saveProposal,
-  listProposals,
   isReviewWindowPassed,
   isVoteApproved,
-  isReadyToExecute,
-  computeVoteDigestHash,
+  loadProposal,
+  saveProposal,
   voteSigningMessage,
-  signingMessage,
-  SIG_THRESHOLD,
 } from "../lib/proposals.js";
-import {
-  encodeRegistryPayload,
-  extractGovernanceHeaderRaw,
-  parseGovernanceHeader,
-  insertSorted,
-  removeEntry,
-  bytesToHex,
-  hexToBytes,
-  strip0x,
-} from "../lib/blkl.js";
+import { bytesToHex, governanceTreasuryLockHash, hexToBytes, scriptToMoleculeBytes } from "../lib/blkl.js";
+import { getLiveCell, getLiveCellsByLock } from "../lib/rpc.js";
 import { verifyMerkleProof } from "../lib/validator-set.js";
 import {
-  ckbBlake2b,
-  buildGov1WitnessV3,
-  buildGovernanceSigWitness,
+  assertProposalCellMatches,
+  assertProposalAnchorTypeMatches,
+  loadRegistryStateForProposal,
+  proposalV4Fields,
+} from "../lib/governance-v4.js";
+import {
+  buildGov1WitnessV4,
+  buildValidatorVoteWitness,
   buildWitnessArgs,
-  encodeAbsoluteTimestampSince,
+  ckbBlake2b,
+  encodeRelativeTimestampSince,
 } from "../lib/witness.js";
 import {
-  TESTNET_RPC_URL,
-  TESTNET_REGISTRY_CELL,
-  TESTNET_CONTRACT_OUTPOINTS,
   SECP256K1_DEP_GROUP,
+  TESTNET_CONTRACT_OUTPOINTS,
+  TESTNET_GOVERNANCE_PUBKEYS,
+  TESTNET_REGISTRY_CELL,
+  TESTNET_RPC_URL,
   warnIfTrivialTestKeys,
 } from "../lib/defaults.js";
 import { printHints } from "../lib/hints.js";
+import { hexCapacity, occupiedCapacityShannons, parseCapacity } from "../lib/capacity.js";
+import { parseCellDepList, type CellDepJson } from "../lib/tx-deps.js";
+
+const DEFAULT_FEE_SHANNONS = 100_000n;
+const MIN_CHANGE_SHANNONS = 61n * 100_000_000n;
 
 export interface ExecuteOptions {
   proposal?: string;
   rpcUrl: string;
   registryTx: string;
   registryIndex: string;
+  proposalTx?: string;
+  proposalIndex?: string;
+  proposalAnchorCodeTx?: string;
+  proposalAnchorCodeIndex?: string;
+  treasuryCell?: string[];
+  treasuryLockDep?: string[];
   txOut: string;
   sign: boolean;
   fromAccount: string;
 }
 
-export async function executeCommand(opts: ExecuteOptions): Promise<void> {
-  // ── select proposal ──────────────────────────────────────────────────────
+export function executeDefaults(): Partial<ExecuteOptions> {
+  return {
+    rpcUrl: TESTNET_RPC_URL,
+    registryTx: TESTNET_REGISTRY_CELL.txHash,
+    registryIndex: String(TESTNET_REGISTRY_CELL.index),
+    proposalAnchorCodeTx: TESTNET_CONTRACT_OUTPOINTS.proposalAnchor.txHash,
+    proposalAnchorCodeIndex: String(TESTNET_CONTRACT_OUTPOINTS.proposalAnchor.index),
+    txOut: "gov_execute_tx.json",
+    sign: false,
+    fromAccount: "",
+  };
+}
 
-  let proposalId = opts.proposal?.trim() ?? "";
-  if (!proposalId) {
-    const ready = listProposals().filter(isReadyToExecute);
-    if (ready.length === 0) {
-      console.log(logSymbols.warning, chalk.yellow("No proposals are ready to execute."));
-      console.log(chalk.dim("  A proposal needs: review window passed + vote threshold + 3 signatures."));
-      process.exit(0);
+function parseOutputIndex(value: string, name: string): number {
+  if (!/^\d+$/.test(value.trim())) {
+    throw new Error(`${name} must be a non-negative integer.`);
+  }
+  return Number.parseInt(value.trim(), 10);
+}
+
+function parseOutpointList(values: string[] | undefined, name: string): Array<{ txHash: string; index: number }> {
+  return (values ?? []).map((value) => {
+    const raw = value.trim();
+    const match = /^(0x[0-9a-fA-F]{64})(?::|#)(\d+)$/.exec(raw);
+    if (!match) {
+      throw new Error(`${name} must be formatted as <tx-hash>:<index>. Got "${value}".`);
     }
-    const { chosen } = await inquirer.prompt<{ chosen: string }>([
-      {
-        type: "list",
-        name: "chosen",
-        message: "Select proposal to execute:",
-        choices: ready.map((p) => ({
-          name: `${chalk.bold(p.id)}  ${p.action} ${p.lockArgs.slice(0, 24)}…`,
-          value: p.id,
-        })),
-      },
-    ]);
-    proposalId = chosen;
+    return { txHash: match[1]!, index: Number.parseInt(match[2]!, 10) };
+  });
+}
+
+export async function executeCommand(opts: ExecuteOptions): Promise<void> {
+  const proposalId = opts.proposal?.trim();
+  if (!proposalId) {
+    console.error(logSymbols.error, chalk.red("--proposal is required for GOV1 v4 execution."));
+    process.exit(1);
   }
 
   const proposal = loadProposal(proposalId);
+  const proposalCellTx = opts.proposalTx?.trim() || proposal.proposalCellTxHash?.trim();
+  const proposalIndexRaw = opts.proposalIndex ?? (
+    proposal.proposalCellIndex === undefined ? undefined : String(proposal.proposalCellIndex)
+  );
+  if (!proposalCellTx || proposalIndexRaw === undefined) {
+    console.error(logSymbols.error, chalk.red("Proposal cell outpoint is required."));
+    console.error(chalk.dim(
+      `Run ckb-firewall anchor --proposal ${proposal.id} --proposal-tx <tx-hash> --proposal-index <n>, ` +
+      "or pass --proposal-tx/--proposal-index directly.",
+    ));
+    process.exit(1);
+  }
 
-  // ── checks ───────────────────────────────────────────────────────────────
+  let registryIndex: number;
+  let proposalIndex: number;
+  let proposalAnchorCodeIndex: number | undefined;
+  let treasuryLockDeps: CellDepJson[];
+  try {
+    registryIndex = parseOutputIndex(opts.registryIndex, "--registry-index");
+    proposalIndex = parseOutputIndex(proposalIndexRaw, "--proposal-index");
+    proposalAnchorCodeIndex = opts.proposalAnchorCodeIndex === undefined
+      ? undefined
+      : parseOutputIndex(opts.proposalAnchorCodeIndex, "--proposal-anchor-code-index");
+    treasuryLockDeps = parseCellDepList(opts.treasuryLockDep, "--treasury-lock-dep");
+  } catch (err) {
+    console.error(logSymbols.error, chalk.red(err instanceof Error ? err.message : String(err)));
+    process.exit(1);
+  }
 
   if (proposal.status === "executed") {
-    console.log(logSymbols.success, chalk.green(`Already executed — tx: ${proposal.txHash ?? "unknown"}`));
+    console.log(logSymbols.success, chalk.green(`Already executed: ${proposal.txHash ?? "unknown tx"}`));
     process.exit(0);
   }
   if (!isReviewWindowPassed(proposal)) {
-    const ms = new Date(proposal.reviewWindowEndsAt).getTime() - Date.now();
-    const h = Math.floor(ms / 3_600_000);
-    console.log(logSymbols.error, chalk.red(`Review window not passed — ${h}h remaining.`));
+    console.error(logSymbols.error, chalk.red("Local review window has not passed."));
+    console.error(chalk.dim(`  Review ends: ${proposal.reviewWindowEndsAt}`));
     process.exit(1);
   }
-  // The review window is also enforced on-chain: the governance cell input's `since`
-  // field is set to an absolute MTP timestamp, and governance-lock v3 rejects the
-  // transaction if the chain's median time has not yet reached reviewWindowEndsAt.
   if (!isVoteApproved(proposal)) {
-    console.log(logSymbols.error, chalk.red("Vote threshold not met."));
-    console.log(chalk.dim(`  Use: ckb-firewall vote --proposal ${proposal.id}`));
+    console.error(logSymbols.error, chalk.red("Vote threshold not met."));
     process.exit(1);
   }
-  if (proposal.signatures.length < SIG_THRESHOLD) {
-    console.log(
-      logSymbols.error,
-      chalk.red(`Only ${proposal.signatures.length}/${SIG_THRESHOLD} signatures — need more.`),
-    );
-    console.log(chalk.dim(`  Use: ckb-firewall sign --proposal ${proposal.id}`));
-    process.exit(1);
-  }
-
-  // P0-8: reject if the proposal's expiry has already passed.
   if (proposal.expiresAt !== "0") {
     const expiryMs = BigInt(proposal.expiresAt) * 1000n;
     if (BigInt(Date.now()) >= expiryMs) {
-      console.log(logSymbols.error, chalk.red(`Proposal "${proposal.id}" has already expired (${new Date(Number(expiryMs)).toISOString()}).`));
-      console.log(chalk.dim("  A new proposal must be created for this blacklist entry."));
+      console.error(logSymbols.error, chalk.red(`Proposal entry has already expired (${new Date(Number(expiryMs)).toISOString()}).`));
       process.exit(1);
     }
   }
 
-  // P4-3: verify every vote carries a valid signature from its claimed pubkey.
+  const spinner = ora("Building GOV1 v4 registry update transaction").start();
+  let state: Awaited<ReturnType<typeof loadRegistryStateForProposal>>;
+  let proposalDataHash: Uint8Array;
+  let reviewDelayMs: bigint;
+  let proposalCell: Awaited<ReturnType<typeof getLiveCell>>;
+  let proposalChangeCapacity: bigint;
+  let treasuryCells: Array<Awaited<ReturnType<typeof getLiveCell>>> = [];
+  let registryOutputCapacity: bigint;
+  let extraTreasuryOutputCapacity = 0n;
+  let proposalAnchorCellDep: { out_point: { tx_hash: string; index: string }; dep_type: "code" } | null = null;
+  try {
+    state = await loadRegistryStateForProposal(opts.rpcUrl, opts.registryTx, registryIndex, proposal);
+    warnIfTrivialTestKeys(TESTNET_GOVERNANCE_PUBKEYS);
+
+    proposalCell = await getLiveCell(opts.rpcUrl, proposalCellTx, proposalIndex);
+    proposalDataHash = assertProposalCellMatches(proposal, proposalCell.data, state.registryTypeIdValue);
+    const fields = proposalV4Fields(proposal, state.registryTypeIdValue);
+    reviewDelayMs = fields.reviewDelayMs;
+    if (bytesToHex(fields.proposalDataHash) !== bytesToHex(proposalDataHash)) {
+      throw new Error("Internal proposal hash mismatch.");
+    }
+
+    proposal.proposalDataHash = bytesToHex(proposalDataHash);
+    proposal.reviewDelayMs = reviewDelayMs.toString();
+    proposal.proposalCellTxHash = proposalCellTx;
+    proposal.proposalCellIndex = proposalIndex;
+    const proposalCapacity = parseCapacity(proposalCell.capacity);
+    proposalChangeCapacity = proposalCapacity - DEFAULT_FEE_SHANNONS;
+    if (proposalChangeCapacity < MIN_CHANGE_SHANNONS) {
+      throw new Error(
+        `Proposal cell capacity ${proposalCapacity} shannons is too small to return change after fee. ` +
+        `Need at least ${MIN_CHANGE_SHANNONS + DEFAULT_FEE_SHANNONS} shannons.`,
+      );
+    }
+    const treasuryLockHash = governanceTreasuryLockHash(state.governanceHeader);
+    if (treasuryLockHash) {
+      assertProposalAnchorTypeMatches({
+        proposalCellType: proposalCell.type,
+        registryTypeIdValue: state.registryTypeIdValue,
+        governanceHeader: state.governanceHeader,
+        reclaimDelayMs: reviewDelayMs,
+      });
+      if (!opts.proposalAnchorCodeTx || proposalAnchorCodeIndex === undefined) {
+        throw new Error(
+          "Typed proposal anchors require --proposal-anchor-code-tx and --proposal-anchor-code-index so the transaction can include the anchor type script cell_dep.",
+        );
+      }
+      proposalAnchorCellDep = {
+        out_point: { tx_hash: opts.proposalAnchorCodeTx, index: `0x${proposalAnchorCodeIndex.toString(16)}` },
+        dep_type: "code",
+      };
+      const proposalLockHash = ckbBlake2b(scriptToMoleculeBytes(proposalCell.lock));
+      if (bytesToHex(proposalLockHash) !== bytesToHex(treasuryLockHash)) {
+        throw new Error(
+          "This registry uses treasury-funded anchors, but the proposal cell is not locked to the registry treasury.",
+        );
+      }
+
+      const treasuryOutpoints = parseOutpointList(opts.treasuryCell, "--treasury-cell");
+      treasuryCells = treasuryOutpoints.length > 0
+        ? await Promise.all(treasuryOutpoints.map((outpoint) => getLiveCell(opts.rpcUrl, outpoint.txHash, outpoint.index)))
+        : [];
+      let treasuryInputCapacity = 0n;
+      for (const cell of treasuryCells) {
+        const lockHash = ckbBlake2b(scriptToMoleculeBytes(cell.lock));
+        if (bytesToHex(lockHash) !== bytesToHex(treasuryLockHash)) {
+          throw new Error(`Treasury cell ${cell.txHash}:${cell.index} is not locked to the registry treasury.`);
+        }
+        if (cell.type) {
+          throw new Error(`Treasury cell ${cell.txHash}:${cell.index} has a type script; only plain treasury cells are supported.`);
+        }
+        if (cell.data !== "0x") {
+          throw new Error(`Treasury cell ${cell.txHash}:${cell.index} has data; only empty treasury cells are supported.`);
+        }
+        treasuryInputCapacity += parseCapacity(cell.capacity);
+      }
+
+      const registryInputCapacity = parseCapacity(state.cell.capacity);
+      const minRegistryCapacity = occupiedCapacityShannons({
+        lock: state.cell.lock,
+        type: state.cell.type,
+        data: state.newBlkl,
+      });
+      registryOutputCapacity = minRegistryCapacity;
+      const registryGrowth = registryOutputCapacity > registryInputCapacity ? registryOutputCapacity - registryInputCapacity : 0n;
+      const registryShrink = registryInputCapacity > registryOutputCapacity ? registryInputCapacity - registryOutputCapacity : 0n;
+      if (registryGrowth > treasuryInputCapacity) {
+        if (!treasuryOutpoints.length && state.governanceHeader?.treasuryLockScript) {
+          const candidates = await getLiveCellsByLock(opts.rpcUrl, state.governanceHeader.treasuryLockScript, 100);
+          for (const cell of candidates) {
+            if (cell.type || cell.data !== "0x") continue;
+            treasuryCells.push(cell);
+            treasuryInputCapacity += parseCapacity(cell.capacity);
+            if (treasuryInputCapacity >= registryGrowth) break;
+          }
+        }
+        if (registryGrowth > treasuryInputCapacity) {
+          throw new Error(
+            `Registry update needs ${registryGrowth} shannons of treasury capacity for growth, ` +
+            `but selected treasury cells contain ${treasuryInputCapacity} shannons. ` +
+            "Pass one or more --treasury-cell <tx-hash>:<index> inputs.",
+          );
+        }
+      }
+      extraTreasuryOutputCapacity = treasuryInputCapacity - registryGrowth + registryShrink;
+    } else {
+      registryOutputCapacity = parseCapacity(state.cell.capacity);
+    }
+    spinner.succeed("GOV1 v4 transaction inputs verified");
+  } catch (err) {
+    spinner.fail("Could not build GOV1 v4 transaction");
+    console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+    process.exit(1);
+  }
+
   for (const v of proposal.votes) {
     const sigBytes = hexToBytes(v.signature);
     if (sigBytes.length !== 65) {
-      console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}… has invalid signature length.`));
+      console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}... has invalid signature length.`));
       process.exit(1);
     }
     const msgHash = voteSigningMessage(proposal.proposalIdHash, v.vote, v.timestamp, v.pubkey);
-    // Rebuild [recovery_id, r, s] from stored [r, s, recovery_id].
     const sig65 = new Uint8Array(65);
-    sig65[0] = sigBytes[64] as number; // length === 65 verified above
+    sig65[0] = sigBytes[64] as number;
     sig65.set(sigBytes.subarray(0, 64), 1);
     let recoveredPubkey: string;
     try {
       recoveredPubkey = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash)));
     } catch {
-      console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}… has unrecoverable signature — proposal may have been tampered.`));
+      console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}... has unrecoverable signature.`));
       process.exit(1);
     }
     if (recoveredPubkey !== v.pubkey) {
-      console.error(logSymbols.error, chalk.red(`Vote signature does not match pubkey ${v.pubkey.slice(0, 14)}… — proposal may have been tampered.`));
+      console.error(logSymbols.error, chalk.red(`Vote signature does not match pubkey ${v.pubkey.slice(0, 14)}...`));
       process.exit(1);
     }
   }
 
-  // ── fetch current registry cell ──────────────────────────────────────────
-
-  if (!/^\d+$/.test(opts.registryIndex.trim())) {
-    console.error(logSymbols.error, chalk.red("--registry-index must be a non-negative integer."));
-    process.exit(1);
-  }
-  const registryIndex = Number.parseInt(opts.registryIndex.trim(), 10);
-
-  const spinner = ora("Fetching current registry cell").start();
-  let cell: Awaited<ReturnType<typeof getLiveCell>>;
-  try {
-    const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, registryIndex);
-    cell = await getLiveCell(opts.rpcUrl, txHash, index);
-    spinner.succeed("Registry cell loaded");
-  } catch (err) {
-    spinner.fail("Could not fetch registry cell");
-    console.error(chalk.red(err instanceof Error ? err.message : String(err)));
-    process.exit(1);
-  }
-
-  let currentPayload: ReturnType<typeof parseRegistryPayload>;
-  try {
-    currentPayload = parseRegistryPayload(cell.data);
-  } catch {
-    console.error(logSymbols.error, chalk.red("Registry cell does not contain a valid BLKL payload."));
-    process.exit(1);
-  }
-
-  // ── verify vote Merkle proofs against on-chain validator set ─────────────
-
-  const oldBlkl = hexToBytes(cell.data);
-  const oldRoot = ckbBlake2b(oldBlkl);
-  const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
-  const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
-
-  // Warn if the live on-chain committee uses known trivial test keys.
-  if (govHeader && govHeader.pubkeys.length > 0) {
-    warnIfTrivialTestKeys(govHeader.pubkeys);
-  }
-
-  // M1: verify signature count against the on-chain threshold, not the compile-time default.
-  if (govHeader && govHeader.threshold > 0) {
-    const onChainThreshold = govHeader.threshold;
-    if (onChainThreshold !== SIG_THRESHOLD) {
-      process.stderr.write(
-        `Warning: on-chain signature threshold (${onChainThreshold}) differs from compile-time default (${SIG_THRESHOLD}). ` +
-        `Using the on-chain value.\n`,
-      );
-    }
-    if (proposal.signatures.length < onChainThreshold) {
-      console.error(
-        logSymbols.error,
-        chalk.red(`Only ${proposal.signatures.length}/${onChainThreshold} signatures — need more (on-chain threshold).`),
-      );
-      console.error(chalk.dim(`  Use: ckb-firewall sign --proposal ${proposal.id}`));
-      process.exit(1);
-    }
-  }
-
-  if (govHeader && govHeader.validatorCount > 0) {
-    const rootHex = bytesToHex(govHeader.validatorMerkleRoot);
+  if (state.governanceHeader?.validatorCount) {
+    const rootHex = bytesToHex(state.governanceHeader.validatorMerkleRoot);
     for (const v of proposal.votes) {
       if (!Array.isArray(v.merkleProof) || typeof v.merkleLeafIndex !== "number") {
-        console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}… is missing a Merkle proof — re-cast the vote with the current CLI.`));
+        console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}... is missing a Merkle proof.`));
         process.exit(1);
       }
-      const valid = verifyMerkleProof(rootHex, v.pubkey, v.merkleProof, v.merkleLeafIndex);
-      if (!valid) {
-        console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}… is not in the on-chain validator set.`));
-        process.exit(1);
-      }
-    }
-  }
-
-  // ── build new BLKL payload ────────────────────────────────────────────────
-  let newEntries;
-
-  if (proposal.action === "add") {
-    if (currentPayload.entries.some((e) => strip0x(e.identifier).toLowerCase() === strip0x(proposal.lockArgs).toLowerCase())) {
-      console.log(logSymbols.warning, chalk.yellow(`${proposal.lockArgs} is already in the registry.`));
-      process.exit(0);
-    }
-    newEntries = insertSorted(currentPayload.entries, {
-      identifier: proposal.lockArgs,
-      expiresAt: BigInt(proposal.expiresAt),
-    });
-  } else {
-    newEntries = removeEntry(currentPayload.entries, proposal.lockArgs);
-    if (newEntries.length === currentPayload.entries.length) {
-      console.log(logSymbols.warning, chalk.yellow(`${proposal.lockArgs} is not in the registry.`));
-      process.exit(0);
-    }
-  }
-
-  const newPayload = { version: currentPayload.version, entries: newEntries };
-  const newBlkl = encodeRegistryPayload(newPayload, govHeaderRaw ?? undefined);
-  const newRoot = ckbBlake2b(newBlkl);
-
-  // C-4: verify governance signer signatures against on-chain pubkeys from governance header.
-  // Use the v3 signing message (includes reviewWindowEndMs) to match what sign.ts produced.
-  const reviewWindowEndMsForVerify = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
-  if (govHeader && govHeader.pubkeys.length > 0) {
-    const msgHash = signingMessage(proposal, oldRoot, newRoot, reviewWindowEndMsForVerify);
-    for (const s of proposal.signatures) {
-      if (!Number.isInteger(s.signerIndex) || s.signerIndex < 0 || s.signerIndex >= govHeader.pubkeys.length) {
-        console.error(logSymbols.error, chalk.red(`Signer index ${s.signerIndex} is out of range for the on-chain governance committee (${govHeader.pubkeys.length} signers).`));
-        process.exit(1);
-      }
-      const sigBytes = hexToBytes(s.signature);
-      if (sigBytes.length !== 65) {
-        console.error(logSymbols.error, chalk.red(`Governance signature from signer ${s.signerIndex} has invalid length.`));
-        process.exit(1);
-      }
-      // Rebuild [recovery_id, r, s] from stored [r, s, recovery_id].
-      const sig65 = new Uint8Array(65);
-      sig65[0] = sigBytes[64] as number; // length === 65 verified above
-      sig65.set(sigBytes.subarray(0, 64), 1);
-      let recoveredPubkey: string;
-      try {
-        recoveredPubkey = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash)));
-      } catch {
-        console.error(logSymbols.error, chalk.red(`Governance signature from signer ${s.signerIndex} is unrecoverable.`));
-        process.exit(1);
-      }
-      const expectedPubkey = bytesToHex(govHeader.pubkeys[s.signerIndex]!);
-      if (recoveredPubkey !== expectedPubkey) {
-        console.error(logSymbols.error, chalk.red(`Governance signature from signer ${s.signerIndex} does not match the on-chain pubkey — proposal may have been tampered.`));
+      if (!verifyMerkleProof(rootHex, v.pubkey, v.merkleProof, v.merkleLeafIndex)) {
+        console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}... is not in the on-chain validator set.`));
         process.exit(1);
       }
     }
   }
-
-  // ── build GOV1 v3 witness with real signatures ────────────────────────────
-
-  // P0-2: recompute voteDigestHash from votes and verify it matches the stored value.
-  const recomputedVoteDigest = computeVoteDigestHash(proposal.votes);
-  if (recomputedVoteDigest !== proposal.voteDigestHash) {
-    console.error(logSymbols.error, chalk.red("Vote digest hash mismatch — proposal votes may have been tampered."));
-    console.error(chalk.dim(`  Stored:     ${proposal.voteDigestHash}`));
-    console.error(chalk.dim(`  Recomputed: ${recomputedVoteDigest}`));
-    process.exit(1);
-  }
-
-  // reviewWindowEndMs is included in the GOV1 v3 witness and the signing preimage,
-  // binding signers to the review window end time. governance-lock verifies the input's
-  // `since` field is an absolute timestamp >= this value, enforcing the review window on-chain.
-  const reviewWindowEndMs = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
 
   const proposalIdBytes = hexToBytes(proposal.proposalIdHash);
   const voteDigestBytes = hexToBytes(proposal.voteDigestHash);
+  const yesVotes = proposal.votes
+    .filter((v) => v.vote === "yes")
+    .sort((a, b) => a.pubkey.localeCompare(b.pubkey));
 
-  // Use the on-chain threshold for signer selection; fall back to compile-time constant.
-  const effectiveThreshold = govHeader?.threshold ?? SIG_THRESHOLD;
-  const signers = proposal.signatures.slice(0, effectiveThreshold).map((s) => ({
-    index: s.signerIndex,
-    sig: hexToBytes(s.signature),
-  }));
-
-  // v3: GOV1 binding (with review window) in input_type, signer entries in lock field.
-  const gov1 = buildGov1WitnessV3({
+  const gov1 = buildGov1WitnessV4({
     proposalIdHash: proposalIdBytes,
     voteDigestHash: voteDigestBytes,
-    oldRoot,
-    newRoot,
-    reviewWindowEndMs,
+    oldRoot: state.oldRoot,
+    newRoot: state.newRoot,
+    proposalDataHash,
+    reviewDelayMs,
   });
-  const sigWitness = buildGovernanceSigWitness(signers);
-  const witnessBytes = buildWitnessArgs({ lock: sigWitness, inputType: gov1 });
-
-  // ── summary ───────────────────────────────────────────────────────────────
-
-  console.log();
-  console.log(chalk.bold("Executing proposal:"), proposal.id);
-  console.log(`  Action:     ${proposal.action === "add" ? chalk.green("add") : chalk.red("remove")} ${proposal.lockArgs}`);
-  console.log(`  Proposer:   ${proposal.proposer}`);
-  console.log(`  Signers:    ${signers.map((s) => `#${s.index}`).join(", ")}`);
-  console.log(`  Old → new:  ${currentPayload.entries.length} → ${newEntries.length} entries`);
-  console.log();
-
-  // ── build tx JSON ────────────────────────────────────────────────────────
+  const voteWitness = buildValidatorVoteWitness(yesVotes.map((v) => ({
+    pubkey: hexToBytes(v.pubkey),
+    vote: v.vote,
+    timestamp: v.timestamp,
+    signature: hexToBytes(v.signature),
+    merkleLeafIndex: v.merkleLeafIndex,
+    merkleProof: v.merkleProof.map(hexToBytes),
+  })));
+  const witnessBytes = buildWitnessArgs({ lock: voteWitness, inputType: gov1 });
 
   const txJson = {
     transaction: {
       version: "0x0",
       cell_deps: [
         { out_point: { tx_hash: SECP256K1_DEP_GROUP.txHash, index: "0x0" }, dep_type: "dep_group" },
+        ...treasuryLockDeps,
         {
           out_point: {
             tx_hash: TESTNET_CONTRACT_OUTPOINTS.blacklistRegistry.txHash,
@@ -348,38 +344,62 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
           },
           dep_type: "code",
         },
+        ...(proposalAnchorCellDep ? [proposalAnchorCellDep] : []),
       ],
-      // Governance transactions update the registry cell, not firewall-protected cells.
-      // No header_deps are needed — expiry checks only apply when spending firewall-locked cells.
       header_deps: [],
       inputs: [
         {
-          // Absolute median-time-past since lock: CKB consensus enforces this transaction cannot
-          // be included in a block until the block's MTP >= reviewWindowEndsAt.
-          since: encodeAbsoluteTimestampSince(reviewWindowEndMs),
-          previous_output: { tx_hash: cell.txHash, index: `0x${cell.index.toString(16)}` },
+          since: "0x0",
+          previous_output: { tx_hash: state.cell.txHash, index: `0x${state.cell.index.toString(16)}` },
         },
+        {
+          since: encodeRelativeTimestampSince(reviewDelayMs),
+          previous_output: { tx_hash: proposalCellTx, index: `0x${proposalIndex.toString(16)}` },
+        },
+        ...treasuryCells.map((cell) => ({
+          since: "0x0",
+          previous_output: { tx_hash: cell.txHash, index: `0x${cell.index.toString(16)}` },
+        })),
       ],
-      outputs: [{ capacity: cell.capacity, lock: cell.lock, type: cell.type }],
-      outputs_data: [bytesToHex(newBlkl)],
-      witnesses: [bytesToHex(witnessBytes)],
+      outputs: [
+        { capacity: hexCapacity(registryOutputCapacity), lock: state.cell.lock, type: state.cell.type },
+        { capacity: hexCapacity(proposalChangeCapacity), lock: proposalCell.lock, type: null },
+        ...(extraTreasuryOutputCapacity > 0n
+          ? [{ capacity: hexCapacity(extraTreasuryOutputCapacity), lock: proposalCell.lock, type: null }]
+          : []),
+      ],
+      outputs_data: [
+        bytesToHex(state.newBlkl),
+        "0x",
+        ...(extraTreasuryOutputCapacity > 0n ? ["0x"] : []),
+      ],
+      witnesses: [
+        bytesToHex(witnessBytes),
+        bytesToHex(buildWitnessArgs({})),
+        ...treasuryCells.map(() => bytesToHex(buildWitnessArgs({}))),
+      ],
     },
     multisig_configs: {},
     signatures: {},
   };
 
-  const txOut = opts.txOut;
-  writeFileSync(txOut, JSON.stringify(txJson, null, 2) + "\n");
-  console.log(logSymbols.success, `Transaction written to ${chalk.bold(txOut)}`);
-  console.log();
+  writeFileSync(opts.txOut, JSON.stringify(txJson, null, 2) + "\n");
+  saveProposal(proposal);
 
-  // ── sign / submit ────────────────────────────────────────────────────────
+  console.log();
+  console.log(logSymbols.success, chalk.green(`Transaction written to ${opts.txOut}`));
+  console.log(`  Proposal:       ${proposal.id}`);
+  console.log(`  Proposal cell:  ${proposalCellTx}:${proposalIndex}`);
+  console.log(`  Proposal hash:  ${bytesToHex(proposalDataHash)}`);
+  console.log(`  Since delay:    ${encodeRelativeTimestampSince(reviewDelayMs)}`);
+  console.log(`  Registry:       ${state.currentPayload.entries.length} -> ${state.newEntryCount} entries`);
+  console.log();
 
   if (!opts.sign) {
     console.log("Sign and submit with ckb-cli:");
     console.log(chalk.dim(
-      `  ckb-cli wallet sign-txs --tx-file ${txOut} --from-account <address>\n` +
-      `  ckb-cli wallet apply-txs --tx-file ${txOut}`,
+      `  ckb-cli wallet sign-txs --tx-file ${opts.txOut} --from-account <address>\n` +
+      `  ckb-cli wallet apply-txs --tx-file ${opts.txOut}`,
     ));
     console.log();
     printHints("execute");
@@ -392,7 +412,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       {
         type: "input",
         name: "account",
-        message: "Governance account address (ckb-cli --from-account):",
+        message: "Fee-payer account address for ckb-cli:",
         validate: (v: string) => v.trim().length > 0 || "Required.",
       },
     ]);
@@ -406,15 +426,18 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   const { proceed } = await inquirer.prompt<{ proceed: boolean }>([
     { type: "confirm", name: "proceed", message: "Sign and submit?", default: false },
   ]);
-  if (!proceed) { console.log("Aborted."); return; }
+  if (!proceed) {
+    console.log("Aborted.");
+    return;
+  }
 
   const signSpinner = ora("Signing with ckb-cli").start();
   try {
-    execFileSync("ckb-cli", ["wallet", "sign-txs", "--tx-file", txOut, "--from-account", fromAccount], { stdio: "inherit" });
+    execFileSync("ckb-cli", ["wallet", "sign-txs", "--tx-file", opts.txOut, "--from-account", fromAccount], { stdio: "inherit" });
     signSpinner.succeed("Signed");
 
     const submitSpinner = ora("Submitting").start();
-    const output = execFileSync("ckb-cli", ["wallet", "apply-txs", "--tx-file", txOut], { encoding: "utf8" });
+    const output = execFileSync("ckb-cli", ["wallet", "apply-txs", "--tx-file", opts.txOut], { encoding: "utf8" });
     submitSpinner.succeed("Submitted");
 
     const txHash = output.match(/0x[a-fA-F0-9]{64}/)?.[0];
@@ -422,25 +445,13 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       proposal.status = "executed";
       proposal.txHash = txHash;
       saveProposal(proposal);
-      console.log();
-      console.log(logSymbols.success, chalk.green("Registry updated on-chain."));
-      console.log(`  Tx: ${chalk.bold(txHash)}`);
-      printHints("execute");
+      console.log(logSymbols.success, chalk.green(`Executed: ${txHash}`));
+    } else {
+      console.log(chalk.yellow("Submitted, but could not parse tx hash from ckb-cli output."));
     }
   } catch (err) {
-    signSpinner.fail("ckb-cli failed");
+    signSpinner.fail("ckb-cli signing/submission failed");
     console.error(chalk.red(err instanceof Error ? err.message : String(err)));
     process.exit(1);
   }
-}
-
-export function executeDefaults(): Partial<ExecuteOptions> {
-  return {
-    rpcUrl: TESTNET_RPC_URL,
-    registryTx: TESTNET_REGISTRY_CELL.txHash,
-    registryIndex: String(TESTNET_REGISTRY_CELL.index),
-    txOut: "gov_execute_tx.json",
-    sign: false,
-    fromAccount: "",
-  };
 }
