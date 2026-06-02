@@ -38,7 +38,7 @@ export const TESTNET_CONTRACT_OUTPOINTS = {
   },
   governanceLock: {
     txHash:
-      "0xcdd2c63e18729b711bdbd4fa843a4f959f48d93bdf2e5aed8799c8648c7eb9aa",
+      "0x5033e680435bc7ef2255767cfd46b355ab1bc6dcda5ec01e38ef0d29119ad711",
     index: 0,
   },
   proposalAnchor: {

@@ -277,7 +277,8 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     sig65.set(sigBytes.subarray(0, 64), 1);
     let recoveredPubkey: string;
     try {
-      recoveredPubkey = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash)));
+      // prehash:false — msgHash is already blake2b; skip noble/curves' internal sha256 step.
+      recoveredPubkey = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash, { prehash: false })));
     } catch {
       console.error(logSymbols.error, chalk.red(`Vote from ${v.pubkey.slice(0, 14)}... has unrecoverable signature.`));
       process.exit(1);

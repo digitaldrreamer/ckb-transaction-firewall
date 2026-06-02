@@ -31,7 +31,7 @@
     "index": 0
   },
   "governanceLockDeployOutPoint": {
-    "txHash": "0xcdd2c63e18729b711bdbd4fa843a4f959f48d93bdf2e5aed8799c8648c7eb9aa",
+    "txHash": "0x5033e680435bc7ef2255767cfd46b355ab1bc6dcda5ec01e38ef0d29119ad711",
     "index": 0
   },
   "proposalAnchorDeployOutPoint": {
@@ -136,6 +136,13 @@
       "registry": "0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8:0",
       "date": "2026-06-02",
       "note": "Phase 4 governance drill executed — proposal 7a3ebccd3e7d (add 0xababababababababab... to blacklist) confirmed on-chain; end-to-end GOV1 v4 governance flow validated on testnet"
+    },
+    {
+      "contracts": {
+        "governanceLock": "0x5033e680435bc7ef2255767cfd46b355ab1bc6dcda5ec01e38ef0d29119ad711:0"
+      },
+      "date": "2026-06-02",
+      "note": "governance-lock redeployed (Type ID upgrade) — remove sha256 outer hash; vote signing is now blake2b(canonical) only with JS prehash:false. Binary 97040 bytes."
     }
   ],
   "treasury": {

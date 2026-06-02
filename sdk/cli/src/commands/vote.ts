@@ -26,6 +26,8 @@ export interface VoteOptions {
   rpcUrl: string;
   registryTx: string;
   registryIndex: string;
+  /** Private key hex (non-interactive use, e.g. scripted drills). */
+  privateKey?: string;
 }
 
 export function voteDefaults(): Partial<VoteOptions> {
@@ -87,15 +89,20 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
 
   // ── private key → pubkey ─────────────────────────────────────────────────
 
-  console.log();
-  const { keyInput } = await inquirer.prompt<{ keyInput: string }>([
-    {
-      type: "password",
-      name: "keyInput",
-      message: "Validator private key (32-byte hex):",
-      mask: "*",
-    },
-  ]);
+  let keyInput: string;
+  if (opts.privateKey?.trim()) {
+    keyInput = opts.privateKey.trim();
+  } else {
+    console.log();
+    ({ keyInput } = await inquirer.prompt<{ keyInput: string }>([
+      {
+        type: "password",
+        name: "keyInput",
+        message: "Validator private key (32-byte hex):",
+        mask: "*",
+      },
+    ]));
+  }
   if (!keyInput.trim()) {
     console.error(logSymbols.error, chalk.red("A private key is required."));
     process.exit(1);
@@ -190,8 +197,9 @@ export async function voteCommand(opts: VoteOptions): Promise<void> {
   const timestamp = new Date().toISOString();
   const msgHash = voteSigningMessage(proposal.proposalIdHash, vote, timestamp, pubkey);
 
+  // prehash:false — msgHash is already blake2b; skip noble/curves' internal sha256 step.
   // format:"recovered" returns Uint8Array[recovery_id(1), r(32), s(32)]
-  const sigRaw = secp256k1.sign(msgHash, privateKeyBytes, { lowS: true, format: "recovered" });
+  const sigRaw = secp256k1.sign(msgHash, privateKeyBytes, { lowS: true, prehash: false, format: "recovered" });
   // Store as [r(32), s(32), recovery_id(1)] for the on-chain vote witness.
   const sigBytes = new Uint8Array(65);
   sigBytes.set(sigRaw.slice(1), 0);
