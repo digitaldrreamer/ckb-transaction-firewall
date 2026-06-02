@@ -8,6 +8,7 @@ import { secp256k1 } from "@noble/curves/secp256k1.js";
 import {
   isReviewWindowPassed,
   isVoteApproved,
+  listProposals,
   loadProposal,
   saveProposal,
   voteSigningMessage,
@@ -46,6 +47,7 @@ const MIN_CHANGE_SHANNONS = 61n * 100_000_000n;
 
 export interface ExecuteOptions {
   proposal?: string;
+  ready?: boolean;
   rpcUrl: string;
   registryTx: string;
   registryIndex: string;
@@ -58,6 +60,7 @@ export interface ExecuteOptions {
   txOut: string;
   sign: boolean;
   fromAccount: string;
+  privkeyPath?: string;
 }
 
 export function executeDefaults(): Partial<ExecuteOptions> {
@@ -92,9 +95,43 @@ function parseOutpointList(values: string[] | undefined, name: string): Array<{ 
 }
 
 export async function executeCommand(opts: ExecuteOptions): Promise<void> {
+  // --ready: find every proposal with votes complete + window passed + anchored, execute sequentially.
+  if (opts.ready && !opts.proposal?.trim()) {
+    const candidates = listProposals().filter(
+      (p) =>
+        p.status !== "executed" &&
+        p.status !== "rejected" &&
+        p.proposalCellTxHash &&
+        isVoteApproved(p) &&
+        isReviewWindowPassed(p),
+    );
+    if (candidates.length === 0) {
+      console.log(logSymbols.info, chalk.dim("No proposals are ready to execute right now."));
+      return;
+    }
+    console.log(logSymbols.info, `${candidates.length} proposal(s) ready — executing in sequence...`);
+    let passed = 0;
+    let failed = 0;
+    for (const p of candidates) {
+      console.log();
+      console.log(chalk.bold(`→ ${p.id}  (${p.action} ${p.lockArgs.slice(0, 24)}…)`));
+      try {
+        await executeCommand({ ...opts, ready: false, proposal: p.id });
+        passed++;
+      } catch (err) {
+        console.error(logSymbols.error, chalk.red(`Failed: ${err instanceof Error ? err.message : String(err)}`));
+        failed++;
+      }
+    }
+    console.log();
+    console.log(passed > 0 ? logSymbols.success : logSymbols.warning,
+      `${passed} executed, ${failed} failed.`);
+    return;
+  }
+
   const proposalId = opts.proposal?.trim();
   if (!proposalId) {
-    console.error(logSymbols.error, chalk.red("--proposal is required for GOV1 v4 execution."));
+    console.error(logSymbols.error, chalk.red("--proposal <id> or --ready is required."));
     process.exit(1);
   }
 
@@ -420,17 +457,64 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   console.log(`  Registry:       ${state.currentPayload.entries.length} -> ${state.newEntryCount} entries`);
   console.log();
 
-  if (!opts.sign) {
+  const usePrivkey = !!opts.privkeyPath?.trim();
+
+  if (!opts.sign && !usePrivkey) {
     console.log("Sign and submit with ckb-cli:");
     console.log(chalk.dim(
-      `  ckb-cli wallet sign-txs --tx-file ${opts.txOut} --from-account <address>\n` +
-      `  ckb-cli wallet apply-txs --tx-file ${opts.txOut}`,
+      `  ckb-cli tx sign-inputs --tx-file ${opts.txOut} --privkey-path <key-file> --skip-check --add-signatures\n` +
+      `  ckb-cli tx send --tx-file ${opts.txOut} --skip-check`,
     ));
     console.log();
     printHints("execute");
     return;
   }
 
+  // ── non-interactive signing via privkey file ──────────────────────────────
+  if (usePrivkey) {
+    const signSpinner = ora("Signing with privkey").start();
+    try {
+      execFileSync("ckb-cli", [
+        "--url", opts.rpcUrl,
+        "tx", "sign-inputs",
+        "--tx-file", opts.txOut,
+        "--privkey-path", opts.privkeyPath!.trim(),
+        "--skip-check",
+        "--add-signatures",
+      ], { stdio: "pipe" });
+      signSpinner.succeed("Signed");
+    } catch (err) {
+      signSpinner.fail("Signing failed");
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+
+    const submitSpinner = ora("Submitting").start();
+    try {
+      const output = execFileSync("ckb-cli", [
+        "--url", opts.rpcUrl,
+        "tx", "send",
+        "--tx-file", opts.txOut,
+        "--skip-check",
+      ], { encoding: "utf8" });
+      submitSpinner.succeed("Submitted");
+      const txHash = output.trim().match(/0x[a-fA-F0-9]{64}/)?.[0];
+      if (txHash) {
+        proposal.status = "executed";
+        proposal.txHash = txHash;
+        saveProposal(proposal);
+        console.log(logSymbols.success, chalk.green(`Executed: ${txHash}`));
+      } else {
+        console.log(chalk.yellow("Submitted, but could not parse tx hash from ckb-cli output."));
+        console.log(chalk.dim(output.trim()));
+      }
+    } catch (err) {
+      submitSpinner.fail("Submission failed");
+      throw new Error(err instanceof Error ? err.message : String(err));
+    }
+    return;
+  }
+
+  // ── interactive signing via ckb-cli wallet ────────────────────────────────
   let fromAccount = opts.fromAccount;
   if (!fromAccount && process.stdin.isTTY) {
     const { account } = await inquirer.prompt<{ account: string }>([

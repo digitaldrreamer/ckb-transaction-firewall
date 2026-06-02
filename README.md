@@ -13,7 +13,7 @@
 > The firewall checks your **outputs, not your counterparties.**  
 > It prevents a protected cell from sending to blacklisted destinations — at consensus, inside the lock script — regardless of what your application code does.
 
-**Deployed to CKB testnet.** Registry cell [`0x685dc49b`](https://testnet.explorer.nervos.org/transaction/0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4) · All outpoints in [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
+**Deployed to CKB testnet.** Registry cell [`0xd841c6c1`](https://testnet.explorer.nervos.org/transaction/0xd841c6c1e0841ea58274a7a114cce505bc19503cca4ab2da07c060d10a436672) · All outpoints in [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
 
 ---
 
@@ -69,9 +69,9 @@ import { TransactionFirewall, fetchRegistryPayload } from "@ckb-firewall/sdk";
 
 const firewall = new TransactionFirewall({
   registries: [{
-    codeHash:    "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
+    codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
     hashType:    "type",
-    typeIdValue: "0xc70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
+    typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
     required:    true,
   }],
 });
@@ -79,7 +79,7 @@ const firewall = new TransactionFirewall({
 // Fetch the live registry cell from your CKB node
 const { type: registryType, data: registryData } = await fetchRegistryPayload(
   "https://testnet.ckb.dev",
-  "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4",
+  "0xd841c6c1e0841ea58274a7a114cce505bc19503cca4ab2da07c060d10a436672",
   0
 );
 
@@ -150,10 +150,12 @@ ckb-firewall export --proposal <id> --out proposal.json
 ckb-firewall import proposal.json
 ckb-firewall vote --proposal <id> --vote yes
 
-# 4. Sign after review window (72h) and vote threshold (3/5) are met
-ckb-firewall sign --proposal <id> --signer-index 0
+# 4. Anchor the proposal on-chain as a PBLK cell
+ckb-firewall anchor --proposal <id> --to-address <proposal-cell-owner-address>
+# after the transfer is accepted, record it once if you did not use --submit
+ckb-firewall anchor --proposal <id> --proposal-tx <anchor-tx> --proposal-index <data-output-index>
 
-# 5. Execute on-chain
+# 5. Execute on-chain after review window (72h) and vote threshold (3/5)
 ckb-firewall execute --proposal <id>
 ```
 
@@ -171,17 +173,28 @@ For multi-registry deployments or self-managed registries, see [Private registry
 
 ---
 
-## Deployed contracts (testnet, 2026-05-26)
+## Deployed contracts (testnet)
 
 | Contract | Tx | Index |
 |---|---|---|
-| `governance-lock` | `0x410864a6...` | 0 |
-| `firewall-lock` | `0x128193cc...` | 0 |
-| `blacklist-registry` | `0x410864a6...` | 1 |
-| `spawn-aware-secp256k1` | `0x0fe5d476...` | 0 |
-| Registry cell | `0x685dc49b...` | 0 |
+| `governance-lock` | [`0x5033e680...`](https://testnet.explorer.nervos.org/transaction/0x5033e680435bc7ef2255767cfd46b355ab1bc6dcda5ec01e38ef0d29119ad711) | 0 |
+| `firewall-lock` | [`0x128193cc...`](https://testnet.explorer.nervos.org/transaction/0x128193cc2d547b224ccf10a6e299cb0749c633c5f9354ff5a9a5fd3e894318d2) | 0 |
+| `blacklist-registry` | [`0xa165e5af...`](https://testnet.explorer.nervos.org/transaction/0xa165e5af82538c072caaee87ae5b919ad89ca2448d66daf9a29092b5ad87294d) | 0 |
+| `proposal-anchor` | [`0x9d8cc6d2...`](https://testnet.explorer.nervos.org/transaction/0x9d8cc6d26fce08eba8104dba8b5e5b5acb097b9c71f96b6bd6d68d12531413ee) | 0 |
+| `spawn-aware-secp256k1` | [`0x0fe5d476...`](https://testnet.explorer.nervos.org/transaction/0x0fe5d47662724a3620c002683d8c3f38103359c7e1ca697196b39442317c709e) | 0 |
+| Registry cell | [`0xa3dcb46f...`](https://testnet.explorer.nervos.org/transaction/0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8) | 0 |
 
 Full outpoints and Type IDs: [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
+
+### Live testnet blacklist
+
+Real entries confirmed on the testnet registry as of 2026-06-02:
+
+| Lock args | Added by | Status |
+|---|---|---|
+| `0xababababababababababababababababababababab` | proposal [`7a3ebccd`](https://testnet.explorer.nervos.org/transaction/0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8) | active |
+| `0x3f54dea35bcc7a0efef541d361799f77bd1b858` | proposal `dbf110bb` | pending execution (review window) |
+| `0x9888a8a74df4e0ce82e7a4604f8fd403fd4622ca` | proposal `dbe06fc7` | pending execution (review window) |
 
 ---
 
