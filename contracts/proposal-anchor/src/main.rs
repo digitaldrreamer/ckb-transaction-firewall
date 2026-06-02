@@ -257,6 +257,18 @@ fn output_capacity_for_lock_hash(target_hash: &[u8; 32]) -> Result<u64, SysError
     }
 }
 
+fn total_output_capacity() -> Result<u64, SysError> {
+    let mut total = 0u64;
+    let mut i = 0usize;
+    loop {
+        match load_cell_capacity(i, Source::Output) {
+            Ok(cap) => { total = total.saturating_add(cap); i += 1; }
+            Err(SysError::IndexOutOfBound) => return Ok(total),
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 fn program_entry() -> Result<(), SysError> {
     let args = running_type_args()?;
     let self_hash = running_type_script_hash()?;
@@ -270,29 +282,27 @@ fn program_entry() -> Result<(), SysError> {
         return Err(error::to_sys_error(error::INVALID_TOPOLOGY));
     }
 
+    // Creating a new anchor: validate PBLK data. Lock is not checked — any lock
+    // (governance-lock, treasury secp256k1, or other) is permitted. The since delay
+    // and capacity-return checks on the consume path provide the real security.
     if let Some(&output_index) = output_anchors.first() {
         let data = load_cell_data_bytes(output_index, Source::Output)?;
         validate_pblk(data.as_slice(), &args.registry_type_id_value)?;
-        let lock_hash = load_cell_lock_hash(output_index, Source::Output)?;
-        if lock_hash != args.treasury_lock_hash {
-            return Err(error::to_sys_error(error::UNAUTHORIZED_TREASURY_LOCK));
-        }
     }
 
+    // Consuming an anchor (execute or reclaim): validate data, enforce since delay,
+    // and ensure capacity is not burned. Lock is not checked — the consuming
+    // transaction's lock script (governance-lock or treasury secp256k1) handles auth.
     if let Some(&input_index) = input_anchors.first() {
         let data = load_cell_data_bytes(input_index, Source::Input)?;
         validate_pblk(data.as_slice(), &args.registry_type_id_value)?;
-        let input_lock_hash = load_cell_lock_hash(input_index, Source::Input)?;
-        if input_lock_hash != args.treasury_lock_hash {
-            return Err(error::to_sys_error(error::UNAUTHORIZED_TREASURY_LOCK));
-        }
         let delay = relative_timestamp_since_ms(input_index)?;
         if delay < args.reclaim_delay_ms {
             return Err(error::to_sys_error(error::INVALID_RECLAIM_SINCE));
         }
         let input_capacity = load_cell_capacity(input_index, Source::Input)?;
         let min_return = input_capacity.saturating_sub(MAX_ANCHOR_FEE_SHANNONS);
-        if output_capacity_for_lock_hash(&args.treasury_lock_hash)? < min_return {
+        if total_output_capacity()? < min_return {
             return Err(error::to_sys_error(error::INVALID_RECLAIM_RETURN));
         }
     }

@@ -43,7 +43,7 @@ export const TESTNET_CONTRACT_OUTPOINTS = {
   },
   proposalAnchor: {
     txHash:
-      "0x9d8cc6d26fce08eba8104dba8b5e5b5acb097b9c71f96b6bd6d68d12531413ee",
+      "0x0daff588f0053bdf34d4c2eebaf2c092f70192cdd4a2d1dd95aee07ce100dea9",
     index: 0,
   },
   spawnAwareSecp256k1: {
@@ -51,6 +51,15 @@ export const TESTNET_CONTRACT_OUTPOINTS = {
       "0x0fe5d47662724a3620c002683d8c3f38103359c7e1ca697196b39442317c709e",
     index: 0,
   },
+};
+
+// Governance-lock script — use as the lock for proposal cells so any validator can execute
+// without the treasury private key. The lock is validated by the GOV1 witness already
+// present in every execute TX.
+export const TESTNET_GOVERNANCE_LOCK_SCRIPT = {
+  code_hash: "0x95d5e88dabf32ef59bc292d1f925df2f17948f7845daa4e52f34b81fb2711c40",
+  hash_type: "type" as const,
+  args: "0x01",
 };
 
 // secp256k1 dep group used by ckb-cli for fee-payer signing.

@@ -35,7 +35,7 @@
     "index": 0
   },
   "proposalAnchorDeployOutPoint": {
-    "txHash": "0x9d8cc6d26fce08eba8104dba8b5e5b5acb097b9c71f96b6bd6d68d12531413ee",
+    "txHash": "0x0daff588f0053bdf34d4c2eebaf2c092f70192cdd4a2d1dd95aee07ce100dea9",
     "index": 0
   },
   "spawnAwareSecp256k1DeployOutPoint": {
@@ -143,6 +143,13 @@
       },
       "date": "2026-06-02",
       "note": "governance-lock redeployed (Type ID upgrade) — remove sha256 outer hash; vote signing is now blake2b(canonical) only with JS prehash:false. Binary 97040 bytes."
+    },
+    {
+      "contracts": {
+        "proposalAnchor": "0x0daff588f0053bdf34d4c2eebaf2c092f70192cdd4a2d1dd95aee07ce100dea9:0"
+      },
+      "date": "2026-06-02",
+      "note": "proposal-anchor redeployed (Type ID upgrade) — remove treasury lock checks; proposal cells now use governance-lock so any validator can execute without the treasury private key. Lock check replaced by total output capacity check. Binary 18792 bytes."
     }
   ],
   "treasury": {
