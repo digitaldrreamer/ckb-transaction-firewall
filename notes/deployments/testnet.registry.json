@@ -1,36 +1,41 @@
 {
   "_comment": [
-    "Values read from CKB testnet (2026-05-26 deployment).",
-    "registrySpec: RegistrySpecLike for FirewallConfig.registries — matches by type_id_value (bytes 34..66 of v2 type args).",
-    "canonicalRegistryCell: live BLKL v2 registry cell bootstrapped with rotated testnet governance committee.",
+    "Values read from CKB testnet (2026-05-31 treasury-enabled registry deployment).",
+    "registrySpec: RegistrySpecLike for FirewallConfig.registries - matches by type_id_value (bytes 34..66 of v2 type args).",
+    "canonicalRegistryCell: live BLKL v2 registry cell bootstrapped with v3 governance header and treasury lock script.",
     "canonicalRegistryCell.typeArgs: 66-byte v2 type args (version=0x02 | gov_code_hash(32) | gov_hash_type(1) | type_id_value(32)).",
     "firewallLockDeployOutPoint and spawnAwareSecp256k1DeployOutPoint are unchanged from the 2026-05-20 deployment.",
-    "blacklistRegistryDeployOutPoint: blacklist-registry GOV1 v3-only binary.",
-    "governanceLockDeployOutPoint: GOV1 v3 governance-lock enforcing review-window since semantics."
+    "blacklistRegistryDeployOutPoint: treasury-enabled blacklist-registry binary.",
+    "governanceLockDeployOutPoint: GOV1 v4 governance-lock enforcing review-window since semantics.",
+    "proposalAnchorDeployOutPoint: proposal-anchor type script for treasury-funded PBLK anchors."
   ],
   "rpcUrl": "https://testnet.ckb.dev",
   "registrySpec": {
-    "codeHash": "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
+    "codeHash": "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
     "hashType": "type",
-    "typeIdValue": "0xc70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
+    "typeIdValue": "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
     "required": true
   },
   "canonicalRegistryCell": {
-    "txHash": "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4",
+    "txHash": "0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8",
     "index": 0,
-    "typeArgs": "0x0295d5e88dabf32ef59bc292d1f925df2f17948f7845daa4e52f34b81fb2711c4001c70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
-    "data": "0x424c4b4c02ca0001050303c60aaf535194f80f45dc59e8e9d0c43735c6a1f2a359eb9e42cfcf95ab763daf03ddeea19ee452acaec2fe23be86dfef148eb00615702bbd4f287da66a19542438038f5ff1cbbb8e140068f49f67183db95e06baa21ccf06975989350b8d4fa9f2a003992ac4c937d1e880cb479b55391585f2ad88835aa9acc7cd822f912562d163220242933ebb4276e5820cabd2c06845a58acb8f981fcd79a2783986e55134c3fac20500e0eb867a373cd9e44a6112dffd9b49704d96558ab9b0a18c2f449d035548cf8d00000000"
+    "typeArgs": "0x0295d5e88dabf32ef59bc292d1f925df2f17948f7845daa4e52f34b81fb2711c40019be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
+    "data": "0x424c4b4c02150103050303c60aaf535194f80f45dc59e8e9d0c43735c6a1f2a359eb9e42cfcf95ab763daf03ddeea19ee452acaec2fe23be86dfef148eb00615702bbd4f287da66a19542438038f5ff1cbbb8e140068f49f67183db95e06baa21ccf06975989350b8d4fa9f2a003992ac4c937d1e880cb479b55391585f2ad88835aa9acc7cd822f912562d163220242933ebb4276e5820cabd2c06845a58acb8f981fcd79a2783986e55134c3fac20500e0eb867a373cd9e44a6112dffd9b49704d96558ab9b0a18c2f449d035548cf8d4900490000001000000030000000310000009bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce801140000009888a8a74df4e0ce82e7a4604f8fd403fd4622ca0100000014abababababababababababababababababababab0000000000000000"
   },
   "firewallLockDeployOutPoint": {
     "txHash": "0x128193cc2d547b224ccf10a6e299cb0749c633c5f9354ff5a9a5fd3e894318d2",
     "index": 0
   },
   "blacklistRegistryDeployOutPoint": {
-    "txHash": "0x410864a6815cec51cbc3a86dfe5cf7c1ff62f1c56648ea0a0bdb2feeb6831973",
-    "index": 1
+    "txHash": "0xa165e5af82538c072caaee87ae5b919ad89ca2448d66daf9a29092b5ad87294d",
+    "index": 0
   },
   "governanceLockDeployOutPoint": {
-    "txHash": "0x410864a6815cec51cbc3a86dfe5cf7c1ff62f1c56648ea0a0bdb2feeb6831973",
+    "txHash": "0xcdd2c63e18729b711bdbd4fa843a4f959f48d93bdf2e5aed8799c8648c7eb9aa",
+    "index": 0
+  },
+  "proposalAnchorDeployOutPoint": {
+    "txHash": "0x9d8cc6d26fce08eba8104dba8b5e5b5acb097b9c71f96b6bd6d68d12531413ee",
     "index": 0
   },
   "spawnAwareSecp256k1DeployOutPoint": {
@@ -39,8 +44,9 @@
   },
   "typeIds": {
     "firewallLock": "0x8192c9df809976ae9b093dd0d6b072a96101be8cffe61a7e9ac87c04e1f4dc54",
-    "blacklistRegistry": "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
+    "blacklistRegistry": "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
     "governanceLock": "0x95d5e88dabf32ef59bc292d1f925df2f17948f7845daa4e52f34b81fb2711c40",
+    "proposalAnchor": "0x89decc8507addb114e35c2a2e2ae943089832884818fc7ac6de3c3b8cdae6a12",
     "spawnAwareSecp256k1": "0x9be62e0423d4278b15c071bb881a4ebf936f7e46b3df0f152de50ae416f54465"
   },
   "governance": {
@@ -80,6 +86,70 @@
       "registry": "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4:0",
       "date": "2026-05-26",
       "note": "GOV1 v3 redeployment — governance-lock and blacklist-registry redeployed; registry re-bootstrapped with rotated testnet governance keys"
+    },
+    {
+      "contracts": {
+        "proposalAnchor": "0x09797b7a49421ae78526d172c90eb8027f1998f5bcf66bab5748a7cf201bd646:0"
+      },
+      "date": "2026-05-31",
+      "note": "proposal-anchor type script deployed for treasury-funded PBLK anchors and consensus-enforced reclaim"
+    },
+    {
+      "contracts": {
+        "blacklistRegistry": "0xa165e5af82538c072caaee87ae5b919ad89ca2448d66daf9a29092b5ad87294d:0"
+      },
+      "registry": "0xd841c6c1e0841ea58274a7a114cce505bc19503cca4ab2da07c060d10a436672:0",
+      "treasury": "0xd841c6c1e0841ea58274a7a114cce505bc19503cca4ab2da07c060d10a436672:1",
+      "date": "2026-05-31",
+      "note": "Treasury-enabled blacklist-registry redeployed and canonical testnet registry re-bootstrapped with BLKL v2 data carrying a v3 governance header and dedicated public treasury seed cell."
+    },
+    {
+      "contracts": {
+        "proposalAnchor": "0x6a30f9a5f725d3fa61a47842a5e88d44c034ad7044db24fa950f7e026b8fe6f6:0"
+      },
+      "date": "2026-06-01",
+      "note": "proposal-anchor redeployed (Type ID upgrade) — fixed bytes::Bytes Arc atomic opcodes (lr/sc) by replacing high_level::load_script molecule path with raw syscall load_script into Vec<u8>; binary is now 19560 bytes with 0 atomic instructions"
+    },
+    {
+      "contracts": {
+        "governanceLock": "0xf0c7aa21eb84a5aee776f17be646461efd81d1858202229581b4e39a58684029:0",
+        "proposalAnchor": "0xf0c7aa21eb84a5aee776f17be646461efd81d1858202229581b4e39a58684029:1"
+      },
+      "date": "2026-06-01",
+      "note": "governance-lock and proposal-anchor redeployed together (combined Type ID upgrade TX) — governance-lock upgraded to signer-free GOV1 v4 validator-vote model; proposal-anchor included to provide capacity for the larger binary (97024 bytes vs 94632 bytes old binary)"
+    },
+    {
+      "contracts": {
+        "governanceLock": "0xcdd2c63e18729b711bdbd4fa843a4f959f48d93bdf2e5aed8799c8648c7eb9aa:0"
+      },
+      "date": "2026-06-02",
+      "note": "governance-lock redeployed (Type ID upgrade) — fixed sha256 outer hash: noble/curves secp256k1 applies SHA-256 internally before ECDSA; governance-lock now matches with sha256(blake2b(canonical)) as the vote signing message hash (binary 98224 bytes)"
+    },
+    {
+      "contracts": {
+        "proposalAnchor": "0x9d8cc6d26fce08eba8104dba8b5e5b5acb097b9c71f96b6bd6d68d12531413ee:0"
+      },
+      "date": "2026-06-02",
+      "note": "proposal-anchor redeployed (Type ID upgrade) — fixed INVALID_RECLAIM_SINCE (error 36): relative_timestamp_since_ms was returning seconds but comparing to reclaim_delay_ms in milliseconds; fix multiplies since seconds by 1000 before comparison (binary 19568 bytes)"
+    },
+    {
+      "registry": "0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8:0",
+      "date": "2026-06-02",
+      "note": "Phase 4 governance drill executed — proposal 7a3ebccd3e7d (add 0xababababababababab... to blacklist) confirmed on-chain; end-to-end GOV1 v4 governance flow validated on testnet"
     }
-  ]
+  ],
+  "treasury": {
+    "lock": {
+      "code_hash": "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8",
+      "hash_type": "type",
+      "args": "0x9888a8a74df4e0ce82e7a4604f8fd403fd4622ca"
+    },
+    "lockHash": "0xc1f0fbfad334b1be673f268122d449449305403b01d008fc698acc41e70740f2",
+    "seedCell": {
+      "txHash": "0xd841c6c1e0841ea58274a7a114cce505bc19503cca4ab2da07c060d10a436672",
+      "index": 1,
+      "capacity": "0x174876e800"
+    },
+    "note": "Ordinary bootstrap change was sent to a different local testnet account so treasury discovery reports only treasury cells."
+  }
 }

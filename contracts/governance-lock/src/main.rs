@@ -375,7 +375,7 @@ fn load_input_since(index: usize, source: Source) -> Result<u64, i8> {
 }
 
 /// Checks that `since` encodes a relative median-time-past delay >= `min_ms`.
-/// Consensus enforces the proposal input is at least this old.
+/// CKB consensus stores timestamp since values in seconds; convert to ms for comparison.
 fn verify_relative_since_timestamp(since: u64, min_ms: u64) -> Result<(), i8> {
     if since & SINCE_LOCK_TYPE_FLAG == 0 {
         return Err(ERR_REVIEW_WINDOW_NOT_MET); // must be relative
@@ -383,7 +383,9 @@ fn verify_relative_since_timestamp(since: u64, min_ms: u64) -> Result<(), i8> {
     if since & SINCE_METRIC_TYPE_MASK != SINCE_METRIC_TIMESTAMP {
         return Err(ERR_REVIEW_WINDOW_NOT_MET); // must be timestamp metric
     }
-    let timestamp_ms = since & SINCE_VALUE_MASK;
+    // since value is in seconds; review_delay_ms is in milliseconds
+    let timestamp_sec = since & SINCE_VALUE_MASK;
+    let timestamp_ms = timestamp_sec.saturating_mul(1000);
     if timestamp_ms < min_ms {
         return Err(ERR_REVIEW_WINDOW_NOT_MET);
     }
@@ -455,6 +457,68 @@ fn vote_word(vote: u8) -> Result<&'static [u8], i8> {
     }
 }
 
+// Minimal SHA-256 for 32-byte inputs. Implements the standard algorithm with one
+// data block (padded 32-byte message → 64-byte padded block).
+fn sha256_32(data: &[u8; 32]) -> [u8; 32] {
+    const K: [u32; 64] = [
+        0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+        0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+        0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+        0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+        0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+        0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+        0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+        0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2,
+    ];
+    // Build padded 512-bit block: data(32) + 0x80 + zeros + length(8 BE)
+    let mut block = [0u8; 64];
+    block[..32].copy_from_slice(data);
+    block[32] = 0x80;
+    // message bit length = 32*8 = 256 = 0x100
+    block[56] = 0x00;
+    block[57] = 0x00;
+    block[58] = 0x00;
+    block[59] = 0x00;
+    block[60] = 0x00;
+    block[61] = 0x00;
+    block[62] = 0x01;
+    block[63] = 0x00;
+    // Prepare message schedule
+    let mut w = [0u32; 64];
+    for i in 0..16 {
+        w[i] = u32::from_be_bytes([block[i*4], block[i*4+1], block[i*4+2], block[i*4+3]]);
+    }
+    for i in 16..64 {
+        let s0 = w[i-15].rotate_right(7) ^ w[i-15].rotate_right(18) ^ (w[i-15] >> 3);
+        let s1 = w[i-2].rotate_right(17) ^ w[i-2].rotate_right(19) ^ (w[i-2] >> 10);
+        w[i] = w[i-16].wrapping_add(s0).wrapping_add(w[i-7]).wrapping_add(s1);
+    }
+    // Initial hash values
+    let mut h = [
+        0x6a09e667u32, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+    ];
+    let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh) =
+        (h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
+    for i in 0..64 {
+        let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+        let ch = (e & f) ^ ((!e) & g);
+        let tmp1 = hh.wrapping_add(s1).wrapping_add(ch).wrapping_add(K[i]).wrapping_add(w[i]);
+        let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+        let maj = (a & b) ^ (a & c) ^ (b & c);
+        let tmp2 = s0.wrapping_add(maj);
+        hh = g; g = f; f = e; e = d.wrapping_add(tmp1);
+        d = c; c = b; b = a; a = tmp1.wrapping_add(tmp2);
+    }
+    h[0] = h[0].wrapping_add(a); h[1] = h[1].wrapping_add(b);
+    h[2] = h[2].wrapping_add(c); h[3] = h[3].wrapping_add(d);
+    h[4] = h[4].wrapping_add(e); h[5] = h[5].wrapping_add(f);
+    h[6] = h[6].wrapping_add(g); h[7] = h[7].wrapping_add(hh);
+    let mut out = [0u8; 32];
+    for i in 0..8 { out[i*4..i*4+4].copy_from_slice(&h[i].to_be_bytes()); }
+    out
+}
+
 fn vote_signing_message(
     proposal_id_hash: &[u8; 32],
     vote: u8,
@@ -471,7 +535,11 @@ fn vote_signing_message(
     canonical.extend_from_slice(b"\",\"pubkey\":\"");
     hex_push(&mut canonical, pubkey);
     canonical.extend_from_slice(b"\"}");
-    Ok(blake2b_256(&canonical))
+    // noble/curves secp256k1 applies SHA-256 to the message before ECDSA by default.
+    // Vote signatures were produced with secp256k1.sign(blake2b(canonical), privKey) which
+    // internally computes sha256(blake2b(canonical)). Apply the same outer hash here.
+    let blake2b_hash = blake2b_256(&canonical);
+    Ok(sha256_32(&blake2b_hash))
 }
 
 fn merkle_node(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
@@ -725,6 +793,53 @@ mod tests {
     }
 
     #[test]
+    fn test_vote_signing_message_hash() {
+        // vote_signing_message returns sha256(blake2b(canonical)).
+        // blake2b(canonical) for vote[0] = 411251fa...
+        // sha256(411251fa...) = 4c4633c3...
+        let proposal_id_hash: [u8; 32] = hex_bytes("7a3ebccd3e7d94380800239be69144590235cbd75f6fdf1118f7414b59c3941b");
+        let pubkey: [u8; 33] = hex_bytes("038f5ff1cbbb8e140068f49f67183db95e06baa21ccf06975989350b8d4fa9f2a0");
+        let timestamp = b"2026-06-01T18:20:51.445Z";
+        let vote: u8 = 1;
+
+        let hash = vote_signing_message(&proposal_id_hash, vote, timestamp, &pubkey).unwrap();
+        let expected: [u8; 32] = hex_bytes("4c4633c35b5b7b55083538d4af4dbcbd2b9d560c52a7853dcf7141ce7bb28a13");
+        assert_eq!(hash, expected, "vote_signing_message hash mismatch");
+    }
+
+    #[test]
+    fn test_recover_pubkey_real_votes() {
+        // vote_signing_message = sha256(blake2b(canonical)).
+        // sha256(blake2b(vote[0])) = 4c4633c3...
+        let msg_hash0: [u8; 32] = hex_bytes("4c4633c35b5b7b55083538d4af4dbcbd2b9d560c52a7853dcf7141ce7bb28a13");
+        let mut sig0 = [0u8; 65];
+        sig0[..32].copy_from_slice(&hex_bytes::<32>("ef6c8d16350699534a6b92ed925c0ba88440f6656dd99a8fc8c21dd33334911a"));
+        sig0[32..64].copy_from_slice(&hex_bytes::<32>("20e4a345c03163a5613b8f05fc30bb5b0c8e3b298339a0f47cbd2b73d7a09532"));
+        sig0[64] = 0x01;
+        let pk0: [u8; 33] = hex_bytes("038f5ff1cbbb8e140068f49f67183db95e06baa21ccf06975989350b8d4fa9f2a0");
+        let recovered0 = recover_pubkey(&msg_hash0, &sig0).expect("recover vote[0]");
+        assert_eq!(recovered0, pk0, "vote[0] pubkey mismatch");
+
+        // sha256(blake2b(vote[1])) = 7ec0d368...
+        let msg_hash1: [u8; 32] = hex_bytes("7ec0d368b885b9e8d385de45fee4d69618c6419db46f2fe4b28ff2ee4f5d48f8");
+        let mut sig1 = [0u8; 65];
+        sig1[..32].copy_from_slice(&hex_bytes::<32>("80c297bcc67af3b66859d8d9d29f5da86e5f4edb3d99e86e5b01a497d3752df3"));
+        sig1[32..64].copy_from_slice(&hex_bytes::<32>("22773a2da2f3b9a13c422d7a5d0148e170cd7cec0c9e3279eeded756c6479c6b"));
+        sig1[64] = 0x00;
+        let pk1: [u8; 33] = hex_bytes("03c60aaf535194f80f45dc59e8e9d0c43735c6a1f2a359eb9e42cfcf95ab763daf");
+        let recovered1 = recover_pubkey(&msg_hash1, &sig1).expect("recover vote[1]");
+        assert_eq!(recovered1, pk1, "vote[1] pubkey mismatch");
+    }
+
+    fn hex_bytes<const N: usize>(s: &str) -> [u8; N] {
+        let mut out = [0u8; N];
+        for i in 0..N {
+            out[i] = u8::from_str_radix(&s[i*2..i*2+2], 16).unwrap();
+        }
+        out
+    }
+
+    #[test]
     fn test_recover_pubkey_roundtrip() {
         use k256::ecdsa::{signature::hazmat::PrehashSigner, SigningKey};
         // Private key = [0x01; 32] → signer 0 in testnet set
@@ -744,27 +859,31 @@ mod tests {
         SINCE_METRIC_TIMESTAMP | (ms & SINCE_VALUE_MASK)
     }
 
-    fn relative_since(ms: u64) -> u64 {
-        SINCE_LOCK_TYPE_FLAG | SINCE_METRIC_TIMESTAMP | (ms & SINCE_VALUE_MASK)
+    // Encodes a relative timestamp since value with the given SECONDS value.
+    fn relative_since_sec(secs: u64) -> u64 {
+        SINCE_LOCK_TYPE_FLAG | SINCE_METRIC_TIMESTAMP | (secs & SINCE_VALUE_MASK)
     }
 
     #[test]
     fn test_relative_since_valid_exact_delay() {
-        assert!(verify_relative_since_timestamp(relative_since(259_200_000), 259_200_000).is_ok());
+        // 259_200 seconds = 259_200_000 ms exactly (3 days)
+        assert!(verify_relative_since_timestamp(relative_since_sec(259_200), 259_200_000).is_ok());
     }
 
     #[test]
     fn test_relative_since_reject_absolute_timestamp() {
+        // Absolute (non-relative) since must be rejected
         assert_eq!(
-            verify_relative_since_timestamp(valid_since(259_200_000), 259_200_000),
+            verify_relative_since_timestamp(valid_since(259_200), 259_200_000),
             Err(ERR_REVIEW_WINDOW_NOT_MET),
         );
     }
 
     #[test]
     fn test_relative_since_reject_short_delay() {
+        // 259_199 seconds * 1000 = 259_199_000 ms < 259_200_000 ms → rejected
         assert_eq!(
-            verify_relative_since_timestamp(relative_since(259_199_999), 259_200_000),
+            verify_relative_since_timestamp(relative_since_sec(259_199), 259_200_000),
             Err(ERR_REVIEW_WINDOW_NOT_MET),
         );
     }

@@ -7,21 +7,24 @@ export const TESTNET_RPC_URL = "https://testnet.ckb.dev";
 // Survives governance-lock upgrades — update only typeIdValue if the registry cell is re-bootstrapped.
 export const TESTNET_REGISTRY_SPEC: RegistrySpecLike = {
   codeHash:
-    "0x5812b3f0f68ded4d61e8f12117caa011f295dbe88a29c07b86c9caec14bd6c55",
+    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
   hashType: "type",
   typeIdValue:
-    "0xc70a072cdfb7d25a5e92d27a47f9c8a0f30513de683e56e16d55ae30775f3951",
+    "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
   required: true,
 };
 
 // Live registry cell outpoint on testnet. Moves after each governance update.
 export const TESTNET_REGISTRY_CELL = {
   txHash:
-    "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4",
+    "0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8",
   index: 0,
 };
 
-// Deployed contract binary cells (2026-05-26 deployment).
+export const TESTNET_TREASURY_DONATION_ADDRESS =
+  "ckt1qyqf3z9g5axlfcxwstn6gcz03l2q8l2xyt9q4erc0p";
+
+// Deployed contract binary cells (treasury-enabled registry redeployed 2026-05-31).
 export const TESTNET_CONTRACT_OUTPOINTS = {
   firewallLock: {
     txHash:
@@ -30,12 +33,17 @@ export const TESTNET_CONTRACT_OUTPOINTS = {
   },
   blacklistRegistry: {
     txHash:
-      "0x410864a6815cec51cbc3a86dfe5cf7c1ff62f1c56648ea0a0bdb2feeb6831973",
-    index: 1,
+      "0xa165e5af82538c072caaee87ae5b919ad89ca2448d66daf9a29092b5ad87294d",
+    index: 0,
   },
   governanceLock: {
     txHash:
-      "0x410864a6815cec51cbc3a86dfe5cf7c1ff62f1c56648ea0a0bdb2feeb6831973",
+      "0xcdd2c63e18729b711bdbd4fa843a4f959f48d93bdf2e5aed8799c8648c7eb9aa",
+    index: 0,
+  },
+  proposalAnchor: {
+    txHash:
+      "0x9d8cc6d26fce08eba8104dba8b5e5b5acb097b9c71f96b6bd6d68d12531413ee",
     index: 0,
   },
   spawnAwareSecp256k1: {
