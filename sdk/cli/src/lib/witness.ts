@@ -81,6 +81,13 @@ function writeU16LE(buf: Uint8Array, offset: number, value: number): void {
   buf[offset + 1] = (value >> 8) & 0xff;
 }
 
+function writeU32LE(buf: Uint8Array, offset: number, value: number): void {
+  buf[offset] = value & 0xff;
+  buf[offset + 1] = (value >> 8) & 0xff;
+  buf[offset + 2] = (value >> 16) & 0xff;
+  buf[offset + 3] = (value >> 24) & 0xff;
+}
+
 // Builds WitnessArgs.lock content for validator-authorized governance updates.
 // Format:
 //   vote_count(1)
@@ -125,13 +132,6 @@ export function buildValidatorVoteWitness(votes: ValidatorVoteWitnessEntry[]): U
     }
   }
   return buf;
-}
-
-function writeU32LE(buf: Uint8Array, offset: number, value: number): void {
-  buf[offset] = value & 0xff;
-  buf[offset + 1] = (value >> 8) & 0xff;
-  buf[offset + 2] = (value >> 16) & 0xff;
-  buf[offset + 3] = (value >> 24) & 0xff;
 }
 
 function bytesOpt(data: Uint8Array | undefined): Uint8Array {

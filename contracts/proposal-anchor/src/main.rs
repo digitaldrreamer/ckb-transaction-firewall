@@ -242,7 +242,7 @@ fn relative_timestamp_since_ms(index: usize) -> Result<u64, SysError> {
         return Err(error::to_sys_error(error::INVALID_RECLAIM_SINCE));
     }
     // CKB timestamp since field stores seconds; multiply by 1000 to match ms stored in reclaim_delay_ms.
-    Ok((since & 0x00ff_ffff_ffff_ffff) * 1000)
+    Ok((since & 0x00ff_ffff_ffff_ffff).saturating_mul(1000))
 }
 
 fn output_capacity_for_lock_hash(target_hash: &[u8; 32]) -> Result<u64, SysError> {
