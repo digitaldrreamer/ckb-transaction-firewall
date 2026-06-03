@@ -342,12 +342,15 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
 
   const proposalCapacity = parseCapacity(proposalCell.capacity);
   const proposalChangeCapacity = proposalCapacity - DEFAULT_FEE_SHANNONS;
-  if (proposalChangeCapacity < MIN_CHANGE_SHANNONS) {
+  const treasuryLockHash = governanceTreasuryLockHash(state.governanceHeader);
+  const minChange = treasuryLockHash
+    ? MIN_CHANGE_SHANNONS
+    : occupiedCapacityShannons({ lock: proposalCell.lock, type: null, data: "0x" });
+  if (proposalChangeCapacity < minChange) {
     throw new Error(`Proposal cell capacity ${proposalCapacity} shannons is too small to return change after fee`);
   }
   let registryOutputCapacity = parseCapacity(state.cell.capacity);
   let extraTreasuryOutputCapacity = 0n;
-  const treasuryLockHash = governanceTreasuryLockHash(state.governanceHeader);
   let treasuryLockScript: { code_hash: string; hash_type: string; args: string } | undefined;
   if (treasuryLockHash) {
     treasuryLockScript = state.governanceHeader?.treasuryLockScript;
