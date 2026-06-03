@@ -439,7 +439,7 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
         { capacity: hexCapacity(registryOutputCapacity), lock: state.cell.lock, type: state.cell.type },
         // Merge proposal change + extra treasury capacity into one output to avoid
         // creating a cell below the minimum 125 CKB for treasury-lock's 64-byte args.
-        { capacity: hexCapacity(proposalChangeCapacity + extraTreasuryOutputCapacity), lock: TESTNET_TREASURY_LOCK_SCRIPT, type: null },
+        { capacity: hexCapacity(proposalChangeCapacity + extraTreasuryOutputCapacity), lock: state.governanceHeader?.treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT, type: null },
       ],
       outputs_data: [
         bytesToHex(state.newBlkl),

@@ -265,7 +265,7 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
 
       if (!explicitOutpoints.length) {
         // Auto-discover treasury-lock cells from chain.
-        const candidates = await getLiveCellsByLock(opts.rpcUrl, TESTNET_TREASURY_LOCK_SCRIPT, 100);
+        const candidates = await getLiveCellsByLock(opts.rpcUrl, treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT, 100);
         for (const cell of candidates) {
           if (cell.type || cell.data !== "0x") continue;
           selectedTreasuryCells.push(cell);
@@ -322,7 +322,7 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
         outputs: [
           { capacity: hexCapacity(anchorCapacity), lock: TESTNET_GOVERNANCE_LOCK_SCRIPT, type: anchorType },
           ...(changeCapacity > 0n
-            ? [{ capacity: hexCapacity(changeCapacity), lock: TESTNET_TREASURY_LOCK_SCRIPT, type: null }]
+            ? [{ capacity: hexCapacity(changeCapacity), lock: treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT, type: null }]
             : []),
         ],
         outputs_data: [

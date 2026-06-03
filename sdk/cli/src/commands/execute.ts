@@ -280,7 +280,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       if (registryGrowth > treasuryInputCapacity) {
         if (!treasuryOutpoints.length) {
           // Auto-discover autonomous treasury-lock cells (keyless — no signature required).
-          const candidates = await getLiveCellsByLock(opts.rpcUrl, TESTNET_TREASURY_LOCK_SCRIPT, 100);
+          const candidates = await getLiveCellsByLock(opts.rpcUrl, state.governanceHeader?.treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT, 100);
           for (const cell of candidates) {
             if (cell.type || cell.data !== "0x") continue;
             treasuryCells.push(cell);
@@ -437,7 +437,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
         // output below the minimum cell capacity (125 CKB for treasury-lock's 64-byte args).
         {
           capacity: hexCapacity(proposalChangeCapacity + extraTreasuryOutputCapacity),
-          lock: TESTNET_TREASURY_LOCK_SCRIPT,
+          lock: state.governanceHeader?.treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT,
           type: null,
         },
       ],
