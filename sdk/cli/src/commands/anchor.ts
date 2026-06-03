@@ -28,6 +28,8 @@ import { hexCapacity, occupiedCapacityShannons, parseCapacity } from "../lib/cap
 import { parseCellDepList, type CellDepJson } from "../lib/tx-deps.js";
 
 const DEFAULT_FEE_SHANNONS = 100_000n;
+// Minimum occupied capacity for a treasury-lock cell (8 + 32 + 1 + 64 bytes args = 105 CKB; 125 CKB is conservative headroom).
+const MIN_CHANGE_SHANNONS = 125n * 100_000_000n;
 
 export interface AnchorOptions {
   proposal?: string;
@@ -293,7 +295,10 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
       process.exit(1);
     }
 
-    const changeCapacity = totalInput - anchorCapacity - DEFAULT_FEE_SHANNONS;
+    // Dust change below the minimum cell capacity is absorbed into the fee rather than
+    // creating a sub-minimum output that CKB consensus would reject.
+    const rawChange = totalInput - anchorCapacity - DEFAULT_FEE_SHANNONS;
+    const changeCapacity = rawChange >= MIN_CHANGE_SHANNONS ? rawChange : 0n;
     const txJson = {
       transaction: {
         version: "0x0",
