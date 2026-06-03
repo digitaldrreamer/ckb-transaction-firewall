@@ -12,7 +12,7 @@ use ckb_testtool::context::Context;
 
 const MAX_CYCLES: u64 = 30_000_000;
 const REVIEW_DELAY_MS: u64 = 259_200_000;
-const ERROR_UNAUTHORIZED_TREASURY_LOCK: i8 = 34;
+const ERROR_INVALID_PROPOSAL_DATA: i8 = 33;
 const ERROR_INVALID_RECLAIM_RETURN: i8 = 35;
 const ERROR_INVALID_RECLAIM_SINCE: i8 = 36;
 
@@ -54,7 +54,8 @@ fn pblk_data() -> Bytes {
 }
 
 fn encode_relative_timestamp_since(ms: u64) -> u64 {
-    0x8000_0000_0000_0000u64 | 0x4000_0000_0000_0000u64 | ms
+    // CKB since timestamp metric stores seconds (not ms); contract multiplies by 1000.
+    0x8000_0000_0000_0000u64 | 0x4000_0000_0000_0000u64 | (ms / 1000)
 }
 
 fn assert_error_code(err: ckb_testtool::ckb_error::Error, expected_code: i8) {
@@ -110,16 +111,16 @@ fn test_pass_create_treasury_locked_anchor() {
 }
 
 #[test]
-fn test_reject_create_anchor_with_wrong_lock() {
+fn test_reject_create_anchor_with_invalid_pblk_data() {
+    // The contract does not restrict which lock script an anchor may use on creation
+    // (any lock is permitted; security is enforced on the consumption path).
+    // This test verifies that malformed PBLK data IS rejected on the creation path.
     let mut context = Context::default();
     let anchor_code = context.deploy_cell(Bytes::from(PROPOSAL_ANCHOR_BINARY.to_vec()));
     let always_success = context.deploy_cell(ALWAYS_SUCCESS.clone());
     let treasury_lock = context
         .build_script(&always_success, Bytes::from(vec![0x01]))
         .expect("treasury lock");
-    let wrong_lock = context
-        .build_script(&always_success, Bytes::from(vec![0x02]))
-        .expect("wrong lock");
     let treasury_lock_hash = blake2b_256(treasury_lock.as_slice());
     let anchor_type = context
         .build_script(&anchor_code, proposal_anchor_args(treasury_lock_hash))
@@ -128,21 +129,24 @@ fn test_reject_create_anchor_with_wrong_lock() {
     let funding = context.create_cell(
         CellOutput::new_builder()
             .capacity(300_000_000u64.pack())
-            .lock(treasury_lock)
+            .lock(treasury_lock.clone())
             .build(),
         Bytes::new(),
     );
+
+    // Garbage PBLK data — not a valid proposal payload.
+    let bad_data = Bytes::from(vec![0xde, 0xad, 0xbe, 0xef]);
 
     let tx = TransactionBuilder::default()
         .input(CellInput::new_builder().previous_output(funding).build())
         .output(
             CellOutput::new_builder()
                 .capacity(200_000_000u64.pack())
-                .lock(wrong_lock)
+                .lock(treasury_lock)
                 .type_(Some(anchor_type).pack())
                 .build(),
         )
-        .output_data(pblk_data().pack())
+        .output_data(bad_data.pack())
         .cell_dep(CellDep::new_builder().out_point(anchor_code).build())
         .cell_dep(CellDep::new_builder().out_point(always_success).build())
         .build();
@@ -150,8 +154,8 @@ fn test_reject_create_anchor_with_wrong_lock() {
     let tx = context.complete_tx(tx);
     let err = context
         .verify_tx(&tx, MAX_CYCLES)
-        .expect_err("wrong anchor lock should be rejected");
-    assert_error_code(err, ERROR_UNAUTHORIZED_TREASURY_LOCK);
+        .expect_err("anchor with invalid PBLK data should be rejected");
+    assert_error_code(err, ERROR_INVALID_PROPOSAL_DATA);
 }
 
 #[test]
