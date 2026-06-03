@@ -1,0 +1,23 @@
+{
+  "name": "ckb-firewall-typescript-examples",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "agent": "tsx src/agent-preflight.ts",
+    "wallet": "tsx src/wallet-feedback.ts",
+    "wallet-ui": "tsx src/wallet-ui.ts",
+    "blacklisted-transfer": "tsx src/blacklisted-transfer-safety.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/mistral": "3.0.37",
+    "@ckb-firewall/sdk": "^0.3.3",
+    "ai": "6.0.188",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.19",
+    "tsx": "^4.20.6",
+    "typescript": "^5.6.3"
+  }
+}

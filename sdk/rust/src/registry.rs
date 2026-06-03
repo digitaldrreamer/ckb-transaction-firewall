@@ -11,8 +11,13 @@ pub(crate) fn parse_governance_header(
     if data.len() < offset + gov_len || gov_len < 3 {
         return Err(FirewallError::InvalidRegistryData);
     }
-    // gh_version(1) | signer_count(1) | threshold(1) | pubkeys(33×N) | validator_count(2 LE) | merkle_root(32)
-    if data[offset] != 0x01 {
+    // Wire format:
+    //   gh_version(1) | legacy_signer_count(1) | threshold(1) | [pubkey(33)]×N
+    //   | validator_count(2 LE) | merkle_root(32)
+    //   v2 suffix: treasury_lock_hash(32)
+    //   v3 suffix: treasury_lock_script_len(2 LE) | treasury_lock_script bytes
+    let gh_version = data[offset];
+    if gh_version != 0x01 && gh_version != 0x02 && gh_version != 0x03 {
         return Err(FirewallError::InvalidRegistryData);
     }
     let signer_count = data[offset + 1] as usize;

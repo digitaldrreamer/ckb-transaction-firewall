@@ -65,7 +65,7 @@
     {
       "txHash": "0x11b0397cd58dce5c2bd704108ee6e1609128c0d828a3f3360237585e82bb7aed",
       "date": "2026-05-14",
-      "note": "0.2.0 release — v1 contract upgrade; placeholder governance-lock"
+      "note": "0.2.0 release \u2014 v1 contract upgrade; placeholder governance-lock"
     },
     {
       "contracts": {
@@ -75,7 +75,7 @@
       },
       "registry": "0x0e96b7c0bd201654b854cf4d1937e1c51b9f9802e961d637d4ea61cd5b46efb3:0",
       "date": "2026-05-20",
-      "note": "v2 full deployment — real governance-lock with secp256k1 multisig; blacklist-registry with CellInput struct fix; BLKL v2 registry bootstrapped with testnet committee"
+      "note": "v2 full deployment \u2014 real governance-lock with secp256k1 multisig; blacklist-registry with CellInput struct fix; BLKL v2 registry bootstrapped with testnet committee"
     },
     {
       "contracts": {
@@ -85,7 +85,7 @@
       },
       "registry": "0x685dc49bfe466a198a01abd94117f5fe7dd79f28570d6ceba744616d7aa51eb4:0",
       "date": "2026-05-26",
-      "note": "GOV1 v3 redeployment — governance-lock and blacklist-registry redeployed; registry re-bootstrapped with rotated testnet governance keys"
+      "note": "GOV1 v3 redeployment \u2014 governance-lock and blacklist-registry redeployed; registry re-bootstrapped with rotated testnet governance keys"
     },
     {
       "contracts": {
@@ -108,7 +108,7 @@
         "proposalAnchor": "0x6a30f9a5f725d3fa61a47842a5e88d44c034ad7044db24fa950f7e026b8fe6f6:0"
       },
       "date": "2026-06-01",
-      "note": "proposal-anchor redeployed (Type ID upgrade) — fixed bytes::Bytes Arc atomic opcodes (lr/sc) by replacing high_level::load_script molecule path with raw syscall load_script into Vec<u8>; binary is now 19560 bytes with 0 atomic instructions"
+      "note": "proposal-anchor redeployed (Type ID upgrade) \u2014 fixed bytes::Bytes Arc atomic opcodes (lr/sc) by replacing high_level::load_script molecule path with raw syscall load_script into Vec<u8>; binary is now 19560 bytes with 0 atomic instructions"
     },
     {
       "contracts": {
@@ -116,40 +116,51 @@
         "proposalAnchor": "0xf0c7aa21eb84a5aee776f17be646461efd81d1858202229581b4e39a58684029:1"
       },
       "date": "2026-06-01",
-      "note": "governance-lock and proposal-anchor redeployed together (combined Type ID upgrade TX) — governance-lock upgraded to signer-free GOV1 v4 validator-vote model; proposal-anchor included to provide capacity for the larger binary (97024 bytes vs 94632 bytes old binary)"
+      "note": "governance-lock and proposal-anchor redeployed together (combined Type ID upgrade TX) \u2014 governance-lock upgraded to signer-free GOV1 v4 validator-vote model; proposal-anchor included to provide capacity for the larger binary (97024 bytes vs 94632 bytes old binary)"
     },
     {
       "contracts": {
         "governanceLock": "0xcdd2c63e18729b711bdbd4fa843a4f959f48d93bdf2e5aed8799c8648c7eb9aa:0"
       },
       "date": "2026-06-02",
-      "note": "governance-lock redeployed (Type ID upgrade) — fixed sha256 outer hash: noble/curves secp256k1 applies SHA-256 internally before ECDSA; governance-lock now matches with sha256(blake2b(canonical)) as the vote signing message hash (binary 98224 bytes)"
+      "note": "governance-lock redeployed (Type ID upgrade) \u2014 fixed sha256 outer hash: noble/curves secp256k1 applies SHA-256 internally before ECDSA; governance-lock now matches with sha256(blake2b(canonical)) as the vote signing message hash (binary 98224 bytes)"
     },
     {
       "contracts": {
         "proposalAnchor": "0x9d8cc6d26fce08eba8104dba8b5e5b5acb097b9c71f96b6bd6d68d12531413ee:0"
       },
       "date": "2026-06-02",
-      "note": "proposal-anchor redeployed (Type ID upgrade) — fixed INVALID_RECLAIM_SINCE (error 36): relative_timestamp_since_ms was returning seconds but comparing to reclaim_delay_ms in milliseconds; fix multiplies since seconds by 1000 before comparison (binary 19568 bytes)"
+      "note": "proposal-anchor redeployed (Type ID upgrade) \u2014 fixed INVALID_RECLAIM_SINCE (error 36): relative_timestamp_since_ms was returning seconds but comparing to reclaim_delay_ms in milliseconds; fix multiplies since seconds by 1000 before comparison (binary 19568 bytes)"
     },
     {
       "registry": "0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8:0",
       "date": "2026-06-02",
-      "note": "Phase 4 governance drill executed — proposal 7a3ebccd3e7d (add 0xababababababababab... to blacklist) confirmed on-chain; end-to-end GOV1 v4 governance flow validated on testnet"
+      "note": "Phase 4 governance drill executed \u2014 proposal 7a3ebccd3e7d (add 0xababababababababab... to blacklist) confirmed on-chain; end-to-end GOV1 v4 governance flow validated on testnet"
     },
     {
       "contracts": {
         "governanceLock": "0x5033e680435bc7ef2255767cfd46b355ab1bc6dcda5ec01e38ef0d29119ad711:0"
       },
       "date": "2026-06-02",
-      "note": "governance-lock redeployed (Type ID upgrade) — remove sha256 outer hash; vote signing is now blake2b(canonical) only with JS prehash:false. Binary 97040 bytes."
+      "note": "governance-lock redeployed (Type ID upgrade) \u2014 remove sha256 outer hash; vote signing is now blake2b(canonical) only with JS prehash:false. Binary 97040 bytes."
     },
     {
       "contracts": {
         "proposalAnchor": "0x0daff588f0053bdf34d4c2eebaf2c092f70192cdd4a2d1dd95aee07ce100dea9:0"
       },
       "date": "2026-06-02",
-      "note": "proposal-anchor redeployed (Type ID upgrade) — remove treasury lock checks; proposal cells now use governance-lock so any validator can execute without the treasury private key. Lock check replaced by total output capacity check. Binary 18792 bytes."
+      "note": "proposal-anchor redeployed (Type ID upgrade) \u2014 remove treasury lock checks; proposal cells now use governance-lock so any validator can execute without the treasury private key. Lock check replaced by total output capacity check. Binary 18792 bytes."
+    },
+    {
+      "contracts": {
+        "treasuryLock": "0xac4f9ba2e09edb80588fb9a7b09518dcda172fd91f1c4234d53bda231787cc2b:0"
+      },
+      "date": "2026-06-02",
+      "note": "treasury-lock deployed \u2014 autonomous vending-machine lock; anyone can spend treasury cells into a valid proposal-anchor cell with no private key. code_hash=0xa95f80c9... hash_type=data1, args=gov_type_id||anchor_type_id. Binary 16568 bytes."
+    },
+    {
+      "date": "2026-06-03",
+      "note": "treasury-lock v3: fix molecule Bytes prefix (args at off_args+4), GOV_LOCK_SCRIPT_LEN=54, anchor detection. Code: 0x14882a30:0"
     }
   ],
   "treasury": {
@@ -165,5 +176,11 @@
       "capacity": "0x174876e800"
     },
     "note": "Ordinary bootstrap change was sent to a different local testnet account so treasury discovery reports only treasury cells."
-  }
+  },
+  "treasuryLockCodeHash": "0x8d00a19bd6015716712c6c9ce0b51a533f9f0d227b4a08f7884c918e12e2ae67",
+  "treasuryLockDepOutPoint": {
+    "txHash": "0x14882a3056eb736f51d13ae14d77757afe9cf23fd9d26d9ea9c2bce61f0fd7cd",
+    "index": 0
+  },
+  "treasuryLockDonationAddress": "ckt1qzxspgvm6cq4w9n393kfec94rffnl8cdyfa55z8h3pxfrrsju2hxwq546h5gm2ln9m6ehs5j68ujthe0z72g77z9m2jw2te5hq0myugugzyaany9q7kaky2wxhp29c4wjscgnqegsjqcl3avdh3u8wxd4e4py4tp7mv"
 }
