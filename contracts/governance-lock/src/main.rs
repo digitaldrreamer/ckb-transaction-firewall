@@ -568,7 +568,7 @@ fn program_entry() -> Result<(), i8> {
         if entry.vote != 1 {
             return Err(ERR_INVALID_WITNESS);
         }
-        if entry.merkle_leaf_index as u16 >= header.validator_count {
+        if entry.merkle_leaf_index >= header.validator_count as u32 {
             return Err(ERR_SIG_VERIFICATION);
         }
         if seen.iter().any(|pk| pk == &entry.pubkey) {

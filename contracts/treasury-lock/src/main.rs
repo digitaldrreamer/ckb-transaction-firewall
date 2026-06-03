@@ -144,22 +144,6 @@ fn load_group_input_capacity() -> Result<u64, i8> {
     Ok(total)
 }
 
-fn is_governance_lock(lock: &[u8], gov_type_id: &[u8; 32]) -> bool {
-    // Governance-lock Script molecule (54 bytes):
-    //   [0..4]   full_size = 54 LE
-    //   [4..8]   offset_code_hash = 16 LE
-    //   [8..12]  offset_hash_type = 48 LE
-    //   [12..16] offset_args = 49 LE
-    //   [16..48] code_hash
-    //   [48]     hash_type = 0x01 (type)
-    //   [49..53] Bytes length prefix = [0x01, 0x00, 0x00, 0x00]
-    //   [53]     args data = 0x01 (governance-lock version byte)
-    lock.len() == GOV_LOCK_SCRIPT_LEN
-        && &lock[16..48] == gov_type_id
-        && lock[48] == 0x01   // hash_type = type
-        && lock[53] == 0x01   // args = [0x01]
-}
-
 // Check that a type script belongs to the proposal-anchor AND is bound to this treasury.
 // Anchor type args layout (after the 4-byte Bytes prefix at offset 49):
 //   args[0]      = version byte (0x01)       → type_bytes[53]
@@ -207,6 +191,22 @@ fn program_entry() -> Result<(), i8> {
 
     let treasury_in_cap = load_group_input_capacity()?;
 
+    // Precompute the expected governance-lock blake2b hash once so we can compare
+    // against lock_hash directly without loading the full lock script per output.
+    // Governance-lock molecule (54 bytes) is deterministic given gov_type_id.
+    let gov_lock_hash = {
+        let mut mol = [0u8; GOV_LOCK_SCRIPT_LEN];
+        mol[0..4].copy_from_slice(&(GOV_LOCK_SCRIPT_LEN as u32).to_le_bytes()); // full_size
+        mol[4..8].copy_from_slice(&16u32.to_le_bytes());  // offset code_hash
+        mol[8..12].copy_from_slice(&48u32.to_le_bytes()); // offset hash_type
+        mol[12..16].copy_from_slice(&49u32.to_le_bytes()); // offset args
+        mol[16..48].copy_from_slice(&gov_type_id);
+        mol[48] = 0x01;  // hash_type = type
+        mol[49..53].copy_from_slice(&1u32.to_le_bytes()); // args Bytes prefix (len=1)
+        mol[53] = 0x01;  // args = [0x01]
+        blake2b_256(&mol)
+    };
+
     // Scan outputs: accumulate treasury return capacity and detect an anchor output
     // bound to this treasury.
     let mut found_anchor = false;
@@ -224,19 +224,12 @@ fn program_entry() -> Result<(), i8> {
             treasury_out_cap = treasury_out_cap.saturating_add(cap);
         }
 
-        if !found_anchor {
-            // Check for governance-lock by comparing hash rather than loading full script.
-            // We still need the full lock bytes to verify the args byte (lock[53] == 0x01),
-            // so load it only for outputs that look like they could be governance-lock.
-            if let Ok(lock) = load_cell_field_bytes(i, Source::Output, CellField::Lock) {
-                if is_governance_lock(&lock, &gov_type_id) {
-                    if let Ok(Some(type_bytes)) = load_output_type(i) {
-                        if is_anchor_type_for_treasury(&type_bytes, &anchor_type_id, &self_lock_hash) {
-                            if let Ok(prefix) = load_output_data_prefix(i) {
-                                if &prefix == PBLK_MAGIC {
-                                    found_anchor = true;
-                                }
-                            }
+        if !found_anchor && lock_hash == gov_lock_hash {
+            if let Ok(Some(type_bytes)) = load_output_type(i) {
+                if is_anchor_type_for_treasury(&type_bytes, &anchor_type_id, &self_lock_hash) {
+                    if let Ok(prefix) = load_output_data_prefix(i) {
+                        if &prefix == PBLK_MAGIC {
+                            found_anchor = true;
                         }
                     }
                 }

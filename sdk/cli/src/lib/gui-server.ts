@@ -27,6 +27,7 @@ import {
 import { computeMerkleProof, verifyMerkleProof } from "./validator-set.js";
 import {
   TESTNET_GOVERNANCE_PUBKEYS, TESTNET_CONTRACT_OUTPOINTS, SECP256K1_DEP_GROUP,
+  TESTNET_TREASURY_LOCK_SCRIPT,
 } from "./defaults.js";
 import {
   ckbBlake2b, buildGov1WitnessV4, buildValidatorVoteWitness,
@@ -436,15 +437,13 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
       ],
       outputs: [
         { capacity: hexCapacity(registryOutputCapacity), lock: state.cell.lock, type: state.cell.type },
-        { capacity: hexCapacity(proposalChangeCapacity), lock: proposalCell.lock, type: null },
-        ...(extraTreasuryOutputCapacity > 0n
-          ? [{ capacity: hexCapacity(extraTreasuryOutputCapacity), lock: proposalCell.lock, type: null }]
-          : []),
+        // Merge proposal change + extra treasury capacity into one output to avoid
+        // creating a cell below the minimum 125 CKB for treasury-lock's 64-byte args.
+        { capacity: hexCapacity(proposalChangeCapacity + extraTreasuryOutputCapacity), lock: TESTNET_TREASURY_LOCK_SCRIPT, type: null },
       ],
       outputs_data: [
         bytesToHex(state.newBlkl),
         "0x",
-        ...(extraTreasuryOutputCapacity > 0n ? ["0x"] : []),
       ],
       witnesses: [bytesToHex(witnessBytes), bytesToHex(buildWitnessArgs({}))],
     },

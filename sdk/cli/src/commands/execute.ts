@@ -436,21 +436,18 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       ],
       outputs: [
         { capacity: hexCapacity(registryOutputCapacity), lock: state.cell.lock, type: state.cell.type },
-        // Return proposal cell capacity to the autonomous treasury-lock pool so future
-        // anchors and executes can draw on it without any private key.
+        // Return proposal cell capacity + any extra treasury growth capacity as a single
+        // output to the autonomous treasury-lock pool. Merging avoids creating a second
+        // output below the minimum cell capacity (125 CKB for treasury-lock's 64-byte args).
         {
-          capacity: hexCapacity(proposalChangeCapacity),
+          capacity: hexCapacity(proposalChangeCapacity + extraTreasuryOutputCapacity),
           lock: TESTNET_TREASURY_LOCK_SCRIPT,
           type: null,
         },
-        ...(extraTreasuryOutputCapacity > 0n
-          ? [{ capacity: hexCapacity(extraTreasuryOutputCapacity), lock: TESTNET_TREASURY_LOCK_SCRIPT, type: null }]
-          : []),
       ],
       outputs_data: [
         bytesToHex(state.newBlkl),
         "0x",
-        ...(extraTreasuryOutputCapacity > 0n ? ["0x"] : []),
       ],
       witnesses: [
         bytesToHex(witnessBytes),
