@@ -271,15 +271,10 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       const registryGrowth = registryOutputCapacity > registryInputCapacity ? registryOutputCapacity - registryInputCapacity : 0n;
       const registryShrink = registryInputCapacity > registryOutputCapacity ? registryInputCapacity - registryOutputCapacity : 0n;
 
-      // Prefer covering registry growth from the proposal cell's capacity surplus.
-      // If that's not enough, draw from the autonomous treasury-lock pool — no private
-      // key needed, the treasury-lock contract validates by detecting the proposal-anchor
-      // input being consumed.
-      const proposalSurplus = parseCapacity(proposalCell.capacity) - DEFAULT_FEE_SHANNONS - MIN_CHANGE_SHANNONS;
-      const growthCoveredByProposal = registryGrowth <= proposalSurplus ? registryGrowth : 0n;
-      const remainingGrowth = registryGrowth - growthCoveredByProposal;
-
-      if (remainingGrowth > treasuryInputCapacity) {
+      // Registry growth must always be funded entirely by treasury inputs.
+      // The proposal-anchor contract requires the full proposal cell capacity (minus fee)
+      // to be returned to the treasury, so proposalChangeCapacity must not be reduced.
+      if (registryGrowth > treasuryInputCapacity) {
         if (!treasuryOutpoints.length) {
           // Auto-discover autonomous treasury-lock cells (keyless — no signature required).
           const candidates = await getLiveCellsByLock(opts.rpcUrl, TESTNET_TREASURY_LOCK_SCRIPT, 100);
@@ -287,19 +282,17 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
             if (cell.type || cell.data !== "0x") continue;
             treasuryCells.push(cell);
             treasuryInputCapacity += parseCapacity(cell.capacity);
-            if (treasuryInputCapacity >= remainingGrowth) break;
+            if (treasuryInputCapacity >= registryGrowth) break;
           }
         }
-        if (remainingGrowth > treasuryInputCapacity) {
+        if (registryGrowth > treasuryInputCapacity) {
           throw new Error(
-            `Registry update needs ${remainingGrowth} shannons of additional capacity for growth. ` +
+            `Registry update needs ${registryGrowth} shannons of additional capacity for growth. ` +
             `Treasury pool is insufficient — donate CKB: ckb-firewall donate`,
           );
         }
       }
-      extraTreasuryOutputCapacity = treasuryInputCapacity - remainingGrowth + registryShrink;
-      // Recalculate proposal change: reduced by the growth it covers.
-      proposalChangeCapacity -= growthCoveredByProposal;
+      extraTreasuryOutputCapacity = treasuryInputCapacity - registryGrowth + registryShrink;
     } else {
       registryOutputCapacity = parseCapacity(state.cell.capacity);
     }
