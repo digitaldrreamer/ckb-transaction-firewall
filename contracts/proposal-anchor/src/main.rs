@@ -166,7 +166,8 @@ fn running_type_args() -> Result<AnchorArgs, SysError> {
         return Err(error::to_sys_error(error::INVALID_TYPE_ARGS));
     }
     let data_len = u32::from_le_bytes([raw[args_off], raw[args_off+1], raw[args_off+2], raw[args_off+3]]) as usize;
-    let end = args_off + 4 + data_len;
+    let end = args_off.checked_add(4).and_then(|v| v.checked_add(data_len))
+        .ok_or_else(|| error::to_sys_error(error::INVALID_TYPE_ARGS))?;
     if end > raw.len() {
         return Err(error::to_sys_error(error::INVALID_TYPE_ARGS));
     }

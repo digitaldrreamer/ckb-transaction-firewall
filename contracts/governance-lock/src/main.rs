@@ -242,6 +242,9 @@ fn load_witness_fields(index: usize, source: Source) -> Result<WitnessFields, i8
         return Err(ERR_INVALID_WITNESS);
     }
     let vote_count = lock_data[0] as usize;
+    if 1usize.saturating_add(vote_count.saturating_mul(106)) > lock_data.len() {
+        return Err(ERR_INVALID_WITNESS);
+    }
     let mut votes = Vec::with_capacity(vote_count);
     let mut off = 1;
     for _ in 0..vote_count {
