@@ -473,8 +473,9 @@ fn load_cell_lock_script(index: usize, source: Source) -> Result<Script, SysErro
 }
 
 fn load_cell_lock_hash(index: usize, source: Source) -> Result<[u8; 32], SysError> {
-    let raw = load_script_field(index, source, CellField::Lock)?;
-    Ok(blake2b_256(raw.as_slice()))
+    let mut hash = [0u8; 32];
+    load_cell_by_field(&mut hash, 0, index, source, CellField::LockHash)?;
+    Ok(hash)
 }
 
 fn load_cell_capacity(index: usize, source: Source) -> Result<u64, SysError> {
