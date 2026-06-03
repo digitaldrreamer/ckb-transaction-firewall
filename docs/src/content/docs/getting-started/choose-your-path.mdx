@@ -16,6 +16,15 @@ Use the **TypeScript SDK** (`@ckb-firewall/sdk`) to run a pre-flight check befor
   <LinkCard href="/guides/typescript-wallet-integration/" title="Wallet integration" description="Wrap a secp256k1 wallet cell with the firewall lock." />
 </CardGrid>
 
+## I want to run a working example right now
+
+The `examples/` directory contains runnable code against the live testnet registry — wallet UI, AI agent gating, blacklisted-transfer safety test, and a Rust backend service. No mocked data.
+
+<CardGrid>
+  <LinkCard href="https://github.com/digitaldrreamer/ckb-transaction-firewall/tree/main/examples" title="TypeScript examples" description="Agent pre-flight, wallet feedback UI, blacklisted-transfer safety test." />
+  <LinkCard href="https://github.com/digitaldrreamer/ckb-transaction-firewall/tree/main/examples/rust" title="Rust example" description="Backend preflight service that checks unsigned transactions before signing." />
+</CardGrid>
+
 ## I'm building a Rust application or service
 
 Use the **Rust SDK** (`ckb-transaction-firewall-sdk`). It mirrors the TypeScript SDK API and makes no RPC calls — you supply the live registry cell.
@@ -26,10 +35,10 @@ Use the **Rust SDK** (`ckb-transaction-firewall-sdk`). It mirrors the TypeScript
 
 ## I'm a governance participant
 
-Use the **CLI** (`@ckb-firewall/cli`) to inspect the registry, manage proposals, vote, and build governance transactions after validator approval. The **GUI** provides a visual interface for the same operations.
+Use the **CLI** (`@ckb-firewall/cli`) to inspect the registry, manage proposals, vote, and submit governance transactions. The **GUI** provides a visual interface for the same operations. No private key is required for anchoring or executing — the autonomous treasury funds both.
 
 <CardGrid>
   <LinkCard href="/guides/cli-walkthrough/" title="CLI walkthrough" description="Inspect the registry and walk through the governance commands." />
   <LinkCard href="/guides/cli-gui/" title="GUI mode" description="Browser-based governance dashboard." />
-  <LinkCard href="/guides/governance-blacklist/" title="Blacklisting an address" description="Full lifecycle for adding an entry — propose, vote, sign, execute." />
+  <LinkCard href="/guides/governance-blacklist/" title="Blacklisting an address" description="Full lifecycle: propose → anchor → vote → execute (no signing step)." />
 </CardGrid>

@@ -6,6 +6,13 @@ mistaken runtime can send funds to a blocked output. They fetch the live CKB
 testnet registry from `https://testnet.ckb.dev`; the registry payload is not
 mocked.
 
+## Prerequisites
+
+- **Node.js 20+** for TypeScript examples
+- **Rust 1.70+** for the Rust example
+- **`MISTRAL_API_KEY`** env var — required only for the `agent-preflight` example
+- An internet connection (all examples hit the CKB testnet RPC)
+
 ## Included examples
 
 | Example | Audience | What it demonstrates |

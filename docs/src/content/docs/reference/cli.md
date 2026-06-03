@@ -278,17 +278,17 @@ Options: `--force` (skip overwrite confirmation)
 
 ## Full governance flow
 
-All registry changes go through governance. The proposal is a local JSON file until `execute` submits it on-chain.
+All registry changes go through governance. The proposal is a local JSON file until `execute` submits it on-chain. No private key is required for `anchor` or `execute` — the autonomous treasury-lock funds both operations.
 
 ```
-propose → export → [share] → import → vote → export → [share] → import → sign → execute
+propose → anchor → export → [share] → import → vote → export → [share] → import → execute
 ```
 
-1. One participant runs `propose` and `export`
-2. The JSON is shared out-of-band (email, Signal, IPFS, etc.)
-3. Each participant runs `import` to receive it
-4. Each validator runs `vote` with their private key
-5. Each signer runs `sign` after the 72h review window and vote threshold are met
-6. Any participant runs `execute` to build and submit the transaction
+1. Any participant runs `propose` to create the proposal file, then `anchor` to lock it on-chain (funded by the treasury pool — no key needed)
+2. The JSON is exported and shared out-of-band (email, Signal, IPFS, etc.)
+3. Each validator runs `import` to receive it, then `vote` with their validator key
+4. After the review window and vote threshold are met, any participant runs `execute` — also funded by the treasury pool, no key needed
 
-The minimum timeline is approximately 120 hours (72h review + voting + signing). The CLI warns if a temporary entry's `expiresAt` falls within this window.
+There is no `sign` command. Validator vote signatures are collected during `vote` and embedded in the execute witness by `execute` itself.
+
+The minimum timeline is approximately 96 hours (72h review window + time for validators to vote). The CLI warns if a temporary entry's `expiresAt` falls within this window.

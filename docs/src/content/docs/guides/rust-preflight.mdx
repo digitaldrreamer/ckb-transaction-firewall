@@ -170,3 +170,14 @@ For off-chain pre-flight use `SystemTime::now()` as seconds. For consensus-accur
 Full type and function reference: [Rust SDK API](/reference/rust-sdk-api/).
 
 Result codes and their on-chain contract mapping: [Error codes](/reference/error-codes/).
+
+## Runnable example
+
+The [`examples/rust/`](https://github.com/digitaldrreamer/ckb-transaction-firewall/tree/main/examples/rust) directory contains a working backend preflight service against the live testnet registry:
+
+- **`preflight_service.rs`** — fetches the live registry, checks unsigned transaction candidates, rejects unsafe ones before the signing queue
+
+```bash
+cd examples/rust
+cargo run --bin preflight_service
+```

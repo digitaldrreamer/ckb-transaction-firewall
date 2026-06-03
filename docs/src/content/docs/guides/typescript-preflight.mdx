@@ -222,3 +222,12 @@ Entries with a past `expiresAt` are automatically treated as inactive. Both func
 Full type definitions, function signatures, and class documentation: [TypeScript SDK API](/reference/sdk-api/).
 
 Result codes and their on-chain contract mapping: [Error codes](/reference/error-codes/).
+
+## Runnable examples
+
+The [`examples/typescript/`](https://github.com/digitaldrreamer/ckb-transaction-firewall/tree/main/examples/typescript) directory contains four working examples against the live testnet registry:
+
+- **`wallet-feedback.ts`** — clean vs. blocked pre-flight in a wallet send flow
+- **`wallet-ui.ts`** — browser UI with live firewall decisions via `/api/check`
+- **`blacklisted-transfer-safety.ts`** — credentialless safety test against an active blacklisted destination
+- **`agent-preflight.ts`** — AI agent gated by the firewall as a tool-use guard
