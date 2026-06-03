@@ -238,8 +238,10 @@ fn relative_timestamp_since_ms(index: usize) -> Result<u64, SysError> {
     }
     let since = u64::from_le_bytes(raw);
     let relative = (since & 0x8000_0000_0000_0000) != 0;
-    let timestamp = (since & 0x4000_0000_0000_0000) != 0;
-    if !relative || !timestamp {
+    // Bits [62:61] must be exactly 0b10 (MTP timestamp metric).
+    // Checking only bit 62 would also pass the reserved metric 0b11.
+    let metric_valid = (since & 0x6000_0000_0000_0000) == 0x4000_0000_0000_0000;
+    if !relative || !metric_valid {
         return Err(error::to_sys_error(error::INVALID_RECLAIM_SINCE));
     }
     // CKB timestamp since field stores seconds; multiply by 1000 to match ms stored in reclaim_delay_ms.
