@@ -458,8 +458,7 @@ fn vote_word(vote: u8) -> Result<&'static [u8], i8> {
     }
 }
 
-// Minimal SHA-256 for 32-byte inputs. Implements the standard algorithm with one
-// data block (padded 32-byte message → 64-byte padded block).
+// Computes the Blake2b hash of the canonical JSON vote payload used as the signing message.
 fn vote_signing_message(
     proposal_id_hash: &[u8; 32],
     vote: u8,

@@ -478,13 +478,9 @@ fn load_cell_lock_hash(index: usize, source: Source) -> Result<[u8; 32], SysErro
 }
 
 fn load_cell_capacity(index: usize, source: Source) -> Result<u64, SysError> {
-    let raw = load_script_field(index, source, CellField::Capacity)?;
-    if raw.len() != 8 {
-        return Err(error::to_sys_error(error::INVALID_PROPOSAL_CELL));
-    }
-    Ok(u64::from_le_bytes([
-        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
-    ]))
+    let mut raw = [0u8; 8];
+    load_cell_by_field(&mut raw, 0, index, source, CellField::Capacity)?;
+    Ok(u64::from_le_bytes(raw))
 }
 
 fn load_cell_type_script_opt(index: usize, source: Source) -> Result<Option<Script>, SysError> {
