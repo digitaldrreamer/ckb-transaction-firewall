@@ -250,6 +250,9 @@ fn load_witness_fields(index: usize, source: Source) -> Result<WitnessFields, i8
         let vote = lock_data[off];
         off += 1;
         let timestamp_len = u16::from_le_bytes([lock_data[off], lock_data[off + 1]]) as usize;
+        if timestamp_len > 100 {
+            return Err(ERR_INVALID_WITNESS);
+        }
         off += 2;
         if off + timestamp_len + 65 + 4 + 1 > lock_data.len() {
             return Err(ERR_INVALID_WITNESS);
@@ -386,29 +389,6 @@ fn verify_relative_since_timestamp(since: u64, min_ms: u64) -> Result<(), i8> {
         return Err(ERR_REVIEW_WINDOW_NOT_MET);
     }
     Ok(())
-}
-
-fn load_cell_data_bytes_sys(index: usize, source: Source) -> Result<Vec<u8>, SysError> {
-    let mut cap = 512usize;
-    loop {
-        let mut buf = Vec::new();
-        buf.resize(cap, 0u8);
-        match load_cell_data(&mut buf, 0, index, source) {
-            Ok(n) => {
-                if n > cap {
-                    cap = n;
-                    continue;
-                }
-                buf.truncate(n);
-                return Ok(buf);
-            }
-            Err(SysError::LengthNotEnough(need)) => {
-                cap = need;
-                continue;
-            }
-            Err(e) => return Err(e),
-        }
-    }
 }
 
 fn find_input_by_data_hash(target_hash: &[u8; 32]) -> Result<usize, i8> {

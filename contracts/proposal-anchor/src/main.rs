@@ -124,10 +124,6 @@ fn load_cell_data_bytes(index: usize, source: Source) -> Result<Vec<u8>, SysErro
     read_exact_bytes(load_cell_data, index, source)
 }
 
-fn load_input_bytes(index: usize, source: Source) -> Result<Vec<u8>, SysError> {
-    read_exact_bytes(load_input, index, source)
-}
-
 fn load_cell_lock_hash(index: usize, source: Source) -> Result<[u8; 32], SysError> {
     let mut hash = [0u8; 32];
     load_cell_by_field(&mut hash, 0, index, source, CellField::LockHash)?;
@@ -233,13 +229,14 @@ fn validate_pblk(data: &[u8], registry_type_id_value: &[u8; 32]) -> Result<(), S
 }
 
 fn relative_timestamp_since_ms(index: usize) -> Result<u64, SysError> {
-    let raw = load_input_bytes(index, Source::Input)?;
-    if raw.len() < 8 {
-        return Err(error::to_sys_error(error::INVALID_RECLAIM_SINCE));
+    // Load only the 8-byte since field (first field of CellInput) directly into
+    // a stack buffer; the full input is 44 bytes so LengthNotEnough is expected.
+    let mut raw = [0u8; 8];
+    match load_input(&mut raw, 0, index, Source::Input) {
+        Ok(_) | Err(SysError::LengthNotEnough(_)) => {}
+        Err(e) => return Err(e),
     }
-    let since = u64::from_le_bytes([
-        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
-    ]);
+    let since = u64::from_le_bytes(raw);
     let relative = (since & 0x8000_0000_0000_0000) != 0;
     let timestamp = (since & 0x4000_0000_0000_0000) != 0;
     if !relative || !timestamp {
