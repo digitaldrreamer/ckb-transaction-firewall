@@ -536,9 +536,10 @@ fn find_input_by_data_hash(target_hash: &[u8; 32]) -> Result<usize, SysError> {
     let mut found: Option<usize> = None;
     let mut i = 0;
     loop {
-        match load_cell_data_bytes(i, Source::Input) {
-            Ok(data) => {
-                if blake2b_256(data.as_slice()) == *target_hash {
+        let mut hash = [0u8; 32];
+        match load_cell_by_field(&mut hash, 0, i, Source::Input, CellField::DataHash) {
+            Ok(_) => {
+                if hash == *target_hash {
                     if found.is_some() {
                         return Err(error::to_sys_error(error::INVALID_PROPOSAL_CELL));
                     }

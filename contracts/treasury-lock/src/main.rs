@@ -57,9 +57,9 @@ const GOV_LOCK_SCRIPT_LEN: usize = 54;
 
 // Minimum byte size of a proposal-anchor type Script molecule to read through treasury_lock_hash.
 // Layout: header(16) + code_hash(32) + hash_type(1) + bytes_prefix(4) + args:
-//   args = registry_type_id_value(32) | treasury_lock_hash(32) | reclaim_delay_ms(8) = 72 bytes
-// treasury_lock_hash ends at offset 16 + 32 + 1 + 4 + 32 + 32 = 117
-const ANCHOR_TYPE_TREASURY_HASH_END: usize = 117;
+//   args = version(1) + registry_type_id_value(32) + treasury_lock_hash(32) + reclaim_delay_ms(8)
+// treasury_lock_hash ends at: 16 + 32 + 1 + 4 + 1 + 32 + 32 = 118
+const ANCHOR_TYPE_TREASURY_HASH_END: usize = 118;
 
 // Maximum CKB the treasury may spend per TX (anchor cell capacity + TX fee).
 // A single blacklist anchor needs ~300 CKB; allow up to 1000 CKB per TX to be generous.
@@ -162,9 +162,10 @@ fn is_governance_lock(lock: &[u8], gov_type_id: &[u8; 32]) -> bool {
 
 // Check that a type script belongs to the proposal-anchor AND is bound to this treasury.
 // Anchor type args layout (after the 4-byte Bytes prefix at offset 49):
-//   args[0..32]  = registry_type_id_value  → type_bytes[53..85]
-//   args[32..64] = treasury_lock_hash      → type_bytes[85..117]
-//   args[64..72] = reclaim_delay_ms        → type_bytes[117..125]
+//   args[0]      = version byte (0x01)       → type_bytes[53]
+//   args[1..33]  = registry_type_id_value    → type_bytes[54..86]
+//   args[33..65] = treasury_lock_hash        → type_bytes[86..118]
+//   args[65..73] = reclaim_delay_ms          → type_bytes[118..126]
 fn is_anchor_type_for_treasury(
     type_bytes: &[u8],
     anchor_type_id: &[u8; 32],
@@ -173,7 +174,7 @@ fn is_anchor_type_for_treasury(
     type_bytes.len() >= ANCHOR_TYPE_TREASURY_HASH_END
         && &type_bytes[16..48] == anchor_type_id    // code_hash = proposal-anchor type ID
         && type_bytes[48] == 0x01                   // hash_type = type
-        && &type_bytes[85..117] == self_lock_hash   // treasury_lock_hash bound to this treasury
+        && &type_bytes[86..118] == self_lock_hash   // treasury_lock_hash bound to this treasury
 }
 
 const PBLK_MAGIC: &[u8; 4] = b"PBLK";

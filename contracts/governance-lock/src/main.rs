@@ -37,9 +37,9 @@ fn main() -> i8 {
 use alloc::vec::Vec;
 
 use blake2b_ref::{Blake2b, Blake2bBuilder};
-use ckb_std::ckb_constants::Source;
+use ckb_std::ckb_constants::{CellField, Source};
 use ckb_std::error::SysError;
-use ckb_std::syscalls::{load_cell_data, load_input, load_script, load_witness};
+use ckb_std::syscalls::{load_cell_by_field, load_cell_data, load_input, load_script, load_witness};
 use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
 
 const ERR_INVALID_ARGS: i8 = 1;
@@ -422,9 +422,10 @@ fn find_input_by_data_hash(target_hash: &[u8; 32]) -> Result<usize, i8> {
     let mut found: Option<usize> = None;
     let mut i = 0usize;
     loop {
-        match load_cell_data_bytes_sys(i, Source::Input) {
-            Ok(data) => {
-                if blake2b_256(&data) == *target_hash {
+        let mut hash = [0u8; 32];
+        match load_cell_by_field(&mut hash, 0, i, Source::Input, CellField::DataHash) {
+            Ok(_) => {
+                if hash == *target_hash {
                     if found.is_some() {
                         return Err(ERR_INVALID_WITNESS);
                     }
