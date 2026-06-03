@@ -6,7 +6,7 @@ description: Install and use the @ckb-firewall/cli package for registry inspecti
 import cliScreenshot from '../../../../../assets/cli-screenshot.png';
 import { Steps } from '@astrojs/starlight/components';
 
-`@ckb-firewall/cli` is the operator-facing tool for inspecting and governing the blacklist registry.
+`@ckb-firewall/cli` is the validator and viewer tool for inspecting the blacklist registry, reviewing proposals, voting, and building governance transactions after validator approval.
 
 Published on npm as [@ckb-firewall/cli](https://www.npmjs.com/package/@ckb-firewall/cli).
 
@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/digitaldrreamer/ckb-transaction-fir
 ckb-firewall inspect
 ```
 
-Reads the canonical testnet registry cell and prints all entries with their status (`active` or `EXPIRED`) and expiry dates.
+Reads the canonical testnet registry cell and prints all entries with their status (`active` or `EXPIRED`) and expiry dates. For treasury-backed registries it also prints registry capacity use, treasury balance, blacklist pool usage, and the treasury donation address. If pool usage is 70% or higher, `inspect` shows a donation warning.
 
 <figure>
   <img src={cliScreenshot.src} alt="Screenshot of the ckb-firewall CLI" />
@@ -48,16 +48,18 @@ All registry changes go through governance. The proposal lives as a **local JSON
 
 <Steps>
 1. **Propose** — create a proposal locally and start the 72-hour review window
-2. **Export** — share the proposal JSON with other participants
-3. **Import** — each participant receives and merges the proposal
-4. **Vote** — each validator signs their vote with their private key
-5. **Sign** — governance signers add secp256k1 signatures after the review window
-6. **Execute** — build and submit the on-chain registry update transaction
+2. **Anchor** — create the on-chain `PBLK` proposal cell
+3. **Export** — share the proposal JSON with other participants
+4. **Import** — each participant receives and merges the proposal
+5. **Vote** — each validator signs their vote with their private key
+6. **Execute** — build and submit the on-chain registry update transaction after the review window and vote threshold
 </Steps>
 
 ```bash
 # Create and share a proposal
 ckb-firewall propose
+ckb-firewall anchor --proposal <id> --to-address <proposal-cell-owner-address>
+ckb-firewall anchor --proposal <id> --proposal-tx <anchor-tx> --proposal-index <data-output-index>
 ckb-firewall export --proposal <id> --out proposal.json
 
 # Other participants import, vote, re-export
@@ -65,10 +67,7 @@ ckb-firewall import proposal.json
 ckb-firewall vote --proposal <id> --vote yes
 ckb-firewall export --proposal <id> --out proposal-voted.json
 
-# After 72h review window + 3/5 yes votes: sign
-ckb-firewall sign --proposal <id> --signer-index 0
-
-# Execute on-chain
+# After 72h review window + 3/5 yes votes: execute on-chain
 ckb-firewall execute --proposal <id>
 ```
 

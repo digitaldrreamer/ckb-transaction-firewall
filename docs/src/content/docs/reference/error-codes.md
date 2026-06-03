@@ -57,9 +57,9 @@ These codes are returned by `governance-lock` when a registry update transaction
 - `1` `InvalidArgs` — contract args are not 1 byte (version)
 - `2` `InvalidBlkl` — registry cell data is not a valid BLKL v2 payload or governance header
 - `3` `InvalidWitness` — GOV1 payload is malformed (wrong magic, wrong version, wrong length, or zero hashes)
-- `4` `SigVerificationFailed` — a signer entry has an invalid secp256k1 signature or the recovered pubkey doesn't match
-- `5` `ThresholdNotMet` — fewer than the required number of valid signatures
-- `6` `ReviewWindowNotMet` — the governance cell input's `since` field encodes a timestamp before `review_window_end_ms`
+- `4` `SigVerificationFailed` — a validator vote entry has an invalid secp256k1 signature, a mismatched recovered pubkey, or an invalid validator Merkle proof
+- `5` `ThresholdNotMet` — fewer than the required number of valid validator yes-votes
+- `6` `ReviewWindowNotMet` — the anchored `PBLK` proposal input's `since` field does not encode a relative median-time-past delay of at least `review_delay_ms`
 
 ## Blacklist registry
 

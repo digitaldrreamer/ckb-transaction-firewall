@@ -7,11 +7,13 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 
 This page explains the full lifecycle: what happens when you propose an address, what validators do when they vote, what gets written on-chain, and what happens when a temporary entry expires.
 
-## Proposals are local, not on-chain
+## Proposals are local first, then anchored on-chain
 
-The proposal itself is a JSON file stored at `~/.ckb-firewall/proposals/<id>.json` on your machine. It is not on-chain until `execute` is called. Between `propose` and `execute`, all proposal state — votes, signatures, and metadata — lives in local files that participants share manually via `export` and `import`.
+The proposal starts as a JSON file stored at `~/.ckb-firewall/proposals/<id>.json` on your machine. Before it can be executed, it must be anchored on-chain as a `PBLK` proposal cell with `ckb-firewall anchor`.
 
-The `proposalIdHash` is a cryptographic hash of the proposal fields and locks them in place. Any modification to the proposal fields produces a different hash, which invalidates all existing signatures.
+Between `propose` and `execute`, votes and metadata still live in local files that participants share manually via `export` and `import`. The on-chain `PBLK` cell anchors the proposed registry transition and gives CKB consensus a real input cell whose age can enforce the review delay.
+
+The `proposalIdHash` is a cryptographic hash of the proposal fields and locks them in place. Any modification to the proposal fields produces a different hash, which invalidates votes for that proposal.
 
 ## Step 1: Propose
 
@@ -29,7 +31,7 @@ ckb-firewall propose \
 
 All flags are interactive if omitted. After this command:
 - A proposal JSON is saved locally with a unique `proposalIdHash`
-- A 72-hour review window starts
+- A 72-hour review window starts locally
 - The address is **not yet blacklisted** — nothing has changed on-chain
 
 Export and share the proposal with other participants:
@@ -48,7 +50,61 @@ ckb-firewall import proposal.json
 
 The import validates the `proposalIdHash` against the proposal fields — a tampered file is rejected before saving.
 
-## Step 3: Validators vote
+## Step 3: Anchor the proposal cell
+
+Create the on-chain `PBLK` proposal cell. This is the cell that later appears as an input to the governance transaction, with a relative timestamp `since` proving it has aged for the review delay.
+
+```bash
+ckb-firewall anchor --proposal <id> --to-address <proposal-cell-owner-address>
+```
+
+For the production treasury flow, the command builds a typed `proposal-anchor` transaction funded by the registry treasury:
+
+```bash
+ckb-firewall anchor \
+  --proposal <id> \
+  --tx-out gov_anchor_tx.json
+```
+
+On canonical testnet, the deployed `proposal-anchor` code outpoint is used by default. For a private deployment, override it with `--proposal-anchor-code-tx` and `--proposal-anchor-code-index`.
+
+If the treasury uses a custom lock script, include any required lock deps:
+
+```bash
+ckb-firewall anchor \
+  --proposal <id> \
+  --treasury-lock-dep <lock-code-tx>:<index>:code \
+  --tx-out gov_anchor_tx.json
+```
+
+Sign and submit it with the treasury account:
+
+```bash
+ckb-cli tx sign-inputs --tx-file gov_anchor_tx.json --from-account <treasury-address> --add-signatures
+ckb-cli wallet apply-txs --tx-file gov_anchor_tx.json
+```
+
+For a non-treasury registry, the command prints the exact `ckb-cli wallet transfer --to-data ...` command needed to create the cell. To run it directly:
+
+```bash
+ckb-firewall anchor \
+  --proposal <id> \
+  --to-address <proposal-cell-owner-address> \
+  --from-account <funding-address> \
+  --submit
+```
+
+If you used `--submit`, the CLI stores the proposal-cell outpoint on the proposal JSON. If you created the cell with the printed command or the typed treasury transaction, record the accepted outpoint once:
+
+```bash
+ckb-firewall anchor --proposal <id> --proposal-tx <anchor-tx-hash> --proposal-index <data-output-index>
+```
+
+<Aside type="note" title="The review delay is anchored to this cell">
+The governance-lock checks the `since` field on the `PBLK` proposal input, not the registry input. CKB consensus only accepts the final update once that proposal input has aged by the required relative median-time-past delay.
+</Aside>
+
+## Step 4: Validators vote
 
 Each validator reviews the evidence and votes with their secp256k1 private key:
 
@@ -77,48 +133,36 @@ Other participants import this to merge the vote:
 ckb-firewall import proposal-voted.json
 ```
 
-<Aside type="note" title="Votes are off-chain until execute">
-Each vote is a cryptographic signature stored in the proposal JSON. The blockchain only sees the vote digest hash when the governance transaction is eventually submitted. Validators do not pay fees to vote.
+<Aside type="note" title="Votes authorize execution">
+Each vote is a cryptographic signature stored in the proposal JSON. During execution, validator vote signatures and Merkle proofs are included in the transaction witness and verified on-chain. Validators do not pay fees to vote.
 </Aside>
 
-## Step 4: Signers sign
+## Step 5: Execute on-chain
 
 After the 72-hour review window passes and 3 of 5 validators have voted yes:
 
 ```bash
-ckb-firewall sign --proposal <id> --signer-index 0
-# prompts: "Private key for signer 0 (32-byte hex):"
-```
-
-**What the sign command does:**
-1. Computes `signing_message = blake2b(proposalIdHash || voteDigestHash || oldRoot || newRoot || reviewWindowEndMs)` — a 136-byte preimage hashed to 32 bytes
-2. Signs it with the governance signer's secp256k1 private key
-3. Stores the 65-byte signature locally
-
-Three signers must sign (any three of the five governance signers). Each signer exports and shares their updated proposal so others can import the accumulated signatures.
-
-## Step 5: Execute on-chain
-
-Any participant with all three signatures runs:
-
-```bash
-ckb-firewall execute --proposal <id> --tx-out gov_tx.json
+ckb-firewall execute \
+  --proposal <id> \
+  --tx-out gov_tx.json
 ```
 
 **What the execute command does:**
 1. Recomputes the `voteDigestHash` from stored votes — aborts if it doesn't match (tamper detection)
 2. Verifies every vote signature against the voter's claimed public key
 3. Verifies every vote pubkey has a valid Merkle proof against the on-chain validator set
-4. Verifies every governance signer signature against the on-chain committee pubkeys from the BLKL header
+4. Includes the yes-vote signatures and Merkle proofs in the witness for on-chain verification
 5. Fetches the current registry cell from the RPC
-6. Builds the new BLKL v2 payload with the address added
-7. Constructs the GOV1 v3 witness binding the proposal and vote context to the state transition
-8. Writes the signed transaction to `gov_tx.json`
+6. Fetches the `PBLK` proposal cell and verifies its data matches this proposal
+7. Builds the new BLKL v2 payload with the address added or removed
+8. Constructs the GOV1 v4 witness binding the proposal, vote context, BLKL transition, proposal-cell hash, and review delay
+9. Sets relative timestamp `since` on the proposal input
+10. Writes the transaction to `gov_tx.json`
 
 The transaction is then submitted:
 
 ```bash
-ckb-cli wallet sign-txs --tx-file gov_tx.json --from-account <governance-address>
+ckb-cli tx sign-inputs --tx-file gov_tx.json --from-account <funding-address> --add-signatures
 ckb-cli wallet apply-txs --tx-file gov_tx.json
 ```
 
@@ -126,9 +170,21 @@ Or pass `--sign` to `execute` to do this in one step.
 
 **After the transaction confirms:**
 - The old registry cell is consumed
+- The anchored proposal cell is consumed and its remaining capacity is returned to the treasury when the registry declares treasury metadata
 - A new registry cell exists with the address in the BLKL payload
 - The address is now blacklisted — any transaction spending a firewall-protected cell that sends to this address is rejected at consensus
 - The proposal status is updated to `executed`
+
+If the new BLKL payload needs more registry capacity than the current registry cell holds, include treasury cells when building the execution transaction:
+
+```bash
+ckb-firewall execute \
+  --proposal abc123 \
+  --treasury-cell 0x...:0 \
+  --treasury-lock-dep 0x...:0:code
+```
+
+If the update removes expired entries or otherwise shrinks the required registry capacity, the builder lowers the registry output capacity and returns the freed capacity to the treasury.
 
 ## Permanent vs. temporary entries
 

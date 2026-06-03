@@ -28,18 +28,19 @@ Full spec: [BLKL Format](/reference/blkl-format/)
 
 ### GOV1
 
-The governance witness payload that binds a registry update transaction to a specific proposal, vote digest, and BLKL state transition. The current version is **v3**.
+The governance witness payload that binds a registry update transaction to a specific proposal, vote digest, BLKL state transition, and anchored proposal cell. The current version is **v4**.
 
-Layout (141 bytes total):
+Layout (173 bytes total):
 
 ```
 magic                4 bytes  "GOV1"
-version              1 byte   0x03
+version              1 byte   0x04
 proposal_id_hash    32 bytes
 vote_digest_hash    32 bytes
 old_root            32 bytes  blake2b of input registry cell data
 new_root            32 bytes  blake2b of output registry cell data
-review_window_end_ms 8 bytes  LE u64, unix ms
+proposal_data_hash  32 bytes  blake2b of PBLK proposal cell data
+review_delay_ms      8 bytes  LE u64, relative delay in milliseconds
 ```
 
 Placed in `WitnessArgs.input_type`. Signer entries go in `WitnessArgs.lock`.
@@ -71,7 +72,7 @@ Full spec: [Firewall Lock Args](/reference/firewall-lock-args/)
 
 ### blacklist-registry
 
-The CKB **type script** that validates every registry cell update. Enforces: correct BLKL v2 payload structure, strict ascending entry sort order, governance-lock identity on the output cell, and valid GOV1 v3 witness binding. Its Type ID is the stable registry identity — the `type_id_value` in the registry type args never changes across governance updates.
+The CKB **type script** that validates every registry cell update. Enforces: correct BLKL v2 payload structure, strict ascending entry sort order, governance-lock identity on the output cell, valid GOV1 v4 witness binding, and an exact match to the anchored `PBLK` proposal cell. Its Type ID is the stable registry identity — the `type_id_value` in the registry type args never changes across governance updates.
 
 ### firewall-lock
 
@@ -79,7 +80,7 @@ The CKB **lock script** that enforces blacklist checks at consensus. Runs when a
 
 ### governance-lock
 
-The CKB **lock script** that secures the registry cell itself. Validates that a registry update carries enough governance signer signatures (recovered pubkeys match the committee pubkeys in the BLKL governance header) and that the review window has elapsed (the governance cell input's `since` field must encode a median-time-past timestamp ≥ `review_window_end_ms` from the GOV1 witness).
+The CKB **lock script** that secures the registry cell itself. Validates that a registry update carries enough validator yes-votes, that each vote signature matches a validator pubkey committed by the BLKL validator Merkle root, and that the anchored `PBLK` proposal input's `since` field encodes a relative median-time-past delay of at least `review_delay_ms`.
 
 ### spawn-aware-secp256k1
 
@@ -179,53 +180,40 @@ Minimal unsigned transaction view for firewall checking. Fields: `cellDeps: Cell
 
 ### governance header
 
-Metadata embedded inside the BLKL v2 payload. Contains: version byte, signer count, threshold, compressed secp256k1 pubkeys for each governance signer (33 bytes each), validator count, and the validator Merkle root. The `governance-lock` contract reads the pubkeys and threshold from here on every registry update.
+Metadata embedded inside the BLKL v2 payload. Contains a version byte, validator threshold, validator count, validator Merkle root, optional treasury metadata, and legacy signer fields retained in the encoded layout. The `governance-lock` contract reads the threshold and validator commitment from here on every registry update.
 
 ### oldRoot / newRoot
 
-Blake2b hashes of the input and output registry cell data, respectively. Stored in the GOV1 v3 witness and included in the governance signer signing preimage. The registry type script recomputes both from the actual cell data and rejects if they don't match — prevents replay of an old valid witness against a different cell state.
+Blake2b hashes of the input and output registry cell data, respectively. Stored in the GOV1 v4 witness. The registry type script recomputes both from the actual cell data and rejects if they don't match, which prevents replay of an old valid witness against a different cell state.
 
 ### proposalIdHash
 
-Blake2b hash of all canonical proposal fields (lock args, action, evidence, rationale, classification, severity, expiry, proposer). Computed at proposal creation and immutable: any field change produces a different hash and invalidates all existing signatures. Used in the GOV1 v3 witness and as part of the signer signing preimage.
+Blake2b hash of all canonical proposal fields (lock args, action, evidence, rationale, classification, severity, expiry, proposer). Computed at proposal creation and immutable: any field change produces a different hash and invalidates votes for that proposal. Used in the GOV1 v4 witness and the validator vote signing message.
 
 ### review window
 
-A mandatory 72-hour waiting period starting when a proposal is created. The governance cell input's `since` field must encode an absolute median-time-past timestamp ≥ `review_window_end_ms` from the GOV1 witness. CKB consensus refuses to include the governance transaction in a block until the chain's median time reaches this threshold. Cannot be bypassed by transaction construction.
+A mandatory 72-hour waiting period anchored to the on-chain `PBLK` proposal cell. The final governance transaction spends that proposal cell with a relative median-time-past `since` delay of at least `review_delay_ms`. CKB consensus refuses to include the governance transaction in a block until the proposal input has aged by that delay. Cannot be bypassed by transaction construction.
 
-### reviewWindowEndMs
+### proposalDataHash
 
-The unix timestamp in milliseconds when the review window ends. Encoded in the GOV1 v3 witness. Also encoded in the governance cell input's `since` field as `0x4000_0000_0000_0000 | reviewWindowEndMs`. Verified on-chain by the governance-lock script.
+Blake2b hash of the full `PBLK` proposal cell data. Encoded in the GOV1 v4 witness. The registry type script and governance-lock script use it to bind the final update to the exact on-chain proposal cell being spent.
 
-### signer vs validator
+### reviewDelayMs
 
-Two distinct governance roles:
+The required relative delay in milliseconds, normally 72 hours. Encoded in the GOV1 v4 witness. The proposal input's `since` field must use a relative median-time-past delay greater than or equal to this value.
 
-- **Validator** — an off-chain committee member who votes on proposals. Votes are cryptographic signatures stored in the proposal JSON and verified off-chain by the `execute` CLI command. A validator's pubkey commits to the `validatorMerkleRoot` in the BLKL governance header.
-- **Signer** — an on-chain governance committee member whose secp256k1 signature is submitted in the governance transaction witness and verified on-chain by the `governance-lock` script. Signer pubkeys are embedded directly in the BLKL governance header (not the Merkle tree).
+### validator
 
-A person may hold both roles, but the verification paths are entirely separate.
+Validator votes authorize runtime registry updates.
+
+A validator is a committee member who votes on proposals. Votes are cryptographic signatures stored in the proposal JSON. During execution, yes-vote signatures and Merkle proofs are submitted in `WitnessArgs.lock` and verified on-chain by the `governance-lock` script. A validator's pubkey commits to the `validatorMerkleRoot` in the BLKL governance header.
 
 ### validator Merkle root
 
-A 32-byte Merkle root committing to the authorized off-chain validator set. Leaves are `blake2b(compressed_pubkey)` for each validator; the tree is padded to the next power of two and built with the CKB default blake2b personalization. Each vote record includes a Merkle proof (sibling hashes from leaf to root). The CLI verifies proofs off-chain before building the execute transaction.
+A 32-byte Merkle root committing to the authorized validator set. Leaves are `blake2b(compressed_pubkey)` for each validator; the tree is padded to the next power of two and built with the CKB default blake2b personalization. Each vote record includes a Merkle proof (sibling hashes from leaf to root). The governance-lock verifies yes-vote proofs on-chain during execution.
 
 ### voteDigestHash
 
-Blake2b hash of the full sorted set of vote records. Computed as `blake2b` over the canonically serialized array of `{ pubkey, vote, timestamp, signature }` objects sorted by pubkey. Recomputed by the `execute` CLI command from stored votes before building the governance transaction, and included in both the GOV1 v3 witness and the signer signing preimage. Any tampered or missing vote produces a different hash.
+Blake2b hash of the full sorted set of vote records. Computed as `blake2b` over the canonically serialized array of `{ pubkey, vote, timestamp, signature }` objects sorted by pubkey. Recomputed by the `execute` CLI command from stored votes before building the governance transaction, and included in the GOV1 v4 witness. Any tampered or missing vote produces a different hash.
 
----
-
-## Signing preimage
-
-The 136-byte message that governance signers sign (before the final blake2b):
-
-```
-proposal_id_hash     32 bytes
-vote_digest_hash     32 bytes
-old_root             32 bytes
-new_root             32 bytes
-review_window_end_ms  8 bytes  LE u64
-```
-
-All five fields must match the GOV1 v3 witness; on-chain signature verification rejects if any field has been tampered.
+All six fields must match the GOV1 v4 witness; on-chain signature verification rejects if any field has been tampered.

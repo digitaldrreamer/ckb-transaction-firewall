@@ -97,6 +97,7 @@ export default defineConfig({
 							'concepts/inner-lock',
 							'concepts/blacklist-registry',
 							'concepts/governance',
+							'concepts/registry-treasury',
 							'concepts/security-model',
 						],
 					},

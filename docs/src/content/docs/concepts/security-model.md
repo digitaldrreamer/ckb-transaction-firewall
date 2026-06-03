@@ -58,8 +58,8 @@ Only one registry update can be in-flight at a time. The registry is a single ce
 
 The `governance-lock` script enforces three things:
 
-**Review window.** The governance cell input's `since` field must encode an absolute median-time-past timestamp ≥ `review_window_end_ms` from the GOV1 v3 witness. CKB consensus refuses to include the transaction in a block until the chain's median time meets this threshold. This is not a CLI rule — bypassing the CLI and building the transaction manually does not circumvent it.
+**Review window.** The anchored `PBLK` proposal input's `since` field must encode a relative median-time-past delay >= `review_delay_ms` from the GOV1 v4 witness. CKB consensus refuses to include the transaction until that proposal input has aged by the required delay. This is not a CLI rule — bypassing the CLI and building the transaction manually does not circumvent it.
 
-**Signer threshold.** The script reads the pubkeys and threshold from the BLKL v2 governance header embedded in the registry cell. For each governance signer entry in the witness, it recovers the pubkey via secp256k1 and checks that it matches the committee pubkey at the declared index. Fewer than threshold valid signatures → reject.
+**Validator vote threshold.** The script reads the validator Merkle root and threshold from the BLKL v2 governance header embedded in the registry cell. Each yes vote in `WitnessArgs.lock` carries the validator pubkey, vote signature, and Merkle proof. Fewer than threshold valid validator yes votes → reject.
 
-Vote signatures are verified off-chain by the `execute` CLI command before the transaction is built. The `execute` command also verifies that each vote pubkey has a valid Merkle membership proof against the on-chain validator Merkle root.
+The `execute` CLI also verifies vote signatures and Merkle proofs before building the transaction, but the on-chain governance lock is the final authority.

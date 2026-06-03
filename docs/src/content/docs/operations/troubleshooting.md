@@ -113,4 +113,4 @@ ckb-cli --url https://testnet.ckb.dev rpc get_transaction \
   --hash <tx-hash>
 ```
 
-If status is `rejected`, the witness validation failed on-chain. Re-run `execute` after verifying all vote and signer signatures.
+If status is `rejected`, the witness validation failed on-chain. Re-run `execute` after verifying vote signatures and validator Merkle proofs.

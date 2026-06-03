@@ -20,11 +20,12 @@ The registry cell uses CKB's Type ID mechanism. When a governance update replace
 
 Updates are not edits. Each governance transaction:
 - Consumes the old registry cell (input)
+- Consumes the anchored `PBLK` proposal cell (input)
 - Produces a new registry cell (output) with updated data
-- Carries a GOV1 v3 binding in `WitnessArgs.input_type`
-- Carries governance signer entries in `WitnessArgs.lock`
+- Carries a GOV1 v4 binding in `WitnessArgs.input_type`
+- Carries validator yes-vote entries in `WitnessArgs.lock`
 
-The `blacklist-registry` type script validates the payload structure, sort order, governance-lock identity, and GOV1 binding before accepting any update.
+The `blacklist-registry` type script validates the payload structure, sort order, governance-lock identity, GOV1 binding, and exact match between the `PBLK` proposal cell and the BLKL state transition before accepting any update.
 
 ## Serialized updates
 
@@ -36,7 +37,7 @@ When a governance update confirms, the old registry cell is consumed. Any pendin
 
 ## Expired entries
 
-Entries with `expiresAt` timestamps stay in the registry payload indefinitely — there is no automatic cleanup. Removing an expired entry requires a new governance proposal. Operators should monitor registry size if frequent temporary listings are expected.
+Entries with `expiresAt` timestamps stay in the registry payload until a prune/update removes them. They do not hold separate CKB; they consume bytes in the registry cell. A production update builder should prune expired entries before drawing treasury capacity for registry growth. See [Registry treasury](/concepts/registry-treasury/).
 
 ## What to read next
 
