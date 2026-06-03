@@ -103,13 +103,6 @@ fn load_script_bytes() -> Result<Vec<u8>, i8> {
     load_var_bytes_from(|buf, off| load_script(buf, off))
 }
 
-fn le_u16_at(buf: &[u8], off: usize) -> Result<u16, i8> {
-    if off + 2 > buf.len() {
-        return Err(ERR_INVALID_BLKL);
-    }
-    Ok(u16::from_le_bytes([buf[off], buf[off + 1]]))
-}
-
 fn le_u32_at(buf: &[u8], off: usize) -> Result<usize, i8> {
     if off + 4 > buf.len() {
         return Err(ERR_INVALID_WITNESS);
@@ -132,7 +125,7 @@ fn parse_governance_header(data: &[u8]) -> Result<GovernanceHeader, i8> {
     if &data[0..4] != b"BLKL" || data[4] != 0x02 {
         return Err(ERR_INVALID_BLKL);
     }
-    let gov_header_len = le_u16_at(data, 5)? as usize;
+    let gov_header_len = u16::from_le_bytes([data[5], data[6]]) as usize;
     if 7 + gov_header_len > data.len() {
         return Err(ERR_INVALID_BLKL);
     }
@@ -162,7 +155,7 @@ fn parse_governance_header(data: &[u8]) -> Result<GovernanceHeader, i8> {
         if script_len_offset + 2 > gh.len() {
             return Err(ERR_INVALID_BLKL);
         }
-        let script_len = le_u16_at(gh, script_len_offset)? as usize;
+        let script_len = u16::from_le_bytes([gh[script_len_offset], gh[script_len_offset + 1]]) as usize;
         if script_len_offset + 2 + script_len != gh.len() {
             return Err(ERR_INVALID_BLKL);
         }
