@@ -108,7 +108,7 @@ export function buildValidatorVoteWitness(votes: ValidatorVoteWitnessEntry[]): U
       if (proof.length !== 32) throw new Error(`merkle proof hash must be 32 bytes, got ${proof.length}`);
     }
     const timestamp = enc.encode(v.timestamp);
-    if (timestamp.length > 0xffff) throw new Error("timestamp is too long");
+    if (timestamp.length > 100) throw new Error("timestamp is too long (max 100 bytes); governance-lock enforces this limit on-chain");
     return { v, timestamp };
   });
   const size = 1 + parts.reduce(

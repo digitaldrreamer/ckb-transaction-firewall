@@ -218,13 +218,16 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     proposal.proposalCellIndex = proposalIndex;
     const proposalCapacity = parseCapacity(proposalCell.capacity);
     proposalChangeCapacity = proposalCapacity - DEFAULT_FEE_SHANNONS;
-    if (proposalChangeCapacity < MIN_CHANGE_SHANNONS) {
+    const treasuryLockHash = governanceTreasuryLockHash(state.governanceHeader);
+    const minChange = treasuryLockHash
+      ? MIN_CHANGE_SHANNONS
+      : occupiedCapacityShannons({ lock: proposalCell.lock, type: null, data: "0x" });
+    if (proposalChangeCapacity < minChange) {
       throw new Error(
         `Proposal cell capacity ${proposalCapacity} shannons is too small to return change after fee. ` +
-        `Need at least ${MIN_CHANGE_SHANNONS + DEFAULT_FEE_SHANNONS} shannons.`,
+        `Need at least ${minChange + DEFAULT_FEE_SHANNONS} shannons.`,
       );
     }
-    const treasuryLockHash = governanceTreasuryLockHash(state.governanceHeader);
     if (treasuryLockHash) {
       treasuryLockScript = state.governanceHeader?.treasuryLockScript;
       if (!treasuryLockScript) {
