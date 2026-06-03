@@ -3,7 +3,7 @@ import { hexToBytes } from "./blkl.js";
 const SHANNONS_PER_CKB = 100_000_000n;
 
 export function parseCapacity(capacity: string): bigint {
-  return capacity.startsWith("0x") ? BigInt(capacity) : BigInt(capacity);
+  return BigInt(capacity);
 }
 
 export function hexCapacity(value: bigint): string {
