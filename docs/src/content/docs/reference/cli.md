@@ -142,15 +142,21 @@ Options: `--proposal` (required), `--rpc-url`, `--registry-tx`, `--registry-inde
 
 For non-treasury registries, without `--submit`, the command prints the exact `ckb-cli wallet transfer --to-data ...` command. With `--submit`, it runs `ckb-cli`, submits the proposal cell transfer, and stores the resulting proposal-cell outpoint on the proposal JSON.
 
-For treasury-backed registries, `anchor` builds a real typed `proposal-anchor` transaction funded by treasury cells:
+For treasury-backed registries, `anchor` builds a keyless `proposal-anchor` transaction funded by the autonomous treasury pool — **no private key required**:
 
 ```bash
+# Build the TX (keyless — treasury-lock validates without a signature)
 ckb-firewall anchor \
   --proposal abc123 \
   --tx-out gov_anchor_tx.json
+
+# Build and submit in one step (still keyless)
+ckb-firewall anchor \
+  --proposal abc123 \
+  --submit
 ```
 
-On canonical testnet, the deployed `proposal-anchor` code outpoint is used by default. For private deployments, override it with `--proposal-anchor-code-tx` and `--proposal-anchor-code-index`. Add `--treasury-cell <tx-hash>:<index>` one or more times to select treasury inputs manually; otherwise the CLI discovers plain treasury cells by the treasury lock script in the registry. Add `--treasury-lock-dep <tx-hash>:<index>[:code|dep_group]` for any extra cell deps required by a custom treasury lock. Add `--submit --from-account <treasury-address>` to sign and submit with `ckb-cli`.
+The CLI auto-discovers treasury cells from the registry's governance header. To select specific treasury cells manually, add `--treasury-cell <tx-hash>:<index>` one or more times. For private deployments, override the proposal-anchor code outpoint with `--proposal-anchor-code-tx` and `--proposal-anchor-code-index`, and add `--treasury-lock-dep <tx-hash>:<index>[:code|dep_group]` for any extra cell deps required by a custom treasury lock.
 
 If you create the cell separately, run `anchor` again with `--proposal-tx` and `--proposal-index` to record the outpoint.
 
@@ -176,22 +182,22 @@ Options: `--proposal`, `--rpc-url`, `--registry-tx`, `--registry-index`, `--prop
 
 `--proposal-tx` and `--proposal-index` override the stored live `PBLK` proposal-cell outpoint when needed. The generated transaction spends that proposal cell with a relative timestamp `since` delay and returns its remaining capacity as change.
 
-For registries with treasury metadata, `execute` also enforces the treasury funding model:
-
-- the `PBLK` proposal cell must be locked to the registry treasury
-- the `PBLK` proposal cell must carry the `proposal-anchor` type args for this registry treasury and reclaim delay
-- pruned registry capacity is returned to the treasury
-- if the new registry payload needs more capacity, pass one or more `--treasury-cell <tx-hash>:<index>` inputs
-- on canonical testnet, the deployed `proposal-anchor` code outpoint is included by default; private deployments can override it with `--proposal-anchor-code-tx` and `--proposal-anchor-code-index`
-- pass `--treasury-lock-dep <tx-hash>:<index>[:code|dep_group]` if the treasury lock needs custom cell deps
+For treasury-backed registries, `execute` is also **fully keyless** — the autonomous treasury-lock funds any registry capacity growth:
 
 ```bash
+# Default: keyless — treasury cells auto-discovered, no private key required
+ckb-firewall execute --proposal abc123
+
+# Override: specify treasury cells manually (still keyless)
 ckb-firewall execute \
   --proposal abc123 \
-  --treasury-lock-dep 0x...:0:code \
   --treasury-cell 0x...:0 \
   --treasury-cell 0x...:1
 ```
+
+The treasury-lock contract validates the TX by detecting the proposal-anchor input being consumed, so no signature is needed. Proposal cell capacity is returned to the treasury pool automatically.
+
+For private deployments, override the proposal-anchor code outpoint with `--proposal-anchor-code-tx`/`--proposal-anchor-code-index`, and add `--treasury-lock-dep <tx-hash>:<index>[:code|dep_group]` for extra treasury cell deps.
 
 ---
 
