@@ -57,7 +57,9 @@ export interface GuiServer {
 }
 
 const DEFAULT_FEE_SHANNONS = 100_000n;
-const MIN_CHANGE_SHANNONS = 61n * 100_000_000n;
+// Treasury-lock change outputs have 64-byte args — minimum occupied capacity is
+// 8 (capacity field) + 117 (lock script molecule) = 125 CKB = 12,500,000,000 shannons.
+const MIN_CHANGE_SHANNONS = 125n * 100_000_000n;
 
 // ── /api/data handler ─────────────────────────────────────────────────────────
 

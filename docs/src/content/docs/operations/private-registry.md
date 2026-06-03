@@ -90,7 +90,7 @@ The treasury-lock is an **autonomous on-chain contract** that lets anyone anchor
 
 The treasury-lock binary takes 64-byte args encoding your contracts' Type IDs:
 
-```
+```text
 args = governance_lock_type_id(32) | proposal_anchor_type_id(32)
 ```
 

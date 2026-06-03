@@ -270,7 +270,7 @@ fn program_entry() -> Result<(), i8> {
         return Err(ERR_NO_ANCHOR_OUTPUT);
     }
 
-    if treasury_out_cap + MAX_PER_TX_SPEND_SHANNONS < treasury_in_cap {
+    if treasury_out_cap.saturating_add(MAX_PER_TX_SPEND_SHANNONS) < treasury_in_cap {
         return Err(ERR_INSUFFICIENT_RETURN);
     }
 

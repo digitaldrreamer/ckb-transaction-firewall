@@ -195,13 +195,24 @@ fn matching_anchor_indices(source: Source, self_hash: &[u8; 32]) -> Result<Vec<u
 }
 
 fn validate_pblk(data: &[u8], registry_type_id_value: &[u8; 32]) -> Result<(), SysError> {
-    if data.len() < 4 + 1 + 32 + 1 + 1 + 8 + 32 {
-        return Err(error::to_sys_error(error::INVALID_PROPOSAL_DATA));
-    }
-    if &data[0..4] != b"PBLK" || (data[4] != 0x01 && data[4] != 0x02) {
+    // Minimum for either version: PBLK(4) + version(1) + registry_type_id_value(32) + action(1) = 38
+    if data.len() < 38 || &data[0..4] != b"PBLK" {
         return Err(error::to_sys_error(error::INVALID_PROPOSAL_DATA));
     }
     if &data[5..37] != registry_type_id_value {
+        return Err(error::to_sys_error(error::INVALID_PROPOSAL_DATA));
+    }
+    if data[4] == 0x02 {
+        // v0x02 set-treasury proposal:
+        // PBLK(4) | version=0x02(1) | registry_type_id_value(32) | action=0x03(1) | treasury_lock_hash(32) | evidence_hash(32)
+        if data.len() != 4 + 1 + 32 + 1 + 32 + 32 || data[37] != 0x03 {
+            return Err(error::to_sys_error(error::INVALID_PROPOSAL_DATA));
+        }
+        return Ok(());
+    }
+    // v0x01 add/remove proposal:
+    // PBLK(4) | version=0x01(1) | registry_type_id_value(32) | action(1) | id_len(1) | id | expires_at(8) | evidence_hash(32)
+    if data[4] != 0x01 {
         return Err(error::to_sys_error(error::INVALID_PROPOSAL_DATA));
     }
     match data[37] {
@@ -209,8 +220,7 @@ fn validate_pblk(data: &[u8], registry_type_id_value: &[u8; 32]) -> Result<(), S
         _ => return Err(error::to_sys_error(error::INVALID_PROPOSAL_DATA)),
     }
     let id_len = data[38] as usize;
-    let id_start = 39usize;
-    let id_end = id_start + id_len;
+    let id_end = 39 + id_len;
     if id_len == 0 || id_end + 8 + 32 != data.len() {
         return Err(error::to_sys_error(error::INVALID_PROPOSAL_DATA));
     }

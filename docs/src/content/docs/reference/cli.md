@@ -280,7 +280,7 @@ Options: `--force` (skip overwrite confirmation)
 
 All registry changes go through governance. The proposal is a local JSON file until `execute` submits it on-chain. No private key is required for `anchor` or `execute` — the autonomous treasury-lock funds both operations.
 
-```
+```text
 propose → anchor → export → [share] → import → vote → export → [share] → import → execute
 ```
 
