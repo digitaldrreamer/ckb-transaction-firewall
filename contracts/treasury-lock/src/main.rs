@@ -158,10 +158,26 @@ fn is_anchor_type_for_treasury(
     anchor_type_id: &[u8; 32],
     self_lock_hash: &[u8; 32],
 ) -> bool {
-    type_bytes.len() >= ANCHOR_TYPE_TREASURY_HASH_END
-        && &type_bytes[16..48] == anchor_type_id    // code_hash = proposal-anchor type ID
-        && type_bytes[48] == 0x01                   // hash_type = type
-        && &type_bytes[86..118] == self_lock_hash   // treasury_lock_hash bound to this treasury
+    if type_bytes.len() < ANCHOR_TYPE_TREASURY_HASH_END {
+        return false;
+    }
+    // Reject if the molecule table's declared total_size disagrees with the actual buffer.
+    let total_len = u32::from_le_bytes([type_bytes[0], type_bytes[1], type_bytes[2], type_bytes[3]]) as usize;
+    if total_len != type_bytes.len() {
+        return false;
+    }
+    // Validate that the molecule table offsets are canonical for a Script table.
+    // A crafted table with non-standard offsets could place arbitrary bytes at [16..48]
+    // to pass the code_hash check while pointing the real code_hash at an always-success script.
+    let off_code_hash = u32::from_le_bytes([type_bytes[4],  type_bytes[5],  type_bytes[6],  type_bytes[7]])  as usize;
+    let off_hash_type = u32::from_le_bytes([type_bytes[8],  type_bytes[9],  type_bytes[10], type_bytes[11]]) as usize;
+    let off_args      = u32::from_le_bytes([type_bytes[12], type_bytes[13], type_bytes[14], type_bytes[15]]) as usize;
+    if off_code_hash != 16 || off_hash_type != 48 || off_args != 49 {
+        return false;
+    }
+    &type_bytes[16..48] == anchor_type_id    // code_hash = proposal-anchor type ID
+        && type_bytes[48] == 0x01            // hash_type = type
+        && &type_bytes[86..118] == self_lock_hash  // treasury_lock_hash bound to this treasury
 }
 
 const PBLK_MAGIC: &[u8; 4] = b"PBLK";
