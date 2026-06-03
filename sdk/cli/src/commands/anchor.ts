@@ -22,7 +22,7 @@ import {
   proposalCellDataHash,
 } from "../lib/governance-v4.js";
 import { loadProposal, saveProposal, REVIEW_WINDOW_MS } from "../lib/proposals.js";
-import { SECP256K1_DEP_GROUP, TESTNET_CONTRACT_OUTPOINTS, TESTNET_GOVERNANCE_LOCK_SCRIPT, TESTNET_REGISTRY_CELL, TESTNET_RPC_URL } from "../lib/defaults.js";
+import { SECP256K1_DEP_GROUP, TESTNET_CONTRACT_OUTPOINTS, TESTNET_GOVERNANCE_LOCK_SCRIPT, TESTNET_REGISTRY_CELL, TESTNET_RPC_URL, TESTNET_TREASURY_LOCK_DEP, TESTNET_TREASURY_LOCK_SCRIPT } from "../lib/defaults.js";
 import { buildWitnessArgs, ckbBlake2b } from "../lib/witness.js";
 import { hexCapacity, occupiedCapacityShannons, parseCapacity } from "../lib/capacity.js";
 import { parseCellDepList, type CellDepJson } from "../lib/tx-deps.js";
@@ -55,7 +55,7 @@ export function anchorDefaults(): Partial<AnchorOptions> {
     rpcUrl: TESTNET_RPC_URL,
     registryTx: TESTNET_REGISTRY_CELL.txHash,
     registryIndex: String(TESTNET_REGISTRY_CELL.index),
-    capacity: "62",
+    capacity: "auto",
     feeRate: "1000",
     proposalAnchorCodeTx: TESTNET_CONTRACT_OUTPOINTS.proposalAnchor.txHash,
     proposalAnchorCodeIndex: String(TESTNET_CONTRACT_OUTPOINTS.proposalAnchor.index),
@@ -139,7 +139,7 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
     proposalAnchorCodeIndex = opts.proposalAnchorCodeIndex === undefined
       ? undefined
       : parseOutputIndex(opts.proposalAnchorCodeIndex, "--proposal-anchor-code-index");
-    anchorCapacity = parseCkbToShannons(opts.capacity);
+    anchorCapacity = opts.capacity === "auto" ? 0n : parseCkbToShannons(opts.capacity);
     treasuryLockDeps = parseCellDepList(opts.treasuryLockDep, "--treasury-lock-dep");
     if ((providedProposalTx && providedProposalIndex === undefined) || (!providedProposalTx && providedProposalIndex !== undefined)) {
       throw new Error("--proposal-tx and --proposal-index must be provided together.");
@@ -218,7 +218,7 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
       process.exit(1);
     }
 
-    const typedSpinner = ora("Building typed treasury proposal-anchor transaction").start();
+    const typedSpinner = ora("Building keyless treasury anchor transaction").start();
     let selectedTreasuryCells: Array<Awaited<ReturnType<typeof getLiveCell>>>;
     let totalInput = 0n;
     let anchorType: { code_hash: string; hash_type: string; args: string };
@@ -239,29 +239,30 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
         type: anchorType,
         data: proposalDataHex,
       });
-      if (anchorCapacity < minAnchorCapacity) {
+      if (opts.capacity === "auto") {
+        anchorCapacity = minAnchorCapacity;
+      } else if (anchorCapacity < minAnchorCapacity) {
         throw new Error(
           `--capacity ${opts.capacity} CKB is too small for this typed anchor. ` +
-          `Need at least ${minAnchorCapacity} shannons.`,
+          `Need at least ${minAnchorCapacity} shannons (${minAnchorCapacity / 100_000_000n} CKB).`,
         );
       }
 
+      // Use treasury-lock cells as inputs — no private key needed to spend them.
+      // The treasury-lock script validates the TX structure (anchor output + capacity return).
       const explicitOutpoints = parseOutpointList(opts.treasuryCell, "--treasury-cell");
       selectedTreasuryCells = explicitOutpoints.length
-        ? await Promise.all(explicitOutpoints.map((outpoint) => getLiveCell(opts.rpcUrl, outpoint.txHash, outpoint.index)))
+        ? await Promise.all(explicitOutpoints.map((op) => getLiveCell(opts.rpcUrl, op.txHash, op.index)))
         : [];
       for (const cell of selectedTreasuryCells) {
-        const lockHash = ckbBlake2b(scriptToMoleculeBytes(cell.lock));
-        if (bytesToHex(lockHash) !== bytesToHex(treasuryLockHash)) {
-          throw new Error(`Treasury cell ${cell.txHash}:${cell.index} is not locked to the registry treasury.`);
-        }
         if (cell.type) throw new Error(`Treasury cell ${cell.txHash}:${cell.index} has a type script; use plain treasury cells.`);
         if (cell.data !== "0x") throw new Error(`Treasury cell ${cell.txHash}:${cell.index} has data; use empty treasury cells.`);
         totalInput += parseCapacity(cell.capacity);
       }
 
       if (!explicitOutpoints.length) {
-        const candidates = await getLiveCellsByLock(opts.rpcUrl, treasuryLockScript, 100);
+        // Auto-discover treasury-lock cells from chain.
+        const candidates = await getLiveCellsByLock(opts.rpcUrl, TESTNET_TREASURY_LOCK_SCRIPT, 100);
         for (const cell of candidates) {
           if (cell.type || cell.data !== "0x") continue;
           selectedTreasuryCells.push(cell);
@@ -271,13 +272,14 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
       }
       if (totalInput < anchorCapacity + DEFAULT_FEE_SHANNONS) {
         throw new Error(
-          `Selected treasury cells contain ${totalInput} shannons, but anchor creation needs ` +
-          `${anchorCapacity + DEFAULT_FEE_SHANNONS} shannons. Fund the treasury or pass more --treasury-cell inputs.`,
+          `Treasury pool has ${totalInput / 100_000_000n} CKB but anchor needs ` +
+          `${(anchorCapacity + DEFAULT_FEE_SHANNONS) / 100_000_000n} CKB. ` +
+          "Donate CKB to the treasury: ckb-firewall donate",
         );
       }
-      typedSpinner.succeed("Typed treasury proposal-anchor transaction built");
+      typedSpinner.succeed("Keyless treasury anchor transaction built");
     } catch (err) {
-      typedSpinner.fail("Could not build typed anchor transaction");
+      typedSpinner.fail("Could not build anchor transaction");
       console.error(chalk.red(err instanceof Error ? err.message : String(err)));
       process.exit(1);
     }
@@ -287,12 +289,24 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
       transaction: {
         version: "0x0",
         cell_deps: [
-          { out_point: { tx_hash: SECP256K1_DEP_GROUP.txHash, index: "0x0" }, dep_type: "dep_group" },
+          // treasury-lock code cell dep (validates the TX structure, no signature needed)
+          {
+            out_point: { tx_hash: TESTNET_TREASURY_LOCK_DEP.txHash, index: `0x${TESTNET_TREASURY_LOCK_DEP.index.toString(16)}` },
+            dep_type: "code",
+          },
           ...treasuryLockDeps,
           {
             out_point: {
               tx_hash: opts.proposalAnchorCodeTx,
               index: `0x${proposalAnchorCodeIndex.toString(16)}`,
+            },
+            dep_type: "code",
+          },
+          // governance-lock code cell dep (needed for proposal cell output lock validation at creation)
+          {
+            out_point: {
+              tx_hash: TESTNET_CONTRACT_OUTPOINTS.governanceLock.txHash,
+              index: `0x${TESTNET_CONTRACT_OUTPOINTS.governanceLock.index.toString(16)}`,
             },
             dep_type: "code",
           },
@@ -305,16 +319,15 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
         outputs: [
           { capacity: hexCapacity(anchorCapacity), lock: TESTNET_GOVERNANCE_LOCK_SCRIPT, type: anchorType },
           ...(changeCapacity > 0n
-            ? [{ capacity: hexCapacity(changeCapacity), lock: treasuryLockScript, type: null }]
+            ? [{ capacity: hexCapacity(changeCapacity), lock: TESTNET_TREASURY_LOCK_SCRIPT, type: null }]
             : []),
         ],
         outputs_data: [
           proposalDataHex,
           ...(changeCapacity > 0n ? ["0x"] : []),
         ],
-        witnesses: selectedTreasuryCells.map((_, index) => (
-          index === 0 ? bytesToHex(buildWitnessArgs({})) : "0x"
-        )),
+        // No signatures needed — treasury-lock validates TX structure, not a key.
+        witnesses: selectedTreasuryCells.map(() => "0x"),
       },
       multisig_configs: {},
       signatures: {},
@@ -333,37 +346,40 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
     console.log();
 
     if (!opts.submit) {
-      console.log("Sign and submit with ckb-cli:");
+      console.log("Submit keylessly — no signing required:");
       console.log(chalk.dim(
-        `  ckb-cli wallet sign-txs --tx-file ${opts.txOut} --from-account <treasury-address>\n` +
-        `  ckb-cli wallet apply-txs --tx-file ${opts.txOut}\n` +
+        `  ckb-cli tx send --tx-file ${opts.txOut} --skip-check\n` +
         `  ckb-firewall anchor --proposal ${proposal.id} --proposal-tx <tx-hash> --proposal-index 0`,
       ));
+      console.log();
+      console.log(chalk.dim("Or pass --submit to send automatically."));
       return;
     }
 
-    if (!opts.fromAccount) {
-      console.error(logSymbols.error, chalk.red("--from-account is required with --submit for treasury-backed anchors."));
-      process.exit(1);
-    }
-    const submitSpinner = ora("Signing and submitting typed proposal-anchor transaction").start();
+    // No signing step — treasury-lock is validated by script logic, not a key.
+    const submitSpinner = ora("Submitting keyless anchor transaction").start();
     try {
-      execFileSync("ckb-cli", ["wallet", "sign-txs", "--tx-file", opts.txOut, "--from-account", opts.fromAccount], { stdio: "inherit" });
-      const output = execFileSync("ckb-cli", ["wallet", "apply-txs", "--tx-file", opts.txOut], { encoding: "utf8" });
-      submitSpinner.succeed("Typed proposal-anchor transaction submitted");
-      const txHash = output.match(/0x[a-fA-F0-9]{64}/)?.[0];
+      const output = execFileSync("ckb-cli", [
+        "--url", opts.rpcUrl,
+        "tx", "send",
+        "--tx-file", opts.txOut,
+        "--skip-check",
+      ], { encoding: "utf8" });
+      submitSpinner.succeed("Submitted");
+      const txHash = output.trim().match(/0x[a-fA-F0-9]{64}/)?.[0];
       if (txHash) {
         proposal.proposalCellTxHash = txHash;
         proposal.proposalCellIndex = 0;
         saveProposal(proposal);
-        console.log(`  Tx hash: ${txHash}`);
-        console.log(`  Stored proposal cell: ${txHash}:0`);
-        console.log(chalk.dim(`  Execute with: ckb-firewall execute --proposal ${proposal.id}`));
+        console.log();
+        console.log(logSymbols.success, chalk.green(`Proposal anchored: ${txHash}:0`));
+        console.log(chalk.dim(`  Ready to execute after the review window: ckb-firewall execute --proposal ${proposal.id}`));
       } else {
-        console.log(output);
+        console.log(chalk.yellow("Submitted — tx hash not parsed from output."));
+        console.log(chalk.dim(output.trim()));
       }
     } catch (err) {
-      submitSpinner.fail("ckb-cli sign/apply failed");
+      submitSpinner.fail("Submission failed");
       console.error(chalk.red(err instanceof Error ? err.message : String(err)));
       process.exit(1);
     }

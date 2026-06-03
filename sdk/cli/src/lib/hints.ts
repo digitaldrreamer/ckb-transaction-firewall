@@ -7,7 +7,6 @@ type HintKey =
   | "propose"
   | "proposals"
   | "vote"
-  | "sign"
   | "execute";
 
 const HINTS: Record<HintKey, string[]> = {
@@ -30,23 +29,17 @@ const HINTS: Record<HintKey, string[]> = {
     `Validators: help approve this proposal by voting: ${chalk.dim("ckb-firewall vote")}`,
     `Share the proposal ID with your community to gather votes faster`,
     `Track proposal progress: ${chalk.dim("ckb-firewall proposals")}`,
-    `Need 3 yes votes before signing: ${chalk.dim("ckb-firewall proposals --status voting")}`,
+    `Need 3 yes votes before execution: ${chalk.dim("ckb-firewall proposals --status voting")}`,
   ],
   proposals: [
     `Vote on an open proposal: ${chalk.dim("ckb-firewall vote")}`,
-    `Submit a signature on an approved proposal: ${chalk.dim("ckb-firewall sign")}`,
     `Create a new governance proposal: ${chalk.dim("ckb-firewall propose")}`,
-    `Execute a fully signed proposal: ${chalk.dim("ckb-firewall execute")}`,
+    `Execute an approved proposal: ${chalk.dim("ckb-firewall execute")}`,
   ],
   vote: [
     `Encourage others to vote — 3 yes votes required to approve`,
     `Check current vote tallies: ${chalk.dim("ckb-firewall proposals")}`,
-    `Once approved, sign the proposal: ${chalk.dim("ckb-firewall sign")}`,
-  ],
-  sign: [
-    `After 3 signatures, execute the proposal on-chain: ${chalk.dim("ckb-firewall execute")}`,
-    `View all proposals awaiting signatures: ${chalk.dim("ckb-firewall proposals --status approved")}`,
-    `Verify the registry state: ${chalk.dim("ckb-firewall inspect")}`,
+    `Once approved, execute the proposal: ${chalk.dim("ckb-firewall execute")}`,
   ],
   execute: [
     `Verify the updated registry: ${chalk.dim("ckb-firewall inspect")}`,

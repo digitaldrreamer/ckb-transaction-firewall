@@ -8,7 +8,6 @@ import {
   isReadyToExecute,
   countYes,
   VOTE_THRESHOLD,
-  SIG_THRESHOLD,
   type ProposalStatus,
 } from "../lib/proposals.js";
 import { printHints, printVotingCallout } from "../lib/hints.js";
@@ -58,11 +57,10 @@ export async function proposalsCommand(opts: { status?: string }): Promise<void>
       chalk.cyan("Lock Args"),
       chalk.cyan("Status"),
       chalk.cyan("Votes"),
-      chalk.cyan("Sigs"),
       chalk.cyan("Review window"),
     ],
     style: { head: [], border: [] },
-    colWidths: [14, 8, 36, 22, 8, 6, 22],
+    colWidths: [14, 8, 36, 22, 8, 22],
     wordWrap: true,
   });
 
@@ -75,7 +73,6 @@ export async function proposalsCommand(opts: { status?: string }): Promise<void>
       chalk.dim(p.lockArgs.slice(0, 20) + (p.lockArgs.length > 20 ? "…" : "")),
       statusBadge(p.status, ready),
       `${yesVotes}/${VOTE_THRESHOLD}`,
-      `${p.signatures.length}/${SIG_THRESHOLD}`,
       reviewCountdown(p.reviewWindowEndsAt),
     ]);
   }

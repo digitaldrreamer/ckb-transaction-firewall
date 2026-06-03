@@ -23,6 +23,11 @@ export interface ProposeOptions {
   severity?: string;
   rationale?: string;
   proposer?: string;
+  treasuryLockCodeHash?: string;
+  treasuryLockHashType?: string;
+  treasuryLockArgs?: string;
+  /** Override the on-chain review delay in milliseconds. Testnet/drill use only. */
+  reviewDelayMs?: string;
 }
 
 function isValidHex(v: string): boolean {
@@ -38,7 +43,7 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
   // ── action ───────────────────────────────────────────────────────────────
 
   let action: ProposalAction;
-  if (opts.action === "add" || opts.action === "remove") {
+  if (opts.action === "add" || opts.action === "remove" || opts.action === "set-treasury") {
     action = opts.action;
   } else {
     const { chosen } = await inquirer.prompt<{ chosen: ProposalAction }>([
@@ -49,6 +54,7 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
         choices: [
           { name: "Add address to blacklist", value: "add" },
           { name: "Remove address from blacklist", value: "remove" },
+          { name: "Set registry treasury lock", value: "set-treasury" },
         ],
       },
     ]);
@@ -57,8 +63,10 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
 
   // ── lock args ────────────────────────────────────────────────────────────
 
-  let lockArgs: string;
-  if (opts.lockArgs && isValidHex(opts.lockArgs)) {
+  let lockArgs = "0x";
+  if (action === "set-treasury") {
+    lockArgs = "0x";
+  } else if (opts.lockArgs && isValidHex(opts.lockArgs)) {
     lockArgs = `0x${strip0x(opts.lockArgs).toLowerCase()}`;
   } else {
     const { hex } = await inquirer.prompt<{ hex: string }>([
@@ -112,6 +120,51 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
         ]);
         expiresAt = ts.trim();
       }
+    }
+  }
+
+  let treasuryLockScript: { code_hash: string; hash_type: string; args: string } | undefined;
+  if (action === "set-treasury") {
+    const codeHash = opts.treasuryLockCodeHash?.trim();
+    const hashType = opts.treasuryLockHashType?.trim();
+    const args = opts.treasuryLockArgs?.trim();
+    if (codeHash && hashType && args !== undefined && isValidHex(codeHash) && isValidHex(args)) {
+      treasuryLockScript = {
+        code_hash: `0x${strip0x(codeHash).toLowerCase()}`,
+        hash_type: hashType,
+        args: `0x${strip0x(args).toLowerCase()}`,
+      };
+    } else {
+      const answers = await inquirer.prompt<{
+        codeHash: string;
+        hashType: string;
+        args: string;
+      }>([
+        {
+          type: "input",
+          name: "codeHash",
+          message: "Treasury lock code hash:",
+          validate: (v: string) => (isValidHex(v.trim()) && strip0x(v.trim()).length === 64) || "Must be a 32-byte hex string.",
+        },
+        {
+          type: "list",
+          name: "hashType",
+          message: "Treasury lock hash type:",
+          choices: ["type", "data1", "data"],
+          default: "type",
+        },
+        {
+          type: "input",
+          name: "args",
+          message: "Treasury lock args:",
+          validate: (v: string) => isValidHex(v.trim()) || "Must be valid even-length hex.",
+        },
+      ]);
+      treasuryLockScript = {
+        code_hash: `0x${strip0x(answers.codeHash).toLowerCase()}`,
+        hash_type: answers.hashType,
+        args: `0x${strip0x(answers.args).toLowerCase()}`,
+      };
     }
   }
 
@@ -214,7 +267,22 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
   // ── create proposal ──────────────────────────────────────────────────────
 
   const submittedAt = new Date().toISOString();
-  const reviewWindowEndsAt = new Date(Date.now() + REVIEW_WINDOW_MS).toISOString();
+  let effectiveReviewDelayMs = REVIEW_WINDOW_MS;
+  if (opts.reviewDelayMs !== undefined) {
+    const parsed = Number(opts.reviewDelayMs);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      console.error(logSymbols.error, chalk.red("--review-delay-ms must be a non-negative number."));
+      process.exit(1);
+    }
+    effectiveReviewDelayMs = parsed;
+    if (parsed < REVIEW_WINDOW_MS) {
+      console.log(logSymbols.warning, chalk.yellow(
+        `Review delay set to ${parsed}ms — shorter than the production minimum of ${REVIEW_WINDOW_MS}ms. ` +
+        "For testnet / drill use only.",
+      ));
+    }
+  }
+  const reviewWindowEndsAt = new Date(Date.now() + effectiveReviewDelayMs).toISOString();
 
   const proposalIdHash = computeProposalIdHash({
     action,
@@ -226,6 +294,7 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
     rationale,
     proposer,
     submittedAt,
+    ...(treasuryLockScript ? { treasuryLockScript } : {}),
   });
 
   const proposal = {
@@ -245,6 +314,8 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
     votes: [],
     voteDigestHash: computeVoteDigestHash([]),
     signatures: [],
+    ...(opts.reviewDelayMs !== undefined ? { reviewDelayMs: String(effectiveReviewDelayMs) } : {}),
+    ...(treasuryLockScript ? { treasuryLockScript } : {}),
   };
 
   saveProposal(proposal);
@@ -297,8 +368,7 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
   console.log(chalk.bold("Next steps:"));
   console.log(`  1. Export and share:  ${chalk.dim(`ckb-firewall export --proposal ${proposal.id} --out proposal-${proposal.id}.json`)}`);
   console.log(`  2. Collect votes:     ${chalk.dim(`ckb-firewall vote --proposal ${proposal.id}`)}`);
-  console.log(`  3. Sign (3-of-5):     ${chalk.dim(`ckb-firewall sign --proposal ${proposal.id}`)}`);
-  console.log(`  4. Execute:           ${chalk.dim(`ckb-firewall execute --proposal ${proposal.id}`)}`);
+  console.log(`  3. Execute:           ${chalk.dim(`ckb-firewall execute --proposal ${proposal.id}`)}`);
   console.log();
   printHints("propose");
 }

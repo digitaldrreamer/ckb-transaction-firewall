@@ -60,15 +60,24 @@ ckb-firewall vote --proposal <id> --vote yes
 # 5. Track status
 ckb-firewall proposals
 
-# 6. Sign after 72h review window and vote threshold
+# 6. Anchor the proposal on-chain as a PBLK cell
+ckb-firewall anchor --proposal <id> --to-address <proposal-cell-owner-address>
+# after the transfer is accepted, record it once if you did not use --submit
+ckb-firewall anchor --proposal <id> --proposal-tx <anchor-tx> --proposal-index <data-output-index>
+
+# 7. Sign after 72h review window and vote threshold
 ckb-firewall sign --proposal <id> --signer-index 0
 #   (prompts for 32-byte private key)
 
-# 7. Execute on-chain
-ckb-firewall execute --proposal <id> --tx-out gov_tx.json
+# 8. Execute on-chain with the anchored proposal cell
+ckb-firewall execute \
+  --proposal <id> \
+  --tx-out gov_tx.json
 ```
 
 Proposal state lives in `~/.ckb-firewall/proposals/`. Use `export`/`import` to share between participants — `import` merges rather than overwrites.
+
+`anchor` creates the on-chain `PBLK` proposal cell and stores its outpoint on the proposal when submitted directly or when you later pass `--proposal-tx` and `--proposal-index`. GOV1 v4 execution spends that cell with a relative timestamp `since` delay, so the review window is enforced by CKB consensus.
 
 ## Full reference
 
