@@ -16,6 +16,7 @@ MAX_CYCLES_VERY_LARGE_REGISTRY="${MAX_CYCLES_VERY_LARGE_REGISTRY:-3000000}"
 
 FIREWALL_DIR="$ROOT_DIR/contracts/firewall-lock"
 REGISTRY_DIR="$ROOT_DIR/contracts/blacklist-registry"
+ANCHOR_DIR="$ROOT_DIR/contracts/proposal-anchor"
 TESTS_DIR="$ROOT_DIR/tests/unit"
 
 FIREWALL_BIN="$FIREWALL_DIR/target/riscv64imac-unknown-none-elf/release/firewall-lock"
@@ -38,6 +39,13 @@ echo "Building blacklist-registry (dev key feature for local verification)..."
 (
   cd "$REGISTRY_DIR"
   cargo build --locked --release --target=riscv64imac-unknown-none-elf --features dev-signer-keys
+)
+
+echo ""
+echo "Building proposal-anchor (required by proposal_anchor_tests include_bytes)..."
+(
+  cd "$ANCHOR_DIR"
+  cargo build --locked --release --target=riscv64imac-unknown-none-elf
 )
 
 echo ""
