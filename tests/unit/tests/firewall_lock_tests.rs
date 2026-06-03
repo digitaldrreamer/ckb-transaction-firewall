@@ -56,11 +56,11 @@ fn build_registry_v2_type_args(tag: u8) -> Bytes {
 fn build_firewall_lock_args_with_version_flags(version: u8, flags: u8) -> Bytes {
     let mut args = vec![version, flags, 1u8]; // 1 dummy registry
     args.extend_from_slice(&[0u8; 32]); // registry code_hash
-    args.push(0x01u8);                  // registry hash_type
+    args.push(0x01u8); // registry hash_type
     args.extend_from_slice(&[0u8; 32]); // type_id_value (dummy — no matching dep in these tests)
-    args.push(1u8);                     // required = true
+    args.push(1u8); // required = true
     args.extend_from_slice(&[1u8; 32]); // inner_code_hash
-    args.push(0x01u8);                  // inner_hash_type
+    args.push(0x01u8); // inner_hash_type
     args.extend_from_slice(&[0u8, 0u8]); // inner_args_len = 0
     Bytes::from(args)
 }
@@ -81,7 +81,7 @@ fn build_registry_payload_with_expires(entries: Vec<(Vec<u8>, u64)>, sorted: boo
     }
     let mut data = vec![];
     data.extend_from_slice(b"BLKL");
-    data.push(0x02u8);                        // version = 2
+    data.push(0x02u8); // version = 2
     data.extend_from_slice(&0u16.to_le_bytes()); // gov_header_len = 0
     data.extend_from_slice(
         &u32::try_from(rows.len())
@@ -103,7 +103,7 @@ fn build_registry_payload(entries: Vec<Vec<u8>>, sorted: bool) -> Bytes {
     }
     let mut data = vec![];
     data.extend_from_slice(b"BLKL");
-    data.push(0x02u8);                        // version = 2
+    data.push(0x02u8); // version = 2
     data.extend_from_slice(&0u16.to_le_bytes()); // gov_header_len = 0
     data.extend_from_slice(
         &u32::try_from(ids.len())
@@ -377,7 +377,8 @@ fn test_reject_invalid_registry_data() {
         .build();
 
     // Invalid magic to trigger ERROR_INVALID_REGISTRY_DATA
-    let registry_out_point = context.create_cell(registry_output, Bytes::from(vec![0x00, 0x11, 0x22]));
+    let registry_out_point =
+        context.create_cell(registry_output, Bytes::from(vec![0x00, 0x11, 0x22]));
     let registry_dep = CellDep::new_builder().out_point(registry_out_point).build();
 
     let inner_hash: [u8; 32] = context
@@ -433,8 +434,12 @@ fn test_reject_registry_not_sorted() {
         data.push(0x02u8);
         data.extend_from_slice(&0u16.to_le_bytes()); // gov_header_len = 0
         data.extend_from_slice(&2u32.to_le_bytes());
-        data.push(1); data.push(0xBB); data.extend_from_slice(&0u64.to_le_bytes());
-        data.push(1); data.push(0xAA); data.extend_from_slice(&0u64.to_le_bytes());
+        data.push(1);
+        data.push(0xBB);
+        data.extend_from_slice(&0u64.to_le_bytes());
+        data.push(1);
+        data.push(0xAA);
+        data.extend_from_slice(&0u64.to_le_bytes());
         Bytes::from(data)
     };
     let registry_out_point = context.create_cell(registry_output, unsorted_payload);
@@ -588,10 +593,15 @@ fn test_reject_ambiguous_registry_cell_dep() {
         .build();
 
     // Create two registry deps with identical type script identity
-    let registry_out_point_1 = context.create_cell(registry_output.clone(), registry_payload.clone());
+    let registry_out_point_1 =
+        context.create_cell(registry_output.clone(), registry_payload.clone());
     let registry_out_point_2 = context.create_cell(registry_output, registry_payload);
-    let registry_dep_1 = CellDep::new_builder().out_point(registry_out_point_1).build();
-    let registry_dep_2 = CellDep::new_builder().out_point(registry_out_point_2).build();
+    let registry_dep_1 = CellDep::new_builder()
+        .out_point(registry_out_point_1)
+        .build();
+    let registry_dep_2 = CellDep::new_builder()
+        .out_point(registry_out_point_2)
+        .build();
 
     let inner_hash: [u8; 32] = context
         .build_script(&inner_code_out_point, Bytes::new())
@@ -653,8 +663,14 @@ fn run_non_blacklisted_pass_and_get_cycles(flags: u8, include_type_script: bool)
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, flags, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        flags,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     let inner_dep = CellDep::new_builder()
         .out_point(inner_code_out_point.clone())
@@ -722,8 +738,14 @@ fn run_non_blacklisted_large_registry_and_get_cycles(
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, flags, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        flags,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     let inner_dep = CellDep::new_builder()
         .out_point(inner_code_out_point.clone())
@@ -785,8 +807,14 @@ fn test_pass_temporary_blacklist_expired_with_header_median() {
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     let inner_dep = CellDep::new_builder()
         .out_point(inner_code_out_point.clone())
@@ -844,8 +872,14 @@ fn test_reject_temporary_blacklist_active_with_header_median() {
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     let inner_dep = CellDep::new_builder()
         .out_point(inner_code_out_point.clone())
@@ -905,8 +939,14 @@ fn test_median_time_even_header_count_affects_expiry() {
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     let inner_dep = CellDep::new_builder()
         .out_point(inner_code_out_point.clone())
@@ -965,8 +1005,14 @@ fn test_header_dep_order_permutation_invariant_for_median_expiry() {
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     let inner_dep = CellDep::new_builder()
         .out_point(inner_code_out_point.clone())
@@ -1037,8 +1083,14 @@ fn test_median_nine_headers_expiry_matrix() {
     let dep_expired = CellDep::new_builder()
         .out_point(registry_out_expired)
         .build();
-    let lock_args_expired =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args_expired = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
     let tx_ok = build_tx_with_firewall_lock(
         &mut context,
         firewall_out_point.clone(),
@@ -1059,8 +1111,14 @@ fn test_median_nine_headers_expiry_matrix() {
     let dep_active = CellDep::new_builder()
         .out_point(registry_out_active)
         .build();
-    let lock_args_active =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args_active = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
     let tx_bad = build_tx_with_firewall_lock(
         &mut context,
         firewall_out_point,
@@ -1110,8 +1168,14 @@ fn test_no_header_deps_zero_median_keeps_temporary_blacklist_active() {
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     let inner_dep = CellDep::new_builder()
         .out_point(inner_code_out_point.clone())
@@ -1168,8 +1232,14 @@ fn test_median_duplicate_header_timestamps_boundary_eq_expires() {
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     let inner_dep = CellDep::new_builder()
         .out_point(inner_code_out_point.clone())
@@ -1227,8 +1297,14 @@ fn test_median_single_header_timestamp() {
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     let inner_dep = CellDep::new_builder()
         .out_point(inner_code_out_point.clone())
@@ -1281,8 +1357,14 @@ fn test_reject_missing_inner_lock_cell_dep() {
         .expect("build inner script");
     let inner_hash: [u8; 32] = inner_script.code_hash().unpack();
     let inner_hash_type: u8 = u8::from(inner_script.hash_type());
-    let lock_args =
-        build_full_lock_args(0x02, 0x01, &registry_type_script, inner_hash, inner_hash_type, &[]);
+    let lock_args = build_full_lock_args(
+        0x02,
+        0x01,
+        &registry_type_script,
+        inner_hash,
+        inner_hash_type,
+        &[],
+    );
 
     // Intentionally omit inner lock code cell_dep so spawn_cell cannot resolve the binary.
     let tx = build_tx_with_firewall_lock(
