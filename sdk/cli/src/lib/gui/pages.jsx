@@ -3,11 +3,53 @@
 
 const {
   TFW_ProposalCard, TFW_Stat, TFW_SectionHead, TFW_EmptyState,
-  TFW_Badge, TFW_VoteDots, TFW_SigDots, TFW_StatusBadge, TFW_ActionPill,
+  TFW_Badge, TFW_VoteDots, TFW_StatusBadge, TFW_ActionPill,
   TFW_ClassificationTag, TFW_SeverityChip, TFW_Address,
-  TFW_isReady, TFW_displayStatus, TFW_countYes, TFW_sigCount,
+  TFW_isReady, TFW_displayStatus, TFW_countYes,
   TFW_reviewPassed, TFW_relTime, TFW_fmtDateShort, TFW_trunc,
 } = window;
+
+const TFW_SHANNONS_PER_CKB = 100_000_000;
+
+function TFW_fmtCkbFromShannons(value) {
+  if (value === undefined || value === null || value === "") return "n/a";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "n/a";
+  return `${(n / TFW_SHANNONS_PER_CKB).toLocaleString(undefined, {
+    maximumFractionDigits: 4,
+  })} CKB`;
+}
+
+function TFW_TreasuryBanner({ treasury, compact = false }) {
+  if (!treasury) return null;
+  const used = typeof treasury.poolUsedPercent === "number" ? treasury.poolUsedPercent : null;
+  const warning = Boolean(treasury.donateRecommended);
+  const donationTarget = treasury.donationAddress || treasury.lockHash;
+  const balance = TFW_fmtCkbFromShannons(treasury.balanceShannons);
+  const capacity = TFW_fmtCkbFromShannons(treasury.poolCapacityShannons);
+  return (
+    <div className={`tfw-treasury${warning ? " tfw-treasury--warn" : ""}${compact ? " tfw-treasury--compact" : ""}`}>
+      <div className="tfw-treasury__main">
+        <div className="tfw-treasury__eyebrow">BLACKLIST POOL</div>
+        <div className="tfw-treasury__line">
+          <strong>{used === null ? "Usage unavailable" : `${used.toFixed(2)}% used`}</strong>
+          <span>Reserve {balance}</span>
+          <span>Pool {capacity}</span>
+          {typeof treasury.liveCellCount === "number" && <span>{treasury.liveCellCount} treasury cell{treasury.liveCellCount === 1 ? "" : "s"}</span>}
+        </div>
+      </div>
+      <div className="tfw-treasury__meter" aria-hidden="true">
+        <span style={{ width: `${Math.min(100, Math.max(0, used || 0))}%` }} />
+      </div>
+      {warning && (
+        <div className="tfw-treasury__donate">
+          <span>Donate CKB to keep registry growth funded</span>
+          <code className="tfw-mono">{donationTarget}</code>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Overview ──────────────────────────────────────────────────────────────────
 function OverviewPage({ state, actions }) {
@@ -18,11 +60,7 @@ function OverviewPage({ state, actions }) {
   const expiredReg = registry.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
 
   const open = proposals.filter(p => p.status === "pending-review" || p.status === "voting");
-  const ready = proposals.filter(TFW_isReady);
-  const approved = proposals.filter(p => p.status === "approved" && !TFW_isReady(p));
-  const executed = proposals.filter(p => p.status === "executed");
-
-  const action = ready.concat(open);
+  const action = open.filter(p => !(p.votes || []).some(v => v.pubkey === meta.yourPubkey));
   const recent = [...proposals]
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
     .slice(0, 6);
@@ -34,10 +72,12 @@ function OverviewPage({ state, actions }) {
   return (
     <div className="tfw-page tfw-page--overview">
 
+      <TFW_TreasuryBanner treasury={meta.treasury} />
+
       {/* HERO STRIP — editorial-sized stats */}
       <div className="tfw-hero">
         <div className="tfw-hero__lead">
-          <div className="tfw-hero__eyebrow">GOVERNANCE STATUS · {new Date().toISOString().slice(0,10)}</div>
+          <div className="tfw-hero__eyebrow">VALIDATOR STATUS · {new Date().toISOString().slice(0,10)}</div>
           <h1 className="tfw-hero__title">
             <span className="tfw-hero__title-line1">{activeReg === 0 ? "Registry" : "Blocking"}</span>
             <span className="tfw-hero__title-line2">
@@ -49,14 +89,14 @@ function OverviewPage({ state, actions }) {
           <div className="tfw-hero__sub">
             {action.length > 0 ? (
               <>
-                <strong>{action.length} item{action.length !== 1 ? "s" : ""}</strong> need
-                {action.length === 1 ? "s" : ""} your attention.
+                <strong>{action.length} proposal{action.length !== 1 ? "s" : ""}</strong> need
+                {action.length === 1 ? "s" : ""} your vote.
                 {youHaventVoted.length > 0 && (
                   <> You haven&rsquo;t voted on <strong>{youHaventVoted.length}</strong>.</>
                 )}
               </>
             ) : (
-              <>All clear. No proposals require action right now.</>
+              <>All clear. No proposals need your vote right now.</>
             )}
           </div>
         </div>
@@ -73,25 +113,15 @@ function OverviewPage({ state, actions }) {
             tone="amber"
             sub={youHaventVoted.length ? `${youHaventVoted.length} need you` : "all caught up"}
           />
-          <TFW_Stat
-            value={ready.length}
-            label="READY TO EXECUTE"
-            tone="green"
-          />
-          <TFW_Stat
-            value={approved.length}
-            label="AWAITING SIGS"
-            tone="amber"
-          />
         </div>
       </div>
 
-      {/* ACTION REQUIRED */}
+      {/* VOTES NEEDED */}
       {action.length > 0 && (
         <div className="tfw-section">
           <TFW_SectionHead
             eyebrow="◆ PRIORITY"
-            title="Action required"
+            title="Votes needed"
             count={action.length}
             action={
               <button type="button" className="tfw-link" onClick={() => actions.setTab("proposals")}>
@@ -105,33 +135,10 @@ function OverviewPage({ state, actions }) {
                 key={p.id}
                 proposal={p}
                 registry={registry}
+                meta={meta}
                 onOpen={actions.openProposal}
                 onVote={actions.openVote}
-                onSign={actions.openSign}
-                onExecute={actions.openExecute}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* AWAITING SIGS */}
-      {approved.length > 0 && (
-        <div className="tfw-section">
-          <TFW_SectionHead
-            eyebrow="◇ MULTISIG"
-            title="Awaiting signatures"
-            count={approved.length}
-          />
-          <div className="tfw-cards">
-            {approved.map(p => (
-              <TFW_ProposalCard
-                key={p.id}
-                proposal={p}
-                registry={registry}
-                onOpen={actions.openProposal}
-                onVote={actions.openVote}
-                onSign={actions.openSign}
+                onAnchor={actions.openAnchor}
                 onExecute={actions.openExecute}
               />
             ))}
@@ -155,9 +162,10 @@ function OverviewPage({ state, actions }) {
                 key={p.id}
                 proposal={p}
                 registry={registry}
+                meta={meta}
                 onOpen={actions.openProposal}
                 onVote={actions.openVote}
-                onSign={actions.openSign}
+                onAnchor={actions.openAnchor}
                 onExecute={actions.openExecute}
                 compact
               />
@@ -211,6 +219,8 @@ function RegistryPage({ state, actions }) {
 
   return (
     <div className="tfw-page tfw-page--registry">
+      <TFW_TreasuryBanner treasury={meta.treasury} compact />
+
       <div className="tfw-pagehead">
         <div className="tfw-pagehead__col">
           <div className="tfw-pagehead__eyebrow">ON-CHAIN STATE</div>
@@ -325,17 +335,15 @@ function RegistryPage({ state, actions }) {
 // ── Proposals ────────────────────────────────────────────────────────────────
 const PROP_FILTERS = [
   { key: "all", label: "All" },
-  { key: "action", label: "Needs action" },
+  { key: "action", label: "Needs my vote" },
   { key: "pending-review", label: "Pending review" },
   { key: "voting", label: "Voting" },
-  { key: "approved", label: "Awaiting sigs" },
-  { key: "ready", label: "Ready" },
   { key: "executed", label: "Executed" },
   { key: "rejected", label: "Rejected" },
 ];
 
 function ProposalsPage({ state, actions }) {
-  const { proposals, registry } = state;
+  const { proposals, registry, meta } = state;
   const [filter, setFilter] = React.useState("all");
   const [query, setQuery] = React.useState("");
 
@@ -344,9 +352,9 @@ function ProposalsPage({ state, actions }) {
       const ds = TFW_displayStatus(p);
       if (filter === "all") return true;
       if (filter === "action") {
-        return p.status === "pending-review" || p.status === "voting" || TFW_isReady(p);
+        return (p.status === "pending-review" || p.status === "voting")
+          && !(p.votes || []).some(v => v.pubkey === meta.yourPubkey);
       }
-      if (filter === "ready") return TFW_isReady(p);
       return ds === filter;
     })
     .filter(p => {
@@ -364,22 +372,22 @@ function ProposalsPage({ state, actions }) {
   proposals.forEach(p => {
     const ds = TFW_displayStatus(p);
     counts[ds] = (counts[ds] || 0) + 1;
-    if (p.status === "pending-review" || p.status === "voting" || TFW_isReady(p)) {
-      counts.action = (counts.action || 0) + 1;
+    if (p.status === "pending-review" || p.status === "voting") {
+      if (!(p.votes || []).some(v => v.pubkey === meta.yourPubkey)) {
+        counts.action = (counts.action || 0) + 1;
+      }
     }
   });
   counts.all = proposals.length;
-  counts.ready = proposals.filter(TFW_isReady).length;
 
   return (
     <div className="tfw-page tfw-page--proposals">
       <div className="tfw-pagehead">
         <div className="tfw-pagehead__col">
-          <div className="tfw-pagehead__eyebrow">GOVERNANCE WORKFLOW</div>
+          <div className="tfw-pagehead__eyebrow">VALIDATOR WORKFLOW</div>
           <h1 className="tfw-pagehead__title">Proposals</h1>
           <div className="tfw-pagehead__sub">
-            Every proposal moves through review → voting → multisig → execution.
-            3 of 5 keyholders must approve each on-chain change.
+            Review evidence, cast a vote, and export proposal JSON when another participant needs your vote.
           </div>
         </div>
         <button type="button" className="tfw-btn tfw-btn--primary" onClick={actions.openCreate}>
@@ -421,9 +429,10 @@ function ProposalsPage({ state, actions }) {
               key={p.id}
               proposal={p}
               registry={registry}
+              meta={meta}
               onOpen={actions.openProposal}
               onVote={actions.openVote}
-              onSign={actions.openSign}
+              onAnchor={actions.openAnchor}
               onExecute={actions.openExecute}
             />
           ))}

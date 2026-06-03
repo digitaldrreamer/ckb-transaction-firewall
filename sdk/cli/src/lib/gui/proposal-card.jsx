@@ -3,12 +3,12 @@
 
 const {
   TFW_Badge, TFW_StatusBadge, TFW_ActionPill, TFW_SeverityChip,
-  TFW_VoteDots, TFW_SigDots, TFW_Address, TFW_ClassificationTag,
+  TFW_VoteDots, TFW_Address, TFW_ClassificationTag,
   TFW_trunc, TFW_fmtDate, TFW_fmtDateShort, TFW_relTime, TFW_reviewCountdown,
-  TFW_countYes, TFW_sigCount, TFW_reviewPassed, TFW_isReady, TFW_displayStatus,
+  TFW_countYes, TFW_reviewPassed, TFW_isReady, TFW_displayStatus,
 } = window;
 
-function ProposalCard({ proposal, onOpen, onVote, onSign, onExecute, registry, compact = false }) {
+function ProposalCard({ proposal, onOpen, onVote, onAnchor, onExecute, registry, meta, compact = false }) {
   const p = proposal;
   const ds = TFW_displayStatus(p);
   const reg = registry.find(e => e.identifier.toLowerCase() === p.lockArgs.toLowerCase());
@@ -18,16 +18,14 @@ function ProposalCard({ proposal, onOpen, onVote, onSign, onExecute, registry, c
 
   const review = TFW_reviewCountdown(p.reviewWindowEndsAt);
   const yes = TFW_countYes(p);
-  const sigs = TFW_sigCount(p);
+  const hasVoted = meta?.yourPubkey
+    ? (p.votes || []).some(v => v.pubkey === meta.yourPubkey)
+    : false;
 
-  // Determine primary action
+  // Validator UI: the card only promotes voting. Advanced transaction steps stay in details.
   let primaryAction = null;
-  if ((p.status === "pending-review" || p.status === "voting") && sigs === 0) {
+  if ((p.status === "pending-review" || p.status === "voting") && !hasVoted) {
     primaryAction = { label: "Vote", onClick: () => onVote(p.id) };
-  } else if (TFW_isReady(p)) {
-    primaryAction = { label: "Execute →", onClick: () => onExecute(p.id), strong: true };
-  } else if (TFW_reviewPassed(p) && yes >= 3 && p.status !== "executed" && p.status !== "rejected") {
-    primaryAction = { label: "Sign", onClick: () => onSign(p.id), strong: true };
   }
 
   // Card-state class for left accent stripe
@@ -82,8 +80,6 @@ function ProposalCard({ proposal, onOpen, onVote, onSign, onExecute, registry, c
 
       <div className="tfw-card__foot">
         <TFW_VoteDots proposal={p} />
-        <span className="tfw-card__foot-sep" />
-        <TFW_SigDots proposal={p} />
         <span className="tfw-card__spacer" />
 
         {/* registry hint */}
