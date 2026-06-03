@@ -22,7 +22,7 @@ export const TESTNET_REGISTRY_CELL = {
 };
 
 export const TESTNET_TREASURY_DONATION_ADDRESS =
-  "ckt1qzxspgvm6cq4w9n393kfec94rffnl8cdyfa55z8h3pxfrrsju2hxwq546h5gm2ln9m6ehs5j68ujthe0z72g77z9m2jw2te5hq0myugugzyaany9q7kaky2wxhp29c4wjscgnqegsjqcl3avdh3u8wxd4e4py4tp7mv";
+  "ckt1qzpf4txhkw8vwtycyy5vjru0jv6q5wk3cwd8w22nzsz4e2sge9h7jq546h5gm2ln9m6ehs5j68ujthe0z72g77z9m2jw2te5hq0myugugzyaany9q7kaky2wxhp29c4wjscgnqegsjqcl3avdh3u8wxd4e4py8dwlf3";
 
 // Deployed contract binary cells (treasury-enabled registry redeployed 2026-05-31).
 export const TESTNET_CONTRACT_OUTPOINTS = {
@@ -66,7 +66,7 @@ export const TESTNET_GOVERNANCE_LOCK_SCRIPT = {
 // cells without a private key. Args encode which governance-lock and proposal-anchor
 // type IDs are authorised. code hash = blake2b(binary), hash_type = data1.
 export const TESTNET_TREASURY_LOCK_SCRIPT = {
-  code_hash: "0x8d00a19bd6015716712c6c9ce0b51a533f9f0d227b4a08f7884c918e12e2ae67",
+  code_hash: "0x829aacd7b38ec72c982128c90f8f93340a3ad1c39a77295314055caa08c96fe9",
   hash_type: "data1" as const,
   // governance_lock_type_id(32) | proposal_anchor_type_id(32)
   args: "0x95d5e88dabf32ef59bc292d1f925df2f17948f7845daa4e52f34b81fb2711c4089decc8507addb114e35c2a2e2ae943089832884818fc7ac6de3c3b8cdae6a12",
@@ -74,7 +74,7 @@ export const TESTNET_TREASURY_LOCK_SCRIPT = {
 
 // Cell dep for the treasury-lock code cell.
 export const TESTNET_TREASURY_LOCK_DEP = {
-  txHash: "0x14882a3056eb736f51d13ae14d77757afe9cf23fd9d26d9ea9c2bce61f0fd7cd",
+  txHash: "0xbc918dda15b2e43aa308a554872a0e966d26fa14d7f0f4362871bfed4a53c3ff",
   index: 0,
 };
 

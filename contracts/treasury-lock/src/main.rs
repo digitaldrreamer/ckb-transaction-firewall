@@ -191,9 +191,9 @@ fn program_entry() -> Result<(), i8> {
 
     let treasury_in_cap = load_group_input_capacity()?;
 
+    // Scan outputs: accumulate treasury change capacity and detect anchor output.
     let mut found_anchor = false;
     let mut treasury_out_cap = 0u64;
-
     let mut i = 0usize;
     loop {
         let lock = match load_cell_field_bytes(i, Source::Output, CellField::Lock) {
@@ -220,6 +220,26 @@ fn program_entry() -> Result<(), i8> {
         }
 
         i += 1;
+    }
+
+    // If no anchor output found, check whether this is an execute TX instead:
+    // a TX that consumes a proposal-anchor INPUT. The proposal-anchor type script
+    // enforces governance authorization (since delay, validator votes) before it
+    // can be spent, so the treasury can trust any TX that successfully consumes one.
+    if !found_anchor {
+        let mut j = 0usize;
+        loop {
+            match load_cell_field_bytes(j, Source::Input, CellField::Type) {
+                Ok(type_bytes) if is_anchor_type(&type_bytes, &anchor_type_id) => {
+                    found_anchor = true;
+                    break;
+                }
+                Ok(_) => j += 1,
+                Err(SysError::IndexOutOfBound) => break,
+                Err(SysError::ItemMissing) => j += 1,
+                Err(_) => return Err(ERR_LOAD),
+            }
+        }
     }
 
     if !found_anchor {

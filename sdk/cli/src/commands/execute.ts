@@ -36,6 +36,8 @@ import {
   TESTNET_GOVERNANCE_PUBKEYS,
   TESTNET_REGISTRY_CELL,
   TESTNET_RPC_URL,
+  TESTNET_TREASURY_LOCK_DEP,
+  TESTNET_TREASURY_LOCK_SCRIPT,
   warnIfTrivialTestKeys,
 } from "../lib/defaults.js";
 import { printHints } from "../lib/hints.js";
@@ -267,17 +269,18 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       const registryGrowth = registryOutputCapacity > registryInputCapacity ? registryOutputCapacity - registryInputCapacity : 0n;
       const registryShrink = registryInputCapacity > registryOutputCapacity ? registryInputCapacity - registryOutputCapacity : 0n;
 
-      // Prefer covering registry growth from the proposal cell's capacity surplus rather than
-      // pulling in treasury cells. Treasury cells require secp256k1 signing; the proposal cell
-      // is governance-lock locked and already a TX input — no extra key needed.
-      // Only fall back to treasury cells if the proposal cell cannot cover the growth.
+      // Prefer covering registry growth from the proposal cell's capacity surplus.
+      // If that's not enough, draw from the autonomous treasury-lock pool — no private
+      // key needed, the treasury-lock contract validates by detecting the proposal-anchor
+      // input being consumed.
       const proposalSurplus = parseCapacity(proposalCell.capacity) - DEFAULT_FEE_SHANNONS - MIN_CHANGE_SHANNONS;
       const growthCoveredByProposal = registryGrowth <= proposalSurplus ? registryGrowth : 0n;
       const remainingGrowth = registryGrowth - growthCoveredByProposal;
 
       if (remainingGrowth > treasuryInputCapacity) {
-        if (!treasuryOutpoints.length && state.governanceHeader?.treasuryLockScript) {
-          const candidates = await getLiveCellsByLock(opts.rpcUrl, state.governanceHeader.treasuryLockScript, 100);
+        if (!treasuryOutpoints.length) {
+          // Auto-discover autonomous treasury-lock cells (keyless — no signature required).
+          const candidates = await getLiveCellsByLock(opts.rpcUrl, TESTNET_TREASURY_LOCK_SCRIPT, 100);
           for (const cell of candidates) {
             if (cell.type || cell.data !== "0x") continue;
             treasuryCells.push(cell);
@@ -288,7 +291,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
         if (remainingGrowth > treasuryInputCapacity) {
           throw new Error(
             `Registry update needs ${remainingGrowth} shannons of additional capacity for growth. ` +
-            `Pass one or more --treasury-cell <tx-hash>:<index> inputs.`,
+            `Treasury pool is insufficient — donate CKB: ckb-firewall donate`,
           );
         }
       }
@@ -395,6 +398,8 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       version: "0x0",
       cell_deps: [
         { out_point: { tx_hash: SECP256K1_DEP_GROUP.txHash, index: "0x0" }, dep_type: "dep_group" },
+        // Include treasury-lock code dep whenever we have treasury inputs (keyless validation).
+        ...(treasuryCells.length > 0 ? [{ out_point: { tx_hash: TESTNET_TREASURY_LOCK_DEP.txHash, index: `0x${TESTNET_TREASURY_LOCK_DEP.index.toString(16)}` }, dep_type: "code" as const }] : []),
         ...treasuryLockDeps,
         {
           out_point: {
@@ -429,16 +434,15 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       ],
       outputs: [
         { capacity: hexCapacity(registryOutputCapacity), lock: state.cell.lock, type: state.cell.type },
-        // Return proposal cell capacity to treasury. proposalCell.lock is now governance-lock
-        // (proposal cells are no longer treasury-secp256k1-locked), so we use the treasury
-        // lock from the registry governance header instead.
+        // Return proposal cell capacity to the autonomous treasury-lock pool so future
+        // anchors and executes can draw on it without any private key.
         {
           capacity: hexCapacity(proposalChangeCapacity),
-          lock: state.governanceHeader?.treasuryLockScript ?? proposalCell.lock,
+          lock: TESTNET_TREASURY_LOCK_SCRIPT,
           type: null,
         },
         ...(extraTreasuryOutputCapacity > 0n
-          ? [{ capacity: hexCapacity(extraTreasuryOutputCapacity), lock: state.governanceHeader?.treasuryLockScript ?? proposalCell.lock, type: null }]
+          ? [{ capacity: hexCapacity(extraTreasuryOutputCapacity), lock: TESTNET_TREASURY_LOCK_SCRIPT, type: null }]
           : []),
       ],
       outputs_data: [
@@ -469,10 +473,10 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   console.log();
 
   const usePrivkey = !!opts.privkeyPath?.trim();
-  const needsTreasurySign = treasuryCells.length > 0;
 
-  // No treasury inputs → no signing needed at all. Build and submit directly.
-  if (!needsTreasurySign && !opts.sign && !usePrivkey) {
+  // Autonomous treasury-lock cells need no signature — the contract validates by detecting
+  // the proposal-anchor input. Execute is fully keyless unless the user explicitly requests signing.
+  if (!opts.sign && !usePrivkey) {
     const submitSpinner = ora("Submitting (keyless — no treasury inputs)").start();
     try {
       const output = execFileSync("ckb-cli", [
@@ -498,19 +502,6 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       if (!opts.ready) process.exit(1);
       throw err;
     }
-    console.log();
-    printHints("execute");
-    return;
-  }
-
-  // Treasury inputs present → signing required. Fall through to sign+submit.
-  if (needsTreasurySign && !opts.sign && !usePrivkey) {
-    console.log(logSymbols.warning, chalk.yellow("This proposal requires treasury capacity for registry growth."));
-    console.log("Sign and submit with ckb-cli:");
-    console.log(chalk.dim(
-      `  ckb-cli tx sign-inputs --tx-file ${opts.txOut} --privkey-path <treasury-key-file> --skip-check --add-signatures\n` +
-      `  ckb-cli tx send --tx-file ${opts.txOut} --skip-check`,
-    ));
     console.log();
     printHints("execute");
     return;
