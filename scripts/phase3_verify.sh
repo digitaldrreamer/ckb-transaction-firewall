@@ -45,7 +45,7 @@ echo ""
 echo "Building proposal-anchor (required by proposal_anchor_tests include_bytes)..."
 (
   cd "$ANCHOR_DIR"
-  cargo build --locked --release --target=riscv64imac-unknown-none-elf
+  cargo build --release --target=riscv64imac-unknown-none-elf
 )
 
 echo ""
