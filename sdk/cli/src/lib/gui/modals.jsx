@@ -9,6 +9,14 @@ const {
   TFW_reviewPassed, TFW_isReady, TFW_displayStatus,
 } = window;
 
+function safeUnixToISO(unixSeconds) {
+  try {
+    const num = Number(unixSeconds);
+    if (!num || isNaN(num) || num <= 0) return null;
+    return new Date(num * 1000).toISOString();
+  } catch { return null; }
+}
+
 // ─── Modal shell ─────────────────────────────────────────────────────────────
 function Modal({ open, onClose, eyebrow, title, subtitle, children, size = "md", footer }) {
   React.useEffect(() => {
@@ -119,12 +127,12 @@ function ProposalDetailContent({ proposal, registry, meta, actions, onClose }) {
             {!inReg && <span className="tfw-dossier__none">Not on chain</span>}
             {inReg && isExpReg && (
               <TFW_Badge tone="red" size="sm">
-                expired — {TFW_fmtDateShort(new Date(Number(reg.expiresAt) * 1000).toISOString())}
+                expired — {TFW_fmtDateShort(safeUnixToISO(reg.expiresAt))}
               </TFW_Badge>
             )}
             {inReg && !isExpReg && reg.expiresAt && (
               <TFW_Badge tone="green" size="sm">
-                active — expires {TFW_fmtDateShort(new Date(Number(reg.expiresAt) * 1000).toISOString())}
+                active — expires {TFW_fmtDateShort(safeUnixToISO(reg.expiresAt))}
               </TFW_Badge>
             )}
             {inReg && !isExpReg && !reg.expiresAt && (
@@ -157,7 +165,7 @@ function ProposalDetailContent({ proposal, registry, meta, actions, onClose }) {
           <div className="tfw-dossier__row">
             <div className="tfw-dossier__label">ENTRY EXPIRES</div>
             <div className="tfw-dossier__val tfw-mono">
-              {TFW_fmtDate(new Date(Number(p.expiresAt) * 1000).toISOString())}
+              {TFW_fmtDate(safeUnixToISO(p.expiresAt))}
             </div>
           </div>
         )}
@@ -496,9 +504,7 @@ function CreateForm({ onSubmit, onClose }) {
             <input
               type="datetime-local"
               className="tfw-input"
-              value={expires && expires !== "0"
-                ? new Date(Number(expires) * 1000).toISOString().slice(0, 16)
-                : ""}
+              value={safeUnixToISO(expires)?.slice(0, 16) ?? ""}
               min={new Date().toISOString().slice(0, 16)}
               onChange={e => setExpires(e.target.value
                 ? String(Math.floor(new Date(e.target.value).getTime() / 1000))
