@@ -744,14 +744,14 @@ fn parse_treasury_lock_hash(registry_data: &[u8]) -> Result<Option<[u8; 32]>, Sy
     Ok(Some(blake2b_256(&gh[script_start..script_end])))
 }
 
-fn output_capacity_for_lock_hash(target_hash: &[u8; 32]) -> Result<u64, SysError> {
+fn capacity_for_lock_hash(target_hash: &[u8; 32], source: Source) -> Result<u64, SysError> {
     let mut total = 0u64;
     let mut i = 0usize;
     loop {
-        match load_cell_lock_hash(i, Source::Output) {
+        match load_cell_lock_hash(i, source) {
             Ok(hash) => {
                 if hash == *target_hash {
-                    total = total.saturating_add(load_cell_capacity(i, Source::Output)?);
+                    total = total.saturating_add(load_cell_capacity(i, source)?);
                 }
                 i += 1;
             }
@@ -761,21 +761,13 @@ fn output_capacity_for_lock_hash(target_hash: &[u8; 32]) -> Result<u64, SysError
     }
 }
 
+fn output_capacity_for_lock_hash(target_hash: &[u8; 32]) -> Result<u64, SysError> {
+    capacity_for_lock_hash(target_hash, Source::Output)
+}
+
 fn input_capacity_for_lock_hash(target_hash: &[u8; 32]) -> Result<u64, SysError> {
-    let mut total = 0u64;
-    let mut i = 0usize;
-    loop {
-        match load_cell_lock_hash(i, Source::Input) {
-            Ok(hash) => {
-                if hash == *target_hash {
-                    total = total.saturating_add(load_cell_capacity(i, Source::Input)?);
-                }
-                i += 1;
-            }
-            Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(e) => return Err(e),
-        }
-    }
+    capacity_for_lock_hash(target_hash, Source::Input)
+}
 }
 
 fn required_treasury_return(
