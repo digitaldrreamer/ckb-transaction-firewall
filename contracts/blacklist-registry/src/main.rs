@@ -768,7 +768,6 @@ fn output_capacity_for_lock_hash(target_hash: &[u8; 32]) -> Result<u64, SysError
 fn input_capacity_for_lock_hash(target_hash: &[u8; 32]) -> Result<u64, SysError> {
     capacity_for_lock_hash(target_hash, Source::Input)
 }
-}
 
 fn required_treasury_return(
     treasury_input_capacity: u64,
