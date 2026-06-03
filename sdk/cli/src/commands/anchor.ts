@@ -165,6 +165,12 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
     const governanceHeader = governanceHeaderRaw ? parseGovernanceHeader(governanceHeaderRaw) : null;
     treasuryLockHash = governanceTreasuryLockHash(governanceHeader);
     treasuryLockScript = governanceHeader?.treasuryLockScript;
+    if (treasuryLockHash && !treasuryLockScript) {
+      throw new Error(
+        "Registry treasury lock script is missing from the governance header. " +
+        "A full treasury lock script (v3 header) is required to safely route change capacity."
+      );
+    }
     const proposalData = encodeProposalCellData(proposal, registryTypeIdValue);
     proposalDataHex = bytesToHex(proposalData);
     proposalDataHashHex = bytesToHex(proposalCellDataHash(proposal, registryTypeIdValue));
@@ -265,7 +271,7 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
 
       if (!explicitOutpoints.length) {
         // Auto-discover treasury-lock cells from chain.
-        const candidates = await getLiveCellsByLock(opts.rpcUrl, treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT, 100);
+        const candidates = await getLiveCellsByLock(opts.rpcUrl, treasuryLockScript!, 100);
         for (const cell of candidates) {
           if (cell.type || cell.data !== "0x") continue;
           selectedTreasuryCells.push(cell);
@@ -322,7 +328,7 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
         outputs: [
           { capacity: hexCapacity(anchorCapacity), lock: TESTNET_GOVERNANCE_LOCK_SCRIPT, type: anchorType },
           ...(changeCapacity > 0n
-            ? [{ capacity: hexCapacity(changeCapacity), lock: treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT, type: null }]
+            ? [{ capacity: hexCapacity(changeCapacity), lock: treasuryLockScript!, type: null }]
             : []),
         ],
         outputs_data: [

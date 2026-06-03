@@ -200,6 +200,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   let registryOutputCapacity: bigint;
   let extraTreasuryOutputCapacity = 0n;
   let proposalAnchorCellDep: { out_point: { tx_hash: string; index: string }; dep_type: "code" } | null = null;
+  let treasuryLockScript: { code_hash: string; hash_type: string; args: string } | undefined;
   try {
     state = await loadRegistryStateForProposal(opts.rpcUrl, opts.registryTx, registryIndex, proposal);
     warnIfTrivialTestKeys(TESTNET_GOVERNANCE_PUBKEYS);
@@ -226,6 +227,13 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     }
     const treasuryLockHash = governanceTreasuryLockHash(state.governanceHeader);
     if (treasuryLockHash) {
+      treasuryLockScript = state.governanceHeader?.treasuryLockScript;
+      if (!treasuryLockScript) {
+        throw new Error(
+          "Registry treasury lock script is missing from the governance header. " +
+          "A full treasury lock script (v3 header) is required to safely route change capacity."
+        );
+      }
       assertProposalAnchorTypeMatches({
         proposalCellType: proposalCell.type,
         registryTypeIdValue: state.registryTypeIdValue,
@@ -280,7 +288,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
       if (registryGrowth > treasuryInputCapacity) {
         if (!treasuryOutpoints.length) {
           // Auto-discover autonomous treasury-lock cells (keyless — no signature required).
-          const candidates = await getLiveCellsByLock(opts.rpcUrl, state.governanceHeader?.treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT, 100);
+          const candidates = await getLiveCellsByLock(opts.rpcUrl, treasuryLockScript!, 100);
           for (const cell of candidates) {
             if (cell.type || cell.data !== "0x") continue;
             treasuryCells.push(cell);
@@ -437,7 +445,7 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
         // output below the minimum cell capacity (125 CKB for treasury-lock's 64-byte args).
         {
           capacity: hexCapacity(proposalChangeCapacity + extraTreasuryOutputCapacity),
-          lock: state.governanceHeader?.treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT,
+          lock: treasuryLockScript ?? proposalCell.lock,
           type: null,
         },
       ],

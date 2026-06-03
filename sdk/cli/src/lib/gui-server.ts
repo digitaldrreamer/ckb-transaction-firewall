@@ -349,7 +349,15 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
   let registryOutputCapacity = parseCapacity(state.cell.capacity);
   let extraTreasuryOutputCapacity = 0n;
   const treasuryLockHash = governanceTreasuryLockHash(state.governanceHeader);
+  let treasuryLockScript: { code_hash: string; hash_type: string; args: string } | undefined;
   if (treasuryLockHash) {
+    treasuryLockScript = state.governanceHeader?.treasuryLockScript;
+    if (!treasuryLockScript) {
+      throw new Error(
+        "Registry treasury lock script is missing from the governance header. " +
+        "A full treasury lock script (v3 header) is required to safely route change capacity."
+      );
+    }
     assertProposalAnchorTypeMatches({
       proposalCellType: proposalCell.type,
       registryTypeIdValue: state.registryTypeIdValue,
@@ -439,7 +447,7 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
         { capacity: hexCapacity(registryOutputCapacity), lock: state.cell.lock, type: state.cell.type },
         // Merge proposal change + extra treasury capacity into one output to avoid
         // creating a cell below the minimum 125 CKB for treasury-lock's 64-byte args.
-        { capacity: hexCapacity(proposalChangeCapacity + extraTreasuryOutputCapacity), lock: state.governanceHeader?.treasuryLockScript ?? TESTNET_TREASURY_LOCK_SCRIPT, type: null },
+        { capacity: hexCapacity(proposalChangeCapacity + extraTreasuryOutputCapacity), lock: treasuryLockScript ?? proposalCell.lock, type: null },
       ],
       outputs_data: [
         bytesToHex(state.newBlkl),

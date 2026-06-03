@@ -270,8 +270,8 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
   let effectiveReviewDelayMs = REVIEW_WINDOW_MS;
   if (opts.reviewDelayMs !== undefined) {
     const parsed = Number(opts.reviewDelayMs);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      console.error(logSymbols.error, chalk.red("--review-delay-ms must be a non-negative number."));
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      console.error(logSymbols.error, chalk.red("--review-delay-ms must be a non-negative integer."));
       process.exit(1);
     }
     effectiveReviewDelayMs = parsed;
