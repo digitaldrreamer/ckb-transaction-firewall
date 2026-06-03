@@ -85,6 +85,9 @@ where
         Err(SysError::LengthNotEnough(n)) => n,
         Err(e) => return Err(e),
     };
+    if len > 500_000 {
+        return Err(SysError::LengthNotEnough(len));
+    }
     let mut buf = Vec::new();
     buf.resize(len, 0u8);
     match f(&mut buf, 0) {

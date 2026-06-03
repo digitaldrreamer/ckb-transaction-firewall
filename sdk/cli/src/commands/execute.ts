@@ -242,7 +242,10 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
         dep_type: "code",
       };
       // Proposal cells now use governance-lock (not treasury secp256k1), so no lock check here.
-      const treasuryOutpoints = parseOutpointList(opts.treasuryCell, "--treasury-cell");
+      const rawOutpoints = parseOutpointList(opts.treasuryCell, "--treasury-cell");
+      const treasuryOutpoints = Array.from(
+        new Map(rawOutpoints.map((op) => [`${op.txHash}:${op.index}`, op])).values()
+      );
       treasuryCells = treasuryOutpoints.length > 0
         ? await Promise.all(treasuryOutpoints.map((outpoint) => getLiveCell(opts.rpcUrl, outpoint.txHash, outpoint.index)))
         : [];

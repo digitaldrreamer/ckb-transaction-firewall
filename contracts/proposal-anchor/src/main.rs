@@ -102,6 +102,9 @@ where
         Err(SysError::LengthNotEnough(len)) => len,
         Err(e) => return Err(e),
     };
+    if len > 500_000 {
+        return Err(SysError::LengthNotEnough(len));
+    }
     let mut data = Vec::new();
     data.resize(len, 0);
     match loader(&mut data, 0) {

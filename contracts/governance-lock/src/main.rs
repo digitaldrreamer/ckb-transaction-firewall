@@ -461,6 +461,13 @@ fn vote_signing_message(
     timestamp: &[u8],
     pubkey: &[u8; 33],
 ) -> Result<[u8; 32], i8> {
+    // Restrict timestamp to ISO 8601 characters to prevent JSON injection via
+    // crafted timestamp bytes that could confuse off-chain JSON parsers.
+    for &b in timestamp {
+        if !b.is_ascii_alphanumeric() && b != b'-' && b != b':' && b != b'.' && b != b'T' && b != b'Z' && b != b'+' {
+            return Err(ERR_INVALID_WITNESS);
+        }
+    }
     let mut canonical = Vec::new();
     canonical.extend_from_slice(b"{\"domain\":\"ckb-firewall:vote\",\"proposalIdHash\":\"");
     hex_push(&mut canonical, proposal_id_hash);

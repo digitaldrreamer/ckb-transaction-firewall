@@ -250,7 +250,10 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
 
       // Use treasury-lock cells as inputs — no private key needed to spend them.
       // The treasury-lock script validates the TX structure (anchor output + capacity return).
-      const explicitOutpoints = parseOutpointList(opts.treasuryCell, "--treasury-cell");
+      const rawOutpoints = parseOutpointList(opts.treasuryCell, "--treasury-cell");
+      const explicitOutpoints = Array.from(
+        new Map(rawOutpoints.map((op) => [`${op.txHash}:${op.index}`, op])).values()
+      );
       selectedTreasuryCells = explicitOutpoints.length
         ? await Promise.all(explicitOutpoints.map((op) => getLiveCell(opts.rpcUrl, op.txHash, op.index)))
         : [];
