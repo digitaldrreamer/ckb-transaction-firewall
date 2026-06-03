@@ -1,15 +1,17 @@
 //! Treasury Lock — autonomous treasury for CKB firewall governance.
 //!
 //! Anyone can spend treasury cells WITHOUT a private key, but ONLY in a transaction
-//! that satisfies both conditions:
+//! that satisfies all three conditions:
 //!
-//! 1. At least one output is a valid proposal-anchor cell:
+//! 1. At least one output is a valid proposal-anchor cell bound to THIS treasury:
 //!    - lock  = governance-lock (code_hash = gov_lock_type_id, hash_type = type, args = [0x01])
 //!    - type  = proposal-anchor (code_hash = anchor_type_id, hash_type = type)
+//!            whose args carry treasury_lock_hash == blake2b(this script)
 //!    - data  starts with b"PBLK"
+//!    OR: at least one INPUT is a proposal-anchor cell bound to THIS treasury (execute TX).
 //!
-//! 2. Treasury capacity is not burned:
-//!    - sum(outputs locked by this treasury-lock) + MAX_ANCHOR_FEE >= sum(treasury inputs)
+//! 2. Treasury capacity is not burned beyond MAX_PER_TX_SPEND_SHANNONS:
+//!    - sum(outputs locked by this treasury-lock) + MAX_PER_TX_SPEND_SHANNONS >= sum(treasury inputs)
 //!
 //! Args (64 bytes): governance_lock_type_id(32) | proposal_anchor_type_id(32)
 //!
@@ -53,13 +55,13 @@ const ERR_LOAD: i8 = 4;
 // The args field is molecule `Bytes` which carries a 4-byte LE length prefix before the data.
 const GOV_LOCK_SCRIPT_LEN: usize = 54;
 
-// Minimum byte size of a proposal-anchor type Script molecule to read code_hash + hash_type.
-// Even with empty args, molecule Bytes adds a 4-byte prefix: header(16)+code_hash(32)+hash_type(1)+prefix(4)=53.
-const ANCHOR_TYPE_MIN_LEN: usize = 53;
+// Minimum byte size of a proposal-anchor type Script molecule to read through treasury_lock_hash.
+// Layout: header(16) + code_hash(32) + hash_type(1) + bytes_prefix(4) + args:
+//   args = registry_type_id_value(32) | treasury_lock_hash(32) | reclaim_delay_ms(8) = 72 bytes
+// treasury_lock_hash ends at offset 16 + 32 + 1 + 4 + 32 + 32 = 117
+const ANCHOR_TYPE_TREASURY_HASH_END: usize = 117;
 
-const PBLK_MAGIC: &[u8; 4] = b"PBLK";
-
-// Maximum CKB the treasury may spend per anchor TX (anchor cell capacity + TX fee).
+// Maximum CKB the treasury may spend per TX (anchor cell capacity + TX fee).
 // A single blacklist anchor needs ~300 CKB; allow up to 1000 CKB per TX to be generous.
 const MAX_PER_TX_SPEND_SHANNONS: u64 = 1_000 * 100_000_000;
 
@@ -95,12 +97,11 @@ fn load_cell_field_bytes(index: usize, source: Source, field: CellField) -> Resu
     load_var(|buf, off| load_cell_by_field(buf, off, index, source, field))
 }
 
-fn load_output_capacity(index: usize) -> Result<u64, SysError> {
-    let raw = load_cell_field_bytes(index, Source::Output, CellField::Capacity)?;
-    if raw.len() != 8 {
-        return Err(SysError::Unknown(ERR_LOAD as u64));
-    }
-    Ok(u64::from_le_bytes([raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7]]))
+// Load capacity directly into a fixed [u8; 8] — no heap allocation.
+fn load_capacity_raw(index: usize, source: Source) -> Result<u64, SysError> {
+    let mut raw = [0u8; 8];
+    load_cell_by_field(&mut raw, 0, index, source, CellField::Capacity)?;
+    Ok(u64::from_le_bytes(raw))
 }
 
 fn load_output_type(index: usize) -> Result<Option<Vec<u8>>, SysError> {
@@ -120,18 +121,22 @@ fn load_output_data_prefix(index: usize) -> Result<[u8; 4], SysError> {
     }
 }
 
+// Load lock hash directly via CellField::LockHash — avoids loading the full lock script.
+fn load_lock_hash(index: usize, source: Source) -> Result<[u8; 32], SysError> {
+    let mut hash = [0u8; 32];
+    load_cell_by_field(&mut hash, 0, index, source, CellField::LockHash)?;
+    Ok(hash)
+}
+
 fn load_group_input_capacity() -> Result<u64, i8> {
     let mut total = 0u64;
     let mut i = 0usize;
     loop {
-        match load_cell_field_bytes(i, Source::GroupInput, CellField::Capacity) {
-            Ok(raw) if raw.len() == 8 => {
-                total = total.saturating_add(u64::from_le_bytes([
-                    raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
-                ]));
+        match load_capacity_raw(i, Source::GroupInput) {
+            Ok(cap) => {
+                total = total.saturating_add(cap);
                 i += 1;
             }
-            Ok(_) => return Err(ERR_LOAD),
             Err(SysError::IndexOutOfBound) => break,
             Err(_) => return Err(ERR_LOAD),
         }
@@ -147,20 +152,31 @@ fn is_governance_lock(lock: &[u8], gov_type_id: &[u8; 32]) -> bool {
     //   [12..16] offset_args = 49 LE
     //   [16..48] code_hash
     //   [48]     hash_type = 0x01 (type)
-    //   [49..53] Bytes length prefix = [0x01, 0x00, 0x00, 0x00] (1 byte of args data)
+    //   [49..53] Bytes length prefix = [0x01, 0x00, 0x00, 0x00]
     //   [53]     args data = 0x01 (governance-lock version byte)
     lock.len() == GOV_LOCK_SCRIPT_LEN
         && &lock[16..48] == gov_type_id
         && lock[48] == 0x01   // hash_type = type
-        && lock[53] == 0x01   // args data byte = [0x01]
+        && lock[53] == 0x01   // args = [0x01]
 }
 
-fn is_anchor_type(type_bytes: &[u8], anchor_type_id: &[u8; 32]) -> bool {
-    // Type script molecule: code_hash at bytes[16..48], hash_type at bytes[48]
-    type_bytes.len() >= ANCHOR_TYPE_MIN_LEN
-        && &type_bytes[16..48] == anchor_type_id
-        && type_bytes[48] == 0x01   // hash_type = type
+// Check that a type script belongs to the proposal-anchor AND is bound to this treasury.
+// Anchor type args layout (after the 4-byte Bytes prefix at offset 49):
+//   args[0..32]  = registry_type_id_value  → type_bytes[53..85]
+//   args[32..64] = treasury_lock_hash      → type_bytes[85..117]
+//   args[64..72] = reclaim_delay_ms        → type_bytes[117..125]
+fn is_anchor_type_for_treasury(
+    type_bytes: &[u8],
+    anchor_type_id: &[u8; 32],
+    self_lock_hash: &[u8; 32],
+) -> bool {
+    type_bytes.len() >= ANCHOR_TYPE_TREASURY_HASH_END
+        && &type_bytes[16..48] == anchor_type_id    // code_hash = proposal-anchor type ID
+        && type_bytes[48] == 0x01                   // hash_type = type
+        && &type_bytes[85..117] == self_lock_hash   // treasury_lock_hash bound to this treasury
 }
+
+const PBLK_MAGIC: &[u8; 4] = b"PBLK";
 
 fn program_entry() -> Result<(), i8> {
     // Load this script's serialized molecule bytes to extract args and compute self lock hash.
@@ -173,8 +189,7 @@ fn program_entry() -> Result<(), i8> {
     let off_args = u32::from_le_bytes([
         script_bytes[12], script_bytes[13], script_bytes[14], script_bytes[15],
     ]) as usize;
-    // The `args` field is of type molecule `Bytes`, which includes a 4-byte LE length prefix.
-    // Skip that prefix to get the actual arg bytes.
+    // The `args` field is molecule `Bytes` — skip the 4-byte LE length prefix.
     let args_with_prefix = script_bytes.get(off_args..).ok_or(ERR_INVALID_ARGS)?;
     if args_with_prefix.len() < 4 {
         return Err(ERR_INVALID_ARGS);
@@ -191,28 +206,36 @@ fn program_entry() -> Result<(), i8> {
 
     let treasury_in_cap = load_group_input_capacity()?;
 
-    // Scan outputs: accumulate treasury change capacity and detect anchor output.
+    // Scan outputs: accumulate treasury return capacity and detect an anchor output
+    // bound to this treasury.
     let mut found_anchor = false;
     let mut treasury_out_cap = 0u64;
     let mut i = 0usize;
     loop {
-        let lock = match load_cell_field_bytes(i, Source::Output, CellField::Lock) {
-            Ok(b) => b,
+        let lock_hash = match load_lock_hash(i, Source::Output) {
+            Ok(h) => h,
             Err(SysError::IndexOutOfBound) => break,
             Err(_) => return Err(ERR_LOAD),
         };
-        let cap = load_output_capacity(i).map_err(|_| ERR_LOAD)?;
+        let cap = load_capacity_raw(i, Source::Output).map_err(|_| ERR_LOAD)?;
 
-        if blake2b_256(&lock) == self_lock_hash {
+        if lock_hash == self_lock_hash {
             treasury_out_cap = treasury_out_cap.saturating_add(cap);
         }
 
-        if !found_anchor && is_governance_lock(&lock, &gov_type_id) {
-            if let Ok(Some(type_bytes)) = load_output_type(i) {
-                if is_anchor_type(&type_bytes, &anchor_type_id) {
-                    if let Ok(prefix) = load_output_data_prefix(i) {
-                        if &prefix == PBLK_MAGIC {
-                            found_anchor = true;
+        if !found_anchor {
+            // Check for governance-lock by comparing hash rather than loading full script.
+            // We still need the full lock bytes to verify the args byte (lock[53] == 0x01),
+            // so load it only for outputs that look like they could be governance-lock.
+            if let Ok(lock) = load_cell_field_bytes(i, Source::Output, CellField::Lock) {
+                if is_governance_lock(&lock, &gov_type_id) {
+                    if let Ok(Some(type_bytes)) = load_output_type(i) {
+                        if is_anchor_type_for_treasury(&type_bytes, &anchor_type_id, &self_lock_hash) {
+                            if let Ok(prefix) = load_output_data_prefix(i) {
+                                if &prefix == PBLK_MAGIC {
+                                    found_anchor = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -222,15 +245,15 @@ fn program_entry() -> Result<(), i8> {
         i += 1;
     }
 
-    // If no anchor output found, check whether this is an execute TX instead:
-    // a TX that consumes a proposal-anchor INPUT. The proposal-anchor type script
-    // enforces governance authorization (since delay, validator votes) before it
-    // can be spent, so the treasury can trust any TX that successfully consumes one.
+    // If no anchor output found, check whether this is an execute TX:
+    // a TX that consumes a proposal-anchor INPUT bound to this treasury.
+    // The proposal-anchor type script enforces governance authorization before
+    // it can be spent, so the treasury can trust any TX that consumes one.
     if !found_anchor {
         let mut j = 0usize;
         loop {
             match load_cell_field_bytes(j, Source::Input, CellField::Type) {
-                Ok(type_bytes) if is_anchor_type(&type_bytes, &anchor_type_id) => {
+                Ok(type_bytes) if is_anchor_type_for_treasury(&type_bytes, &anchor_type_id, &self_lock_hash) => {
                     found_anchor = true;
                     break;
                 }

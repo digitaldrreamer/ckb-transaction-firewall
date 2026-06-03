@@ -128,9 +128,12 @@ function serializeRawTx(transaction) {
   // cell_deps: fixed vector (each 37 bytes: 32+4+1)
   const cellDepsCount = Buffer.alloc(4); cellDepsCount.writeUInt32LE(transaction.cell_deps.length);
   const cellDepsBytes = Buffer.concat([cellDepsCount, ...transaction.cell_deps.map(serializeCellDep)]);
-  // header_deps: fixed vector of byte32
+  // header_deps: fixed vector of byte32 (count + each 32-byte hash)
   const hdCount = Buffer.alloc(4); hdCount.writeUInt32LE(transaction.header_deps.length);
-  const headerDepsBytes = Buffer.concat([hdCount]);
+  const headerDepsBytes = Buffer.concat([
+    hdCount,
+    ...transaction.header_deps.map(h => Buffer.from(h.replace(/^0x/, ''), 'hex')),
+  ]);
   // inputs: fixed vector (each 44 bytes: 8+32+4)
   const inpCount = Buffer.alloc(4); inpCount.writeUInt32LE(transaction.inputs.length);
   const inputsBytes = Buffer.concat([inpCount, ...transaction.inputs.map(serializeCellInput)]);

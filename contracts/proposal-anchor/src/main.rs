@@ -125,28 +125,22 @@ fn load_input_bytes(index: usize, source: Source) -> Result<Vec<u8>, SysError> {
     read_exact_bytes(load_input, index, source)
 }
 
-fn load_script_field(index: usize, source: Source, field: CellField) -> Result<Vec<u8>, SysError> {
-    load_var_bytes(|buf, offset| load_cell_by_field(buf, offset, index, source, field))
-}
-
 fn load_cell_lock_hash(index: usize, source: Source) -> Result<[u8; 32], SysError> {
-    let raw = load_script_field(index, source, CellField::Lock)?;
-    Ok(blake2b_256(raw.as_slice()))
+    let mut hash = [0u8; 32];
+    load_cell_by_field(&mut hash, 0, index, source, CellField::LockHash)?;
+    Ok(hash)
 }
 
 fn load_cell_capacity(index: usize, source: Source) -> Result<u64, SysError> {
-    let raw = load_script_field(index, source, CellField::Capacity)?;
-    if raw.len() != 8 {
-        return Err(error::to_sys_error(error::INVALID_RECLAIM_RETURN));
-    }
-    Ok(u64::from_le_bytes([
-        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
-    ]))
+    let mut raw = [0u8; 8];
+    load_cell_by_field(&mut raw, 0, index, source, CellField::Capacity)?;
+    Ok(u64::from_le_bytes(raw))
 }
 
 fn load_cell_type_script_hash(index: usize, source: Source) -> Result<[u8; 32], SysError> {
-    let raw = load_script_field(index, source, CellField::Type)?;
-    Ok(blake2b_256(raw.as_slice()))
+    let mut hash = [0u8; 32];
+    load_cell_by_field(&mut hash, 0, index, source, CellField::TypeHash)?;
+    Ok(hash)
 }
 
 fn load_running_script_raw() -> Result<Vec<u8>, SysError> {
@@ -257,18 +251,6 @@ fn output_capacity_for_lock_hash(target_hash: &[u8; 32]) -> Result<u64, SysError
     }
 }
 
-fn total_output_capacity() -> Result<u64, SysError> {
-    let mut total = 0u64;
-    let mut i = 0usize;
-    loop {
-        match load_cell_capacity(i, Source::Output) {
-            Ok(cap) => { total = total.saturating_add(cap); i += 1; }
-            Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(e) => return Err(e),
-        }
-    }
-}
-
 fn program_entry() -> Result<(), SysError> {
     let args = running_type_args()?;
     let self_hash = running_type_script_hash()?;
@@ -302,7 +284,10 @@ fn program_entry() -> Result<(), SysError> {
         }
         let input_capacity = load_cell_capacity(input_index, Source::Input)?;
         let min_return = input_capacity.saturating_sub(MAX_ANCHOR_FEE_SHANNONS);
-        if total_output_capacity()? < min_return {
+        // Verify reclaim returns funds to the configured treasury, not an arbitrary address.
+        let treasury_return = output_capacity_for_lock_hash(&args.treasury_lock_hash)
+            .map_err(|_| error::to_sys_error(error::INVALID_RECLAIM_RETURN))?;
+        if treasury_return < min_return {
             return Err(error::to_sys_error(error::INVALID_RECLAIM_RETURN));
         }
     }
