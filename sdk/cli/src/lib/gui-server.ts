@@ -27,7 +27,6 @@ import {
 import { computeMerkleProof, verifyMerkleProof } from "./validator-set.js";
 import {
   TESTNET_GOVERNANCE_PUBKEYS, TESTNET_CONTRACT_OUTPOINTS, SECP256K1_DEP_GROUP,
-  TESTNET_TREASURY_LOCK_SCRIPT,
 } from "./defaults.js";
 import {
   ckbBlake2b, buildGov1WitnessV4, buildValidatorVoteWitness,

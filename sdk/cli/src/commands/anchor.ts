@@ -22,7 +22,7 @@ import {
   proposalCellDataHash,
 } from "../lib/governance-v4.js";
 import { loadProposal, saveProposal, REVIEW_WINDOW_MS } from "../lib/proposals.js";
-import { SECP256K1_DEP_GROUP, TESTNET_CONTRACT_OUTPOINTS, TESTNET_GOVERNANCE_LOCK_SCRIPT, TESTNET_REGISTRY_CELL, TESTNET_RPC_URL, TESTNET_TREASURY_LOCK_DEP, TESTNET_TREASURY_LOCK_SCRIPT } from "../lib/defaults.js";
+import { SECP256K1_DEP_GROUP, TESTNET_CONTRACT_OUTPOINTS, TESTNET_REGISTRY_CELL, TESTNET_RPC_URL, TESTNET_TREASURY_LOCK_DEP, TESTNET_TREASURY_LOCK_SCRIPT } from "../lib/defaults.js";
 import { buildWitnessArgs, ckbBlake2b } from "../lib/witness.js";
 import { hexCapacity, occupiedCapacityShannons, parseCapacity } from "../lib/capacity.js";
 import { parseCellDepList, type CellDepJson } from "../lib/tx-deps.js";
@@ -243,7 +243,7 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
         })),
       };
       const minAnchorCapacity = occupiedCapacityShannons({
-        lock: TESTNET_GOVERNANCE_LOCK_SCRIPT,
+        lock: treasuryLockScript,
         type: anchorType,
         data: proposalDataHex,
       });
@@ -331,7 +331,7 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
           previous_output: { tx_hash: cell.txHash, index: `0x${cell.index.toString(16)}` },
         })),
         outputs: [
-          { capacity: hexCapacity(anchorCapacity), lock: TESTNET_GOVERNANCE_LOCK_SCRIPT, type: anchorType },
+          { capacity: hexCapacity(anchorCapacity), lock: treasuryLockScript, type: anchorType },
           ...(changeCapacity > 0n
             ? [{ capacity: hexCapacity(changeCapacity), lock: treasuryLockScript!, type: null }]
             : []),

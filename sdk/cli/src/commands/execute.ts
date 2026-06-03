@@ -37,7 +37,6 @@ import {
   TESTNET_REGISTRY_CELL,
   TESTNET_RPC_URL,
   TESTNET_TREASURY_LOCK_DEP,
-  TESTNET_TREASURY_LOCK_SCRIPT,
   warnIfTrivialTestKeys,
 } from "../lib/defaults.js";
 import { printHints } from "../lib/hints.js";
