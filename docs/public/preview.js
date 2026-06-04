@@ -233,7 +233,7 @@
       code: 'pub fn build_firewall_spend_cell_deps(\n    config: &FirewallSpendDepsConfig,\n) -> Vec<TransactionCellDep>\n// Returns: [firewall-lock code dep, inner-lock code dep,\n//           one registry data dep per registry_out_points entry].\n// Registry outpoints move after each governance update —\n// always fetch fresh values before calling this function.'
     },
     'encode_governance_header': {
-      file: 'sdk/rust/src/registry.rs', lines: [141, 165], lang: 'rust',
+      file: 'sdk/rust/src/registry.rs', lines: [141, 152], lang: 'rust',
       code: 'pub fn encode_governance_header(gh: &GovernanceHeader) -> Vec<u8>\n// Serialises a GovernanceHeader to the BLKL v2 gov_header bytes:\n// signer_count(1) | threshold(1) | [pubkey(33)]×signer_count |\n// validator_count(2 LE) | validator_merkle_root(32)'
     },
     /* Contract entry points */
