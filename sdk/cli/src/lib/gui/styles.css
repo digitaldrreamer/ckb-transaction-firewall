@@ -234,6 +234,7 @@ a:focus, button:focus { outline: 2px solid var(--c-ink); outline-offset: 1px; }
   animation: tfw-pulse 2.2s infinite;
 }
 .tfw-conndot--err { background: var(--c-red); }
+.tfw-conndot--warn { background: var(--c-amber); }
 @keyframes tfw-pulse {
   0% { transform: scale(0.9); opacity: 0.5; }
   100% { transform: scale(1.6); opacity: 0; }
@@ -956,6 +957,10 @@ select.tfw-input {
   padding: 11px 22px;
 }
 .tfw-table__row {
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  border: none;
   border-bottom: 1px solid var(--c-hairline);
   cursor: pointer;
   transition: background 0.1s;
