@@ -12,6 +12,7 @@ import { checkCommand, checkDefaults } from "./commands/check.js";
 import { guiCommand } from "./commands/gui.js";
 import { anchorCommand, anchorDefaults } from "./commands/anchor.js";
 import { reclaimCommand, reclaimDefaults } from "./commands/reclaim.js";
+import { configCommand } from "./commands/config.js";
 
 function printBanner(): void {
   cfonts.say("CKB FIREWALL|CLI", {
@@ -29,7 +30,7 @@ function printBanner(): void {
 program
   .name("ckb-firewall")
   .description("Manage the CKB Transaction Firewall blacklist registry")
-  .version("0.3.1")
+  .version("0.5.0")
   .addHelpCommand(false);
 
 // ── inspect ──────────────────────────────────────────────────────────────────
@@ -296,6 +297,16 @@ program
   .option("--no-open", "Print the URL but don't auto-open the browser")
   .action(async (opts: { port?: string; noOpen?: boolean }) => {
     await guiCommand(opts);
+  });
+
+// ── config ────────────────────────────────────────────────────────────────────
+
+program
+  .command("config")
+  .description("View or set persistent CLI defaults (proposer name, etc.)")
+  .option("--proposer <name>", "Set default proposer name for governance proposals")
+  .action(async (opts: { proposer?: string }) => {
+    await configCommand(opts);
   });
 
 // Show banner on bare invocation before help prints.
