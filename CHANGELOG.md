@@ -400,6 +400,14 @@
 
 - Removed GitHub Pages deployment workflow, `docs/public/CNAME`, and Pages setup docs.
 
+## 2026-05-20
+
+### `blacklist-registry` error code correction
+
+- Added `INVALID_TYPE_ID = 27` to the `blacklist-registry` error module. Previously, type ID mismatch branches were reusing `INVALID_TYPE_ARGS_LAYOUT (20)`, making it impossible to distinguish the two failure modes. Both the bootstrap and update paths now return `27` on type ID mismatch. Code `26` was skipped when assigning this number.
+
+---
+
 ## 2026-05-25
 
 ### `@ckb-firewall/sdk` v0.3.2
