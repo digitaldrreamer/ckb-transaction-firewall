@@ -3,6 +3,7 @@ import inquirer from "inquirer";
 import { getConfigPath, loadConfig, saveConfig } from "../lib/config.js";
 
 export async function configCommand(opts: { proposer?: string }): Promise<void> {
+  try {
   const config = loadConfig();
 
   if (opts.proposer !== undefined) {
@@ -57,4 +58,8 @@ export async function configCommand(opts: { proposer?: string }): Promise<void> 
   config.proposerName = name.trim();
   saveConfig(config);
   process.stdout.write(chalk.green(`✓ Default proposer name saved: ${chalk.bold(config.proposerName)}\n`));
+  } catch (err) {
+    process.stderr.write(chalk.red(`Error: ${err instanceof Error ? err.message : String(err)}\n`));
+    process.exit(1);
+  }
 }
