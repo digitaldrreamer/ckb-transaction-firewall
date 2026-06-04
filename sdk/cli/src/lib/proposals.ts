@@ -210,12 +210,15 @@ export function isReviewWindowPassed(proposal: Proposal): boolean {
 }
 
 export function isVoteApproved(proposal: Proposal, threshold = VOTE_THRESHOLD): boolean {
-  return countYes(proposal.votes) >= threshold;
+  const uniqueYesPubkeys = new Set(
+    proposal.votes.filter(v => v.vote === "yes").map(v => v.pubkey.toLowerCase())
+  );
+  return uniqueYesPubkeys.size >= threshold;
 }
 
-export function isReadyToExecute(proposal: Proposal): boolean {
+export function isReadyToExecute(proposal: Proposal, threshold = VOTE_THRESHOLD): boolean {
   return (
     isReviewWindowPassed(proposal) &&
-    isVoteApproved(proposal)
+    isVoteApproved(proposal, threshold)
   );
 }
