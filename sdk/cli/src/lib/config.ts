@@ -15,7 +15,7 @@ export function loadConfig(): CliConfig {
   if (!existsSync(path)) return {};
   try {
     const raw = JSON.parse(readFileSync(path, "utf8"));
-    if (typeof raw !== "object" || raw === null) return {};
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
     return raw as CliConfig;
   } catch {
     return {};
