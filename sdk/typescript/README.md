@@ -96,6 +96,6 @@ import {
 
 - [CKB Transaction Firewall](https://github.com/digitaldrreamer/ckb-transaction-firewall) — contracts, Rust SDK, governance, testnet deployment
 - [Documentation](https://ckb-firewall.drreamer.digital/)
-- [How to use](https://ckb-firewall.drreamer.digital/guides/governance-how-to-use/)
-- [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/)
-- [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/)
+- [Pre-flight check (TypeScript)](https://ckb-firewall.drreamer.digital/how-to/preflight-typescript/)
+- [Testnet deployment](https://ckb-firewall.drreamer.digital/reference/testnet-deployment/)
+- [Two-layer model](https://ckb-firewall.drreamer.digital/concepts/two-layer-model/)
