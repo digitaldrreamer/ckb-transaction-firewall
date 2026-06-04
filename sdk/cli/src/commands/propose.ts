@@ -277,8 +277,12 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
       ]);
       if (save) {
         config.proposerName = proposer;
-        saveConfig(config);
-        process.stdout.write(chalk.dim(`  Default proposer saved (ckb-firewall config to change)\n`));
+        try {
+          saveConfig(config);
+          process.stdout.write(chalk.dim(`  Default proposer saved (ckb-firewall config to change)\n`));
+        } catch (err) {
+          process.stderr.write(chalk.yellow(`  Warning: could not save default proposer name: ${err instanceof Error ? err.message : String(err)}\n`));
+        }
       }
     }
   }
