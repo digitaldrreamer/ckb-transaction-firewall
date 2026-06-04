@@ -31,6 +31,14 @@
     'voteDigestHash': 'Blake2b hash of the full sorted set of vote records ({ pubkey, vote, timestamp, signature } sorted by pubkey). Recomputed by the execute CLI command before building the governance transaction.',
     'signer': 'Legacy governance role from earlier drafts. Current runtime execution is authorized by validator votes, not signer signatures.',
     'validator': 'Committee member who votes on proposals. Yes-vote signatures and Merkle proofs are submitted in the transaction witness and verified on-chain by the governance-lock script.',
+    'PBLK': 'Binary payload stored in a proposal cell created by ckb-firewall anchor. v1 encodes an add/remove blacklist action; v2 encodes a set-treasury action. The magic bytes are PBLK (0x50 0x42 0x4c 0x4b).',
+    'treasury-lock': 'Autonomous CKB lock script holding the governance treasury pool. Anyone can donate. Funds may only be spent to create proposal-anchor cells or cover registry capacity growth — no private key required.',
+    'proposal-anchor': 'CKB type script governing the lifecycle of PBLK proposal cells. Enforces: valid PBLK payload on creation, treasury lock on the input, capacity return to the treasury on reclaim or execute. Error codes 31–36.',
+    'Type ID': 'CKB mechanism giving a cell a stable identity that survives being consumed and re-created. The type_id_value is computed once at bootstrap and never changes across governance updates.',
+    'blake160': '20-byte hash of a 33-byte compressed secp256k1 public key, computed as blake2b256(pubkey)[0..20]. Used as the inner_args value in a firewall lock configured with spawn-aware-secp256k1.',
+    'since': 'CKB transaction input field encoding a minimum age condition. The governance execute transaction uses a relative median-time-past since value to enforce the 72-hour review window at consensus.',
+    'median block time': 'Median-time-past of the last 11 blocks. Used by the firewall lock to evaluate time-based blacklist entries and by CKB consensus to enforce the governance review window.',
+    'GovernanceHeader': 'Parsed governance header embedded in a RegistryPayload. Fields: ghVersion (1–3), threshold, validatorCount, validatorMerkleRoot (32-byte hex). The governance-lock reads threshold and validatorMerkleRoot on every execute transaction.',
   };
 
   /* ── code snippets (shown when hovering inline <code> elements) ────── */
@@ -77,6 +85,18 @@
       code: 'export interface FirewallLockConfig {\n  firewallCodeHash: string;\n  firewallHashType: HashType;\n  flags: number;\n  registries: RegistrySpecLike[];\n  innerCodeHash: string;\n  innerHashType: HashType;\n  innerArgs: string;\n}'
     },
     /* TypeScript SDK functions */
+    'findRegistryCell': {
+      file: 'sdk/typescript/src/fetch.ts', lines: [1, 14], lang: 'typescript',
+      code: 'export async function findRegistryCell(\n  rpcUrl: string,\n  spec: RegistrySpecLike,\n  timeoutMs = DEFAULT_TIMEOUT_MS,\n): Promise<{ txHash: string; index: number }>\n// Queries the CKB indexer (get_cells) filtered by typeIdValue (bytes 34–65\n// of the 66-byte v2 type args). Returns the current live outpoint.'
+    },
+    'isBlacklisted': {
+      file: 'sdk/typescript/src/blacklist.ts', lines: [1, 8], lang: 'typescript',
+      code: 'export function isBlacklisted(\n  lockArgs: string,\n  payloads: RegistryPayload[],\n): boolean\n// Binary-searches each sorted RegistryPayload.entries for lockArgs.\n// Skips entries whose expiresAt < Date.now() / 1000.'
+    },
+    'isTypeArgsBlacklisted': {
+      file: 'sdk/typescript/src/blacklist.ts', lines: [10, 16], lang: 'typescript',
+      code: 'export function isTypeArgsBlacklisted(\n  typeArgs: string,\n  payloads: RegistryPayload[],\n): boolean\n// Same as isBlacklisted but checks type args (not lock args).'
+    },
     'checkTransaction': {
       file: 'sdk/typescript/src/firewall.ts', lines: [33, 49], lang: 'typescript',
       code: 'checkTransaction(tx: UnsignedTxLike): FirewallDecision {\n  let payloads: RegistryPayload[];\n  try {\n    const deps = resolveRegistryDeps(tx.cellDeps, this.config.registries);\n    payloads = deps.map((dep) => parseRegistryPayload(dep.data));\n  } catch (err: unknown) {\n    return mapUnknownToDecision(err);\n  }\n  for (const out of tx.outputs) {\n    if (isBlacklisted(out.lockArgs, payloads))\n      return { ok: false, code: 11, reason: "BlacklistedLockArgs" };\n    if (out.typeArgs && isTypeArgsBlacklisted(out.typeArgs, payloads))\n      return { ok: false, code: 12, reason: "BlacklistedTypeArgs" };\n  }\n  return { ok: true };\n}'
@@ -129,8 +149,8 @@
     },
     /* GOV1 witness parsing — shown for "GOV1" in contract context */
     'GovernanceWitness': {
-      file: 'contracts/blacklist-registry/src/main.rs', lines: [210, 230], lang: 'rust',
-      code: 'pub fn parse(raw: &[u8]) -> Result<Self, SysError> {\n    if raw.len() != 141 {\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    if &raw[0..4] != b"GOV1" {\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    if raw[4] != 0x03 {  // v3 only — v2 no longer accepted\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    // proposal_id_hash[5..37], vote_digest_hash[37..69],\n    // old_root[69..101], new_root[101..133], review_window_end_ms[133..141]\n}'
+      file: 'contracts/blacklist-registry/src/main.rs', lines: [210, 232], lang: 'rust',
+      code: 'pub fn parse(raw: &[u8]) -> Result<Self, SysError> {\n    if raw.len() != 173 {\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    if &raw[0..4] != b"GOV1" {\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    if raw[4] != 0x04 {  // v4 only\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    // proposal_id_hash[5..37], vote_digest_hash[37..69],\n    // old_root[69..101], new_root[101..133],\n    // proposal_data_hash[133..165], review_delay_ms[165..173]\n}'
     },
     /* Signing preimage */
     'signing_message': {
