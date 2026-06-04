@@ -211,10 +211,6 @@
       code: '// Encodes a RegistryPayload into a BLKL v2 binary buffer.\n// Writes magic, version 0x02, governance header, entry count,\n// and entries in strict ascending lexicographic sort order.'
     },
     /* Rust SDK — additional types */
-    'RegistrySpec': {
-      file: 'sdk/rust/src/types.rs', lines: [107, 115], lang: 'rust',
-      code: 'pub struct RegistrySpec {\n    pub code_hash: [u8; 32],\n    pub hash_type: HashType,\n    /// Bytes 34–66 of the registry type-script args (Type ID value).\n    pub type_id_value: [u8; 32],\n    pub required: bool,\n}'
-    },
     /* Rust SDK — functions */
     'is_blacklisted': {
       file: 'sdk/rust/src/firewall.rs', lines: [68, 72], lang: 'rust',
