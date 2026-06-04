@@ -61,7 +61,7 @@ function OverviewPage({ state, actions }) {
   const expiredReg = reg.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
 
   const open = proposals.filter(p => p.status === "pending-review" || p.status === "voting");
-  const yourPk = (meta.yourPubkey || "").toLowerCase();
+  const yourPk = (meta?.yourPubkey || "").toLowerCase();
   const action = open.filter(p => !yourPk || !(p.votes || []).some(v => (v.pubkey || "").toLowerCase() === yourPk));
   const recent = [...proposals]
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
@@ -188,6 +188,7 @@ function OverviewPage({ state, actions }) {
 // ── Registry ─────────────────────────────────────────────────────────────────
 function RegistryPage({ state, actions }) {
   const { registry, proposals, meta } = state;
+  const reg = registry || [];
 
   const [query, setQuery] = React.useState("");
   const [showExpired, setShowExpired] = React.useState(false);
@@ -206,7 +207,7 @@ function RegistryPage({ state, actions }) {
     return m;
   }, [proposals]);
 
-  const filtered = registry
+  const filtered = reg
     .filter(e => {
       const exp = e.expiresAt ? Number(e.expiresAt) : null;
       const isExp = exp && exp <= now;
@@ -223,8 +224,8 @@ function RegistryPage({ state, actions }) {
       return aE - bE;
     });
 
-  const totalActive = registry.filter(e => !e.expiresAt || Number(e.expiresAt) > now).length;
-  const totalExpired = registry.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
+  const totalActive = reg.filter(e => !e.expiresAt || Number(e.expiresAt) > now).length;
+  const totalExpired = reg.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
 
   return (
     <div className="tfw-page tfw-page--registry">
@@ -280,7 +281,7 @@ function RegistryPage({ state, actions }) {
 
       {filtered.length === 0 ? (
         <TFW_EmptyState
-          title={query ? "No matching entries" : ((registry || []).length === 0 ? "Registry is empty" : "No active entries")}
+          title={query ? "No matching entries" : (reg.length === 0 ? "Registry is empty" : "No active entries")}
           sub={
             query
               ? "Try a different search"
@@ -346,7 +347,7 @@ function RegistryPage({ state, actions }) {
             );
           })}
           <div className="tfw-table__foot">
-            <span>{filtered.length} of {registry.length} entries shown</span>
+            <span>{filtered.length} of {reg.length} entries shown</span>
           </div>
         </div>
       )}
@@ -370,7 +371,7 @@ function ProposalsPage({ state, actions }) {
   const { proposals, registry, meta } = state;
   const [filter, setFilter] = React.useState("all");
   const [query, setQuery] = React.useState("");
-  const yourPk = (meta.yourPubkey || "").toLowerCase();
+  const yourPk = (meta?.yourPubkey || "").toLowerCase();
 
   const filtered = proposals
     .filter(p => {
