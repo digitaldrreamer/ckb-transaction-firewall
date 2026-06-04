@@ -325,6 +325,8 @@ export async function anchorCommand(opts: AnchorOptions): Promise<void> {
             dep_type: "code",
           },
         ],
+        // The `since` MTP delay is enforced by CKB consensus, not by scripts
+        // calling load_header() — so no header_deps are needed.
         header_deps: [],
         inputs: selectedTreasuryCells.map((cell) => ({
           since: "0x0",

@@ -15,8 +15,7 @@ This document describes how blacklist entries are added, removed, and audited wi
 
 - **Proposer**: submits add/remove request with evidence.
 - **Reviewer**: performs open technical and risk review.
-- **Validator**: votes according to governance rules.
-- **Multisig Signer**: executes approved updates on-chain.
+- **Validator**: votes according to governance rules; each vote includes a secp256k1 signature used directly in the execute transaction.
 - **Observer**: any community member who audits process integrity.
 
 ## Proposal Types
@@ -39,9 +38,9 @@ Every proposal should include:
 
 1. **Submission**: proposal is published and indexed.
 2. **Validation**: schema and formatting checks pass.
-3. **Review Window**: minimum 72-hour public discussion period.
-4. **Voting**: validator set votes within fixed voting epoch.
-5. **Execution**: successful proposal becomes signed registry replacement transaction.
+3. **Anchor**: treasury-funded PBLK proposal cell created on-chain; 72-hour review clock starts at consensus.
+4. **Voting**: validator set votes within fixed voting epoch; each vote is secp256k1 signed.
+5. **Execution**: after the review window elapses and threshold yes-votes are collected, the execute transaction consumes the proposal anchor and produces the new registry cell.
 6. **Finalization**: new registry cell is live and linked to proposal id.
 
 ### CLI tooling
@@ -52,11 +51,14 @@ The `@ckb-firewall/cli` package implements the full lifecycle as interactive com
 npm install -g @ckb-firewall/cli
 
 ckb-firewall propose          # submit a proposal (step 1)
-ckb-firewall vote             # record a validator vote (step 4)
-ckb-firewall proposals        # inspect status and countdown (steps 2–4)
-ckb-firewall sign             # add a multisig signature (step 5)
+ckb-firewall anchor           # create treasury-funded proposal cell (step 3)
+ckb-firewall vote             # record a validator vote with secp256k1 signature (step 4)
+ckb-firewall proposals        # inspect status and countdown (steps 1–5)
 ckb-firewall execute          # build and submit the governance tx (step 5–6)
+ckb-firewall reclaim          # reclaim anchor capacity if proposal is rejected/abandoned
 ```
+
+The `sign` command was removed in v0.4.0. Validator signatures are now produced during `vote` and included directly in the execute transaction witness — there is no separate signing step.
 
 All commands are interactive when run without flags. See [`sdk/cli/README.md`](../sdk/cli/README.md) for full option reference.
 
@@ -87,9 +89,11 @@ At consensus, the type script enforces:
 - input and output registry cells use the same `type_id_value` (bytes 34..66 of the 66-byte v2 type args),
 - both registry cells are locked by the configured governance lock script identity (args = `[0x01]`),
 - the registry data is well-formed (`BLKL` v2 format with governance header and sorted entries),
-- a `GOV1` v2 governance witness binding (133 bytes) is present in `WitnessArgs.input_type` for the registry input cell and contains:
+- a `GOV1` v4 governance witness binding (173 bytes) is present in `WitnessArgs.input_type` for the registry input cell and contains:
   - `proposal_id_hash` (non-zero 32 bytes) + `vote_digest_hash` (non-zero 32 bytes)
   - the exact `old_registry_root` → `new_registry_root` transition, where each root is `blake2b_256` over the full registry cell data (personalization `ckb-default-hash`),
+  - `proposal_data_hash` (32 bytes) + `review_delay_ms` (8 bytes) — included in the signing preimage so neither can be tampered with after voting,
+  - `proposal_anchor_type_hash` (32 bytes) — governance-lock uses this to verify a valid anchor input is present in the execute transaction,
   - for bootstrap: `old_root` MUST be `0x00..00`,
 - signer signature verification is delegated entirely to the governance-lock script, which reads signer entries from `WitnessArgs.lock` and verifies them against the committee pubkeys embedded in the `BLKL` v2 governance header.
 - bootstrap Type ID enforcement: for the first registry creation, `type_id_value` in the output type args MUST equal `blake2b_256(inputs[0].previous_output(36 bytes) || output_index(8 bytes LE))`.

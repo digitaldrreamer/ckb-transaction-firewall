@@ -13,6 +13,7 @@ import {
   saveProposal,
   voteSigningMessage,
   computeVoteDigestHash,
+  VOTE_THRESHOLD,
 } from "../lib/proposals.js";
 import { bytesToHex, governanceTreasuryLockHash, hexToBytes, scriptToMoleculeBytes } from "../lib/blkl.js";
 import { getLiveCell, getLiveCellsByLock } from "../lib/rpc.js";
@@ -203,6 +204,15 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
   try {
     state = await loadRegistryStateForProposal(opts.rpcUrl, opts.registryTx, registryIndex, proposal);
     warnIfTrivialTestKeys(TESTNET_GOVERNANCE_PUBKEYS);
+
+    // Re-check vote threshold using the on-chain value from the governance header.
+    // The earlier check used the hardcoded default (VOTE_THRESHOLD); this catches
+    // private registries deployed with a non-default threshold.
+    const onChainThreshold = state.governanceHeader?.threshold ?? VOTE_THRESHOLD;
+    if (!isVoteApproved(proposal, onChainThreshold)) {
+      spinner.fail(`Vote threshold not met — on-chain requires ${onChainThreshold} yes votes, got ${proposal.votes.filter(v => v.vote === "yes").length}.`);
+      process.exit(1);
+    }
 
     proposalCell = await getLiveCell(opts.rpcUrl, proposalCellTx, proposalIndex);
     proposalDataHash = assertProposalCellMatches(proposal, proposalCell.data, state.registryTypeIdValue);
@@ -425,6 +435,8 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
         },
         ...(proposalAnchorCellDep ? [proposalAnchorCellDep] : []),
       ],
+      // The `since` MTP delay is enforced by CKB consensus, not by scripts
+      // calling load_header() — so no header_deps are needed.
       header_deps: [],
       inputs: [
         {

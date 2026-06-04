@@ -177,6 +177,8 @@ export async function reclaimCommand(opts: ReclaimOptions): Promise<void> {
         ...treasuryLockDeps,
         proposalAnchorCellDep,
       ],
+      // The `since` MTP delay is enforced by CKB consensus, not by scripts
+      // calling load_header() — so no header_deps are needed.
       header_deps: [],
       inputs: [
         {

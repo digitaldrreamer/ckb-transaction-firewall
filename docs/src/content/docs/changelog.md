@@ -7,6 +7,31 @@ This page describes changes that affect adopters, integrators, and operators. Fo
 
 ---
 
+## 2026-06-04 — `@ckb-firewall/cli` v0.5.2
+
+**What changed:** Two security findings corrected in the CLI.
+
+- **M1 (medium)**: `ckb-firewall execute` now validates the vote threshold against the value in the on-chain governance header rather than a hardcoded constant. For the canonical testnet registry this is invisible (threshold is 3 in both). For operators who deploy a private registry with a different threshold, the CLI will now correctly enforce the on-chain value instead of always accepting 3 yes-votes.
+
+- **L6 (low)**: Added explanatory comments to `header_deps: []` in the execute, anchor, and reclaim transaction builders. No functional change.
+
+**What you need to do:** No action required for canonical testnet users. If you operate a private registry with a non-default vote threshold, update to v0.5.2 — earlier versions would incorrectly pass vote threshold checks locally before failing on-chain.
+
+---
+
+## 2026-06-04 — `@ckb-firewall/cli` v0.5.1
+
+**What changed:** GUI and operator documentation improvements.
+
+- Execute flow bug fixed — proposals now correctly show as executed after the governance TX is downloaded.
+- Registry connection dot now shows amber when the testnet RPC is unreachable (was incorrectly green).
+- Registry table row alignment fixed; proposal filter tabs now include "Approved" and "Ready to execute".
+- Operator guides for treasury deployment and private registry setup rewritten with clearer connection instructions.
+
+**What you need to do:** No action required. Update with `npm install -g @ckb-firewall/cli` to get the fixes.
+
+---
+
 ## 2026-06-04 — `@ckb-firewall/cli` v0.5.0 and Rust SDK v0.3.1
 
 **What changed:**
@@ -41,6 +66,7 @@ This page describes changes that affect adopters, integrators, and operators. Fo
 **What you need to do:**
 
 - **CLI users:** `npm install -g @ckb-firewall/cli` to update. Run `ckb-firewall gui` to open the dashboard.
+
 
 ---
 

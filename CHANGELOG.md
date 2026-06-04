@@ -2,6 +2,18 @@
 
 ## 2026-06-04
 
+### `@ckb-firewall/cli` v0.5.2
+
+- **Security (M1)**: `isVoteApproved` now accepts an optional `threshold` parameter (default: `VOTE_THRESHOLD`). `executeCommand` passes the on-chain threshold from the governance header after loading registry state — private registry operators with a non-default threshold no longer see incorrect "vote passed" results from the hardcoded value.
+- **Docs (L6)**: Added explanatory comments to `header_deps: []` in `execute.ts`, `anchor.ts`, and `reclaim.ts`. The `since` MTP delay is enforced by CKB consensus; no scripts in this project call `load_header()`, so `header_deps` is always empty.
+
+### `@ckb-firewall/cli` v0.5.1
+
+- **GUI fixes**: Execute reducer now dispatches the correct `EXECUTE` action (previously dispatched `UPDATE_PROPOSAL`, suppressing the optimistic registry update). Server-side execute marks proposal as `executed` before saving. Registry table rows changed from `<button>` to `<div role="button">` to fix nested interactive content (invalid HTML). `SET_DATA` reducer preserves initial-load meta keys (`reviewWindowHours`, `proposerName`) across polls. `state.registry` null guards added throughout.
+- **Connection state**: Registry fetch failures now show an amber "Registry error" dot instead of green "Connected" — the two states were indistinguishable before.
+- **Proposal filters**: Added missing "Approved" and "Ready to execute" filter tabs. Pubkey comparisons normalised to lowercase.
+- **Operator docs**: Rewrote `deploy-treasury.mdx` and `deploy-private-registry.mdx` to explain how the treasury connects to the registry via the v3 governance header, and added dedicated "Connect the CLI / GUI / SDK" sections for private registry operators.
+
 ### `@ckb-firewall/cli` v0.5.0
 
 - **`ckb-firewall config`** — new command that reads and writes `~/.ckb-firewall/config.json`. `--proposer <name>` sets the default proposer name non-interactively; running without flags shows current config and opens an interactive menu.

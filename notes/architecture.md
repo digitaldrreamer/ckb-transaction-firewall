@@ -56,9 +56,10 @@ This document defines the v1 architecture of the CKB Transaction Firewall and th
 ### Governance path (registry update)
 
 1. Proposal created from evidence-backed request.
-2. Review and voting complete under governance rules.
-3. Multisig signers execute registry replacement transaction.
-4. New registry cell becomes authoritative for future transactions.
+2. Treasury-funded proposal anchor cell created on-chain; 72-hour review window begins at consensus.
+3. Validators vote; each vote is secp256k1 signed and vote signatures are used directly in the execute transaction.
+4. After the review window and vote threshold are met, the execute transaction consumes the proposal anchor and produces the new registry cell (keyless — no separate signing step).
+5. New registry cell becomes authoritative for future transactions.
 
 ## Trust and Threat Model
 

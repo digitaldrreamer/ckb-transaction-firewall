@@ -209,8 +209,8 @@ export function isReviewWindowPassed(proposal: Proposal): boolean {
   return Date.now() >= new Date(proposal.reviewWindowEndsAt).getTime();
 }
 
-export function isVoteApproved(proposal: Proposal): boolean {
-  return countYes(proposal.votes) >= VOTE_THRESHOLD;
+export function isVoteApproved(proposal: Proposal, threshold = VOTE_THRESHOLD): boolean {
+  return countYes(proposal.votes) >= threshold;
 }
 
 export function isReadyToExecute(proposal: Proposal): boolean {
