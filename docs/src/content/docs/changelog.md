@@ -19,6 +19,19 @@ This page describes changes that affect adopters, integrators, and operators. Fo
 
 ---
 
+## 2026-06-04 — `@ckb-firewall/cli` v0.5.1
+
+**What changed:** GUI and operator documentation improvements.
+
+- Execute flow bug fixed — proposals now correctly show as executed after the governance TX is downloaded.
+- Registry connection dot now shows amber when the testnet RPC is unreachable (was incorrectly green).
+- Registry table row alignment fixed; proposal filter tabs now include "Approved" and "Ready to execute".
+- Operator guides for treasury deployment and private registry setup rewritten with clearer connection instructions.
+
+**What you need to do:** No action required. Update with `npm install -g @ckb-firewall/cli` to get the fixes.
+
+---
+
 ## 2026-06-04 — `@ckb-firewall/cli` v0.5.0 and Rust SDK v0.3.1
 
 **What changed:**
