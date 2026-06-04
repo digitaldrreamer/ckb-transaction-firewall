@@ -79,7 +79,12 @@ function ProposalCard({ proposal, onOpen, onVote, onAnchor, onExecute, registry,
       )}
 
       <div className="tfw-card__foot">
-        <TFW_VoteDots proposal={p} />
+        <TFW_VoteDots proposal={p} total={meta?.threshold || 3} />
+        {compact && p.status !== "executed" && p.status !== "rejected" && (
+          <span className="tfw-card__reghint" style={{ color: review.done ? "var(--c-green)" : "var(--c-amber)" }}>
+            {review.done ? "✓ review" : `${review.text} left`}
+          </span>
+        )}
         <span className="tfw-card__spacer" />
 
         {/* registry hint */}

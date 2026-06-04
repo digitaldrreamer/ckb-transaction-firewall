@@ -55,24 +55,32 @@ function TFW_TreasuryBanner({ treasury, compact = false }) {
 function OverviewPage({ state, actions }) {
   const { proposals, registry, meta } = state;
   const now = Date.now() / 1000;
+  const reg = registry || [];
 
-  const activeReg = registry.filter(e => !e.expiresAt || Number(e.expiresAt) > now).length;
-  const expiredReg = registry.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
+  const activeReg = reg.filter(e => !e.expiresAt || Number(e.expiresAt) > now).length;
+  const expiredReg = reg.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
 
   const open = proposals.filter(p => p.status === "pending-review" || p.status === "voting");
-  const action = open.filter(p => !(p.votes || []).some(v => v.pubkey === meta.yourPubkey));
+  const yourPk = (meta?.yourPubkey || "").toLowerCase();
+  const action = open.filter(p => !yourPk || !(p.votes || []).some(v => (v.pubkey || "").toLowerCase() === yourPk));
   const recent = [...proposals]
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
     .slice(0, 6);
 
   // your-vote indicators
-  const yourPk = meta.yourPubkey;
-  const youHaventVoted = open.filter(p => !(p.votes || []).some(v => v.pubkey === yourPk));
+  const youHaventVoted = open.filter(p => !yourPk || !(p.votes || []).some(v => (v.pubkey || "").toLowerCase() === yourPk));
 
   return (
     <div className="tfw-page tfw-page--overview">
 
       <TFW_TreasuryBanner treasury={meta.treasury} />
+
+      {meta.registryError && (
+        <div className="tfw-note tfw-note--warn" style={{ marginBottom: "var(--sp-4, 16px)" }}>
+          <span className="tfw-note__icon">⚠</span>
+          <span>Registry unavailable — {meta.registryError}</span>
+        </div>
+      )}
 
       {/* HERO STRIP — editorial-sized stats */}
       <div className="tfw-hero">
@@ -90,13 +98,13 @@ function OverviewPage({ state, actions }) {
             {action.length > 0 ? (
               <>
                 <strong>{action.length} proposal{action.length !== 1 ? "s" : ""}</strong> need
-                {action.length === 1 ? "s" : ""} your vote.
-                {youHaventVoted.length > 0 && (
+                {action.length === 1 ? "s" : ""} votes.
+                {yourPk && youHaventVoted.length > 0 && (
                   <> You haven&rsquo;t voted on <strong>{youHaventVoted.length}</strong>.</>
                 )}
               </>
             ) : (
-              <>All clear. No proposals need your vote right now.</>
+              <>All clear. No proposals need votes right now.</>
             )}
           </div>
         </div>
@@ -111,7 +119,7 @@ function OverviewPage({ state, actions }) {
             value={open.length}
             label="OPEN FOR VOTE"
             tone="amber"
-            sub={youHaventVoted.length ? `${youHaventVoted.length} need you` : "all caught up"}
+            sub={yourPk ? (youHaventVoted.length ? `${youHaventVoted.length} need you` : "all caught up") : (open.length ? "needs votes" : "none open")}
           />
         </div>
       </div>
@@ -180,6 +188,8 @@ function OverviewPage({ state, actions }) {
 // ── Registry ─────────────────────────────────────────────────────────────────
 function RegistryPage({ state, actions }) {
   const { registry, proposals, meta } = state;
+  const reg = registry || [];
+
   const [query, setQuery] = React.useState("");
   const [showExpired, setShowExpired] = React.useState(false);
   const [sort, setSort] = React.useState("added"); // "added" | "expires"
@@ -197,7 +207,7 @@ function RegistryPage({ state, actions }) {
     return m;
   }, [proposals]);
 
-  const filtered = registry
+  const filtered = reg
     .filter(e => {
       const exp = e.expiresAt ? Number(e.expiresAt) : null;
       const isExp = exp && exp <= now;
@@ -214,12 +224,19 @@ function RegistryPage({ state, actions }) {
       return aE - bE;
     });
 
-  const totalActive = registry.filter(e => !e.expiresAt || Number(e.expiresAt) > now).length;
-  const totalExpired = registry.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
+  const totalActive = reg.filter(e => !e.expiresAt || Number(e.expiresAt) > now).length;
+  const totalExpired = reg.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
 
   return (
     <div className="tfw-page tfw-page--registry">
       <TFW_TreasuryBanner treasury={meta.treasury} compact />
+
+      {meta.registryError && (
+        <div className="tfw-note tfw-note--warn" style={{ marginBottom: "var(--sp-4, 16px)" }}>
+          <span className="tfw-note__icon">⚠</span>
+          <span>Registry unavailable — {meta.registryError}</span>
+        </div>
+      )}
 
       <div className="tfw-pagehead">
         <div className="tfw-pagehead__col">
@@ -264,8 +281,14 @@ function RegistryPage({ state, actions }) {
 
       {filtered.length === 0 ? (
         <TFW_EmptyState
-          title={query ? "No matching entries" : "Registry is empty"}
-          sub={query ? "Try a different search" : ""}
+          title={query ? "No matching entries" : (reg.length === 0 ? "Registry is empty" : "No active entries")}
+          sub={
+            query
+              ? "Try a different search"
+              : (!showExpired && totalExpired > 0
+                  ? `${totalExpired} expired ${totalExpired === 1 ? "entry" : "entries"} — enable "Show expired" to see ${totalExpired === 1 ? "it" : "them"}`
+                  : "")
+          }
         />
       ) : (
         <div className="tfw-table">
@@ -281,11 +304,13 @@ function RegistryPage({ state, actions }) {
             const isExp = exp && exp <= now;
             const rel = propsByAddr[e.identifier.toLowerCase()] || [];
             return (
-              <button
+              <div
                 key={i}
-                type="button"
+                role="button"
+                tabIndex={0}
                 className={`tfw-table__row${isExp ? " tfw-table__row--expired" : ""}`}
                 onClick={() => actions.openAddr(e.identifier)}
+                onKeyDown={ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); actions.openAddr(e.identifier); } }}
               >
                 <div className="tfw-table__cell tfw-table__cell--addr">
                   <code className="tfw-mono">{TFW_trunc(e.identifier, 32)}</code>
@@ -320,11 +345,11 @@ function RegistryPage({ state, actions }) {
                     ))
                   )}
                 </div>
-              </button>
+              </div>
             );
           })}
           <div className="tfw-table__foot">
-            <span>{filtered.length} of {registry.length} entries shown</span>
+            <span>{filtered.length} of {reg.length} entries shown</span>
           </div>
         </div>
       )}
@@ -334,26 +359,30 @@ function RegistryPage({ state, actions }) {
 
 // ── Proposals ────────────────────────────────────────────────────────────────
 const PROP_FILTERS = [
-  { key: "all", label: "All" },
-  { key: "action", label: "Needs my vote" },
+  { key: "all",            label: "All" },
+  { key: "action",         label: "Needs votes" },
   { key: "pending-review", label: "Pending review" },
-  { key: "voting", label: "Voting" },
-  { key: "executed", label: "Executed" },
-  { key: "rejected", label: "Rejected" },
+  { key: "voting",         label: "Voting" },
+  { key: "approved",       label: "Approved" },
+  { key: "ready",          label: "Ready to execute" },
+  { key: "executed",       label: "Executed" },
+  { key: "rejected",       label: "Rejected" },
 ];
 
 function ProposalsPage({ state, actions }) {
   const { proposals, registry, meta } = state;
   const [filter, setFilter] = React.useState("all");
   const [query, setQuery] = React.useState("");
+  const yourPk = (meta?.yourPubkey || "").toLowerCase();
 
   const filtered = proposals
     .filter(p => {
       const ds = TFW_displayStatus(p);
       if (filter === "all") return true;
       if (filter === "action") {
-        return (p.status === "pending-review" || p.status === "voting")
-          && !(p.votes || []).some(v => v.pubkey === meta.yourPubkey);
+        const isOpen = p.status === "pending-review" || p.status === "voting";
+        if (!yourPk) return isOpen;
+        return isOpen && !(p.votes || []).some(v => (v.pubkey || "").toLowerCase() === yourPk);
       }
       return ds === filter;
     })
@@ -373,7 +402,7 @@ function ProposalsPage({ state, actions }) {
     const ds = TFW_displayStatus(p);
     counts[ds] = (counts[ds] || 0) + 1;
     if (p.status === "pending-review" || p.status === "voting") {
-      if (!(p.votes || []).some(v => v.pubkey === meta.yourPubkey)) {
+      if (!yourPk || !(p.votes || []).some(v => (v.pubkey || "").toLowerCase() === yourPk)) {
         counts.action = (counts.action || 0) + 1;
       }
     }

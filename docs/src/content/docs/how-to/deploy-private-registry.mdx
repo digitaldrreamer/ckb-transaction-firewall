@@ -1,11 +1,13 @@
 ---
 title: How to Deploy a Private Registry
-description: Full deployment guide — contracts, bootstrap, treasury, and first governance round.
+description: Full deployment reference — contracts, bootstrap, treasury, and connecting the CLI, GUI, and SDK to your private registry.
 ---
+
+import { Aside } from '@astrojs/starlight/components';
 
 For a step-by-step tutorial with visible results at each step, see [Get started: registry operator](/get-started/operator/).
 
-This page covers the full deployment with all options.
+This page covers the full deployment with all options and explains how each component connects to the others.
 
 ## Deploy contracts
 
@@ -14,48 +16,116 @@ This page covers the full deployment with all options.
   --network testnet \
   --rpc-url https://testnet.ckb.dev \
   --from-address <YOUR_CKT1_ADDRESS> \
-  [--no-build]         # skip cargo build if binaries are fresh
-  [--dry-run]          # generate txs without signing
+  [--no-build]   # skip cargo build if binaries are fresh
+  [--dry-run]    # generate txs without signing
 ```
 
 Outputs:
 - `deploy/info.json` — deployment metadata, Type IDs, tx hashes
 - `deploy/migrations/` — migration files for `ckb-cli deploy apply-txs`
 
-To reuse the community contract binaries without redeploying, use the community Type IDs directly and skip this step — your registry will have a unique `type_id_value` from your bootstrap transaction.
+To reuse the community contract binaries without redeploying, use the community Type IDs directly and skip this step. Your registry will have a unique `type_id_value` from your bootstrap transaction regardless.
 
-## Bootstrap the registry cell
+## Bootstrap the registry and treasury
+
+The bootstrap creates both the registry cell and the treasury seed in a single transaction. Run:
 
 ```bash
-./scripts/bootstrap-registry.sh \
-  --rpc-url https://testnet.ckb.dev \
-  --from-address <YOUR_CKT1_ADDRESS> \
-  --governance-lock-type-id <from deploy/info.json> \
-  --blacklist-registry-type-id <from deploy/info.json> \
-  --threshold 3 \
-  --validator-pubkey 0x03... \
-  --validator-pubkey 0x03... \
-  --validator-pubkey 0x03... \
-  --validator-pubkey 0x03... \
-  --validator-pubkey 0x03...
+node scripts/build_treasury_bootstrap_tx.mjs deploy/bootstrap-tx.json
 ```
 
-Record the `type_id_value` (bytes 34–65 of the registry cell's 66-byte v2 type args). This never changes.
+Then sign and submit:
 
-## Deploy and seed the treasury
+```bash
+ckb-cli --url https://testnet.ckb.dev tx sign-inputs \
+  --tx-file deploy/bootstrap-tx.json \
+  --add-signatures
 
-See [How to deploy the treasury](/how-to/deploy-treasury/).
+ckb-cli --url https://testnet.ckb.dev tx send \
+  --tx-file deploy/bootstrap-tx.json
+```
 
-## Configure the firewall lock
+<Aside type="note" title="Adapting validator set and threshold">
+The bootstrap script reads from `sdk/cli/dist/lib/defaults.js`. To deploy with your own validator pubkeys and threshold, edit `TESTNET_GOVERNANCE_PUBKEYS` and the governance lock outpoints in a copy of the script before running it.
+</Aside>
 
-See [How to build a firewall lock script](/how-to/build-firewall-lock-script/).
+**Record the bootstrap transaction hash.** This is the initial `--registry-tx` you pass to all CLI commands. As governance updates run, the registry cell moves — the current outpoint is auto-discovered via the indexer.
+
+## How the treasury connects to the registry
+
+The treasury-lock contract can only be spent when the transaction produces a valid proposal-anchor cell or returns capacity to itself. What "valid" means is encoded in the treasury-lock args:
+
+```
+treasury-lock args = governance_lock_type_id (32 bytes)
+                   | proposal_anchor_type_id (32 bytes)
+```
+
+These must match the contracts you deployed in step 1. The bootstrap computes the treasury address from these IDs and embeds the full treasury lock script in the registry cell's v3 governance header.
+
+This means the CLI and GUI **automatically discover the treasury address by reading the registry cell** — no extra configuration is needed after bootstrap.
+
+See [How to deploy and seed the treasury](/how-to/deploy-treasury/) for treasury management details.
+
+## Connect the CLI to your registry
+
+The CLI defaults to the canonical testnet registry. To use your private registry, pass flags to every governance command:
+
+```bash
+ckb-firewall propose  ... --registry-tx <tx> --registry-index 0
+ckb-firewall anchor   ... --registry-tx <tx> --registry-index 0
+ckb-firewall vote     ... --registry-tx <tx> --registry-index 0
+ckb-firewall execute  ... --registry-tx <tx> --registry-index 0
+ckb-firewall inspect  ... --registry-tx <tx> --registry-index 0
+ckb-firewall check    ... --registry-tx <tx> --registry-index 0
+```
+
+<Aside type="note" title="No persistent registry config">
+The CLI config file (`~/.ckb-firewall/config.json`) does not currently support a default registry override. You must pass `--registry-tx` and `--registry-index` on every command when using a private registry. The `--registry-tx` only needs to be the initial bootstrap tx hash — the CLI auto-discovers the current outpoint via the indexer as governance updates move the cell.
+</Aside>
+
+## Connect the GUI to your registry
+
+The GUI is started with:
+
+```bash
+ckb-firewall gui \
+  --registry-tx <bootstrap tx hash> \
+  --registry-index 0
+```
+
+<Aside type="note" title="GUI defaults">
+If you start the GUI without `--registry-tx`, it connects to the canonical testnet registry. There is no way to change the registry from inside the GUI — you must pass the flag at startup.
+</Aside>
+
+## Connect the TypeScript SDK to your registry
+
+Use `RegistrySpecLike` to find the live cell via the indexer, rather than hardcoding an outpoint:
+
+```ts
+import { findLiveRegistryCell } from "@ckb-firewall/sdk";
+
+const registrySpec = {
+  // The code hash of your deployed blacklist-registry contract
+  // (from deploy/info.json under blacklist-registry.code_hash)
+  codeHash: "<blacklist-registry code hash>",
+  hashType: "type" as const,
+  // The type_id_value printed by `ckb-firewall inspect`
+  // or found in deploy/bootstrap-tx.json under registryCell.typeIdValue
+  typeIdValue: "<your registry type_id_value>",
+  required: true,
+};
+
+const cell = await findLiveRegistryCell(rpcUrl, registrySpec);
+```
+
+`typeIdValue` is the stable 32-byte identifier computed at bootstrap time. It never changes across governance updates, so you can embed it in your application and SDK configuration permanently.
+
+If you are using the community contract binaries (not redeploying), use the community `codeHash` and only supply your own `typeIdValue`.
 
 ## Run governance
 
-Override the default registry with `--registry-tx` and `--registry-index` for all CLI commands:
+See [Step 4: Run a governance round](/get-started/operator/4-first-governance-round/) for a complete worked example.
 
-```bash
-ckb-firewall propose ... --registry-tx <tx> --registry-index 0
-ckb-firewall anchor  ... --registry-tx <tx> --registry-index 0
-ckb-firewall execute ... --registry-tx <tx> --registry-index 0
-```
+## Configure the firewall lock
+
+See [Step 5: Configure a firewall lock](/get-started/operator/5-configure-firewall-lock/) and [How to build a firewall lock script](/how-to/build-firewall-lock-script/).

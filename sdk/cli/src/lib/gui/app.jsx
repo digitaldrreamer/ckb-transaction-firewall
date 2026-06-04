@@ -82,8 +82,7 @@ function reducer(state, action) {
         ...state,
         proposals: action.proposals,
         registry: action.registry,
-        meta: { ...action.meta,
-          yourPubkey: state.meta.yourPubkey },
+        meta: { ...state.meta, ...action.meta },
       };
     default:
       return state;
@@ -156,7 +155,7 @@ function App() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 250);
       addToast("info", `Exported proposal #${p.id}`);
     },
   }), []);
@@ -169,14 +168,19 @@ function App() {
     return state.proposals.find(p => p.id === modal.payload);
   }, [modal, state.proposals]);
 
+  const effectiveConn = connState === "ok" && state.meta?.registryError ? "warn" : connState;
   const yourPk = state.meta.yourPubkey;
+  const nowSec = Date.now() / 1000;
   const openCount = state.proposals.filter(p =>
     p.status === "pending-review" || p.status === "voting"
   ).length;
-  const yourTodos = state.proposals.filter(p =>
+  const activeRegistryCount = (state.registry || []).filter(
+    e => !e.expiresAt || Number(e.expiresAt) > nowSec
+  ).length;
+  const yourTodos = yourPk ? state.proposals.filter(p =>
     (p.status === "pending-review" || p.status === "voting") &&
     !(p.votes || []).some(v => v.pubkey === yourPk)
-  ).length;
+  ).length : 0;
 
   return (
     <div className="tfw-root">
@@ -200,8 +204,8 @@ function App() {
         <nav className="tfw-nav">
           {[
             { k: "overview", label: "Overview" },
-            { k: "registry", label: "Registry", count: state.registry.length },
-            { k: "proposals", label: "Proposals", count: openCount, alert: yourTodos > 0 },
+            { k: "registry", label: "Registry", count: activeRegistryCount },
+            { k: "proposals", label: "Proposals", count: openCount, alert: !!(yourPk && yourTodos > 0) },
           ].map(item => (
             <button
               key={item.k}
@@ -231,9 +235,11 @@ function App() {
             onClick={actions.openCreate}
           >+ New proposal</button>
           <div className="tfw-conn">
-            <TFW_ConnectionDot state={connState} />
+            <TFW_ConnectionDot state={effectiveConn} />
             <div className="tfw-conn__text">
-              <div className="tfw-conn__line1">{connState === "ok" ? "Connected" : "Disconnected"}</div>
+              <div className="tfw-conn__line1">
+                {effectiveConn === "ok" ? "Connected" : effectiveConn === "warn" ? "Registry error" : "Disconnected"}
+              </div>
               <div className="tfw-conn__line2">{TFW_trunc(state.meta?.rpcUrl || "unknown", 24)}</div>
             </div>
           </div>
@@ -257,10 +263,10 @@ function App() {
       {/* Footer rule */}
       <footer className="tfw-footer">
         <div className="tfw-footer__left tfw-mono">
-          ⌧ TRANSACTION-FIREWALL · CKB MAINNET
+          ⌧ TRANSACTION-FIREWALL · CKB TESTNET
         </div>
         <div className="tfw-footer__right tfw-mono">
-          REGISTRY CELL {TFW_trunc(state.meta.registryTxHash, 22)} · THRESHOLD 3-OF-5
+          REGISTRY CELL {TFW_trunc(state.meta.registryTxHash, 22)} · THRESHOLD {state.meta.threshold || 3}-OF-{state.meta.governanceSetSize || 5}
         </div>
       </footer>
 
@@ -325,7 +331,7 @@ function App() {
         size="md"
         eyebrow="NEW SUBMISSION"
         title="Create proposal"
-        subtitle="Will enter a 72-hour review window before voting opens."
+        subtitle={`Will enter a ${state.meta.reviewWindowHours || 72}-hour review window before voting opens.`}
       >
         <TFW_CreateForm
           meta={state.meta}
@@ -389,8 +395,8 @@ function App() {
           <TFW_ExecuteForm
             proposal={modalProposal}
             meta={state.meta}
-            onSubmit={(result) => {
-              if (result.proposal) dispatch({ type: "UPDATE_PROPOSAL", proposal: result.proposal });
+            onSubmit={() => {
+              dispatch({ type: "EXECUTE", proposalId: modalProposal.id, txHash: null });
               addToast("success", "TX downloaded — broadcast it via ckb-cli to complete execution.");
             }}
             onClose={closeModal}

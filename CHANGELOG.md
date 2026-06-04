@@ -122,7 +122,7 @@
 
 - Scaffolded `sdk/cli/` as a standalone npm package (`@ckb-firewall/cli`) with commander, chalk, ora, cli-table3, inquirer, log-symbols, and cfonts.
 - Implemented eight commands covering inspect, quick-path add/remove (testnet/dev), and the full governance lifecycle: `propose`, `vote`, `proposals`, `sign`, `execute`.
-- **Governance flow**: propose → 72-hour review window → validator voting (3-of-5 threshold) → secp256k1 multisig signing → on-chain execution via `ckb-cli`. Proposals are stored under `~/.ckb-firewall/proposals/`.
+- **Governance flow**: propose → 72-hour review window → validator voting (3-of-5 threshold) → `sign` (collect secp256k1 recovered signatures) → on-chain execution via `ckb-cli`. The `sign` command produces 65-byte `[r|s|recovery_bit]` signatures that are stored with the proposal and included directly in the execute transaction witness — there is no separate multisig-aggregation step beyond this. Proposals are stored under `~/.ckb-firewall/proposals/`.
 - **`sign` command**: uses `@noble/curves` v2 `format: 'recovered'` to produce correct secp256k1 65-byte signatures `[r(32)|s(32)|recovery_bit(1)]` matching the CKB secp256k1 convention.
 - **Hints system**: each command prints 2 contextual next-step hints. `inspect` and `proposals` additionally show a voting callout when open proposals are present.
 - **Interactive UX**: all commands prompt for missing arguments; `remove` shows a pick-list of current registry entries.
@@ -399,6 +399,14 @@
 - Favicon and apple-touch icon generated from project logo; Starlight `favicon` configured.
 
 - Removed GitHub Pages deployment workflow, `docs/public/CNAME`, and Pages setup docs.
+
+## 2026-05-20
+
+### `blacklist-registry` error code correction
+
+- Added `INVALID_TYPE_ID = 27` to the `blacklist-registry` error module. Previously, type ID mismatch branches were reusing `INVALID_TYPE_ARGS_LAYOUT (20)`, making it impossible to distinguish the two failure modes. Both the bootstrap and update paths now return `27` on type ID mismatch. Code `26` was skipped when assigning this number.
+
+---
 
 ## 2026-05-25
 

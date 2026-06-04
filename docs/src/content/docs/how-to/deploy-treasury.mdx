@@ -1,9 +1,76 @@
 ---
 title: How to Deploy and Seed the Treasury
-description: Deploy the treasury-lock binary, derive the treasury address, and send seed CKB.
+description: How the treasury-lock connects to your registry, how the bootstrap creates both in one transaction, and how to manage the pool after launch.
 ---
 
-## Deploy the treasury-lock binary
+import { Aside } from '@astrojs/starlight/components';
+
+## How the treasury connects to the registry
+
+The treasury is not a separate account. It is an autonomous contract whose spending rules are defined by **exactly which contracts govern your registry**.
+
+The treasury-lock args encode two Type IDs:
+
+```
+treasury-lock args = governance_lock_type_id (32 bytes)
+                   | proposal_anchor_type_id (32 bytes)
+```
+
+These are the same `governance_lock_type_id` and `proposal_anchor_type_id` that you deployed in Step 1. The treasury-lock contract only permits spending when the transaction creates a valid proposal-anchor cell (typed by the matching proposal-anchor contract) or returns change to itself after a governance update. Any transaction that does not satisfy these rules cannot consume treasury funds.
+
+The bootstrap script stores the treasury lock script (the full `code_hash`, `hash_type`, `args` needed to reconstruct the treasury address) inside the registry cell's governance header. This means the CLI, the GUI, and the SDK **automatically discover the treasury address by reading the registry cell** — no out-of-band configuration is needed.
+
+<Aside type="caution" title="Type IDs must match">
+If you later redeploy the governance-lock or proposal-anchor contracts, their Type IDs change. The old treasury-lock args will no longer authorise spending, and governance stalls. You must redeploy the treasury-lock with the new Type IDs, seed a new pool, and update the governance header in the registry. Plan contract upgrades carefully.
+</Aside>
+
+## The bootstrap creates the treasury automatically
+
+When you run the bootstrap script (Step 2 of the operator tutorial), it creates **two cells in a single transaction**:
+
+- **Output 0** — the registry cell (BLKL v2 payload with a v3 governance header that embeds the treasury lock script)
+- **Output 1** — the initial treasury seed cell (locked to the treasury address)
+
+You do not need to deploy the treasury-lock separately or send a separate seeding transaction. The bootstrap records the treasury address in the governance header and creates the first treasury pool cell in the same on-chain operation.
+
+After the bootstrap transaction is confirmed, running `ckb-firewall inspect` will show the treasury pool balance:
+
+```bash
+ckb-firewall inspect \
+  --rpc-url https://testnet.ckb.dev \
+  --registry-tx <bootstrap tx hash> \
+  --registry-index 0
+```
+
+Expected output includes:
+
+```
+Treasury pool: 100,000.0 CKB (available)
+Donation address: ckt1...
+```
+
+## Seeding additional CKB
+
+If the pool drops below the 70% warning threshold or runs dry, any CKB holder can top it up by sending to the treasury address shown in `inspect` or the GUI:
+
+```bash
+ckb-cli --url https://testnet.ckb.dev wallet transfer \
+  --to-address <treasury address from inspect> \
+  --capacity <amount> \
+  --fee-rate 1000
+```
+
+10,000 CKB covers roughly 33 proposal anchor operations (each anchor costs ~300 CKB, returned after execute or reclaim). A higher seed is recommended for active registries.
+
+<Aside type="note" title="Capacity is recoverable">
+Treasury cells that fund proposal anchors are returned to the treasury pool after the anchor is consumed by an execute or reclaim transaction. The pool is not drained permanently by each governance round — only transaction fees are lost.
+</Aside>
+
+## If you need to deploy the treasury-lock binary separately
+
+This applies only if you are deploying a private registry without using the provided bootstrap script (for example, building your own bootstrap tooling).
+
+Deploy the treasury-lock binary as a CKB data cell:
 
 ```bash
 ckb-cli --url https://testnet.ckb.dev wallet transfer \
@@ -15,38 +82,24 @@ ckb-cli --url https://testnet.ckb.dev wallet transfer \
 
 Record the `tx_hash:index` of the resulting cell — this is your `TREASURY_LOCK_DEP`.
 
-The [`treasury-lock`](/reference/glossary/#treasury-lock) binary is compiled separately. Its args encode two [Type IDs](/reference/glossary/#type-id):
+Then pass the treasury-lock's code hash and your contract Type IDs to your bootstrap transaction builder so it can:
+1. Compute the treasury address (`hash_type = data1`, args = `governance_lock_type_id | proposal_anchor_type_id`)
+2. Embed the full treasury lock script in the registry cell's v3 governance header
+3. Create a treasury seed cell at the treasury address in the same bootstrap transaction
 
-```
-args = governance_lock_type_id(32) | proposal_anchor_type_id(32)
-```
-
-## Derive the treasury address
-
-```bash
-./scripts/treasury-address.sh \
-  --treasury-lock-dep <tx_hash:index> \
-  --governance-lock-type-id <from deploy/info.json> \
-  --proposal-anchor-type-id <from deploy/info.json>
-```
-
-The address uses `hash_type = data1` and the 64-byte args above.
-
-## Seed the treasury
+## Monitoring pool health
 
 ```bash
-ckb-cli --url https://testnet.ckb.dev wallet transfer \
-  --to-address <treasury-address> \
-  --capacity 10000 \
-  --fee-rate 1000
+ckb-firewall inspect \
+  --registry-tx <bootstrap tx hash> \
+  --registry-index 0
 ```
 
-10,000 CKB covers roughly 33 proposal anchors (each costs ~300 CKB, returned after execute or reclaim). A higher seed is recommended for active registries.
+When pool usage reaches 70%, `inspect` and the GUI warn and display the donation address prominently.
 
-## Verify
+## See also
 
-```bash
-ckb-firewall inspect --registry-tx <bootstrap tx hash> --registry-index 0
-```
-
-The treasury pool balance should appear in the output.
+- [The autonomous treasury model](/concepts/treasury-design/) — why the treasury exists and what the treasury-lock contract authorises
+- [How to donate to the treasury](/how-to/donate-treasury/) — top up the pool
+- [Proposal anchor contract](/reference/proposal-anchor/) — what treasury funds are spent on
+- [Step 2: Bootstrap the registry](/get-started/operator/2-bootstrap-registry/) — the full bootstrap walkthrough

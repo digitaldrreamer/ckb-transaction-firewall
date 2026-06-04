@@ -304,7 +304,6 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
   const proposalId = String(b.proposalId ?? "").trim();
   if (!proposalId) throw new Error("proposalId required");
   const proposal = loadProposal(proposalId);
-  if (proposal.status === "executed") throw new Error("Proposal already executed");
   if (!isReviewWindowPassed(proposal)) throw new Error("Local review window has not passed");
   if (!isVoteApproved(proposal)) throw new Error("Vote threshold not met");
 
@@ -462,6 +461,7 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
     signatures: {},
   };
 
+  proposal.status = "executed";
   saveProposal(proposal);
   return {
     ok: true,

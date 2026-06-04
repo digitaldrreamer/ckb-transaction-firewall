@@ -1,15 +1,17 @@
 ---
 title: "Step 2: Bootstrap the Registry and Treasury"
-description: Create the first BLKL v2 registry cell and treasury seed in one transaction.
+description: Create the registry cell, embed the treasury connection, and seed the pool — all in one transaction.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 The bootstrap transaction creates two cells in a single on-chain operation:
-- The **registry cell** (output index 0) — a BLKL v2 payload with the governance header and an empty blacklist
-- The **treasury seed cell** (output index 1) — the initial CKB pool that funds governance operations
+- The **registry cell** (output index 0) — a BLKL v2 payload with a v3 governance header that embeds the treasury lock script
+- The **treasury seed cell** (output index 1) — the initial CKB pool that funds governance operations, locked to the treasury address
 
 The bootstrap also establishes the [`type_id_value`](/reference/glossary/#type_id_value) — the stable identity of your registry — by hashing the first input outpoint and output index. This value never changes.
+
+**This is where the treasury is connected to the registry.** The bootstrap computes the treasury address from your `governance_lock_type_id` and `proposal_anchor_type_id`, then writes the full treasury lock script into the registry cell's governance header. After this transaction is confirmed, the CLI and GUI automatically discover the treasury address by reading the registry cell — no separate configuration is needed.
 
 ## Build the CLI SDK
 
