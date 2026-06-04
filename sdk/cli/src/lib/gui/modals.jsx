@@ -691,7 +691,7 @@ function AnchorForm({ proposal, meta, onSubmit, onClose }) {
   return (
     <div className="tfw-form">
       <SecurityNote kind="info">
-        Anchoring writes a proposal cell on-chain that enforces the 72-hour review window via CKB consensus.
+        Anchoring writes a proposal cell on-chain that enforces the {meta?.reviewWindowHours || 72}-hour review window via CKB consensus.
         {!treasuryBacked && " This registry has no treasury — you'll need a recipient address for the proposal cell deposit."}
       </SecurityNote>
 
@@ -835,7 +835,7 @@ function ExecuteForm({ proposal, meta, onSubmit, onClose }) {
         const a = document.createElement('a');
         a.href = url; a.download = d.filename || ('gov_execute_tx_' + proposal.id + '.json');
         document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
+        document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 250);
         onSubmit(d);
         setSuccess(true);
         setTimeout(onClose, 1500);
