@@ -139,7 +139,7 @@ interface GovernanceHeader {
 }
 ```
 
-Governance metadata embedded in the BLKL v2 payload. The `pubkeys` are the on-chain governance committee; `validatorMerkleRoot` commits to the authorized validator set.
+Governance metadata embedded in the BLKL v2 payload. `validatorMerkleRoot` commits to the authorized validator set. `signerCount` and `pubkeys` are legacy wire-format fields retained for compatibility; they are always 0/empty in current deployments and carry no authorization weight.
 
 ---
 
@@ -244,6 +244,7 @@ async function fetchRegistryPayload(
   rpcUrl:      string,
   txHash:      string,
   outputIndex: number,
+  timeoutMs?:  number,   // default: 15000
 ): Promise<RegistryPayload>
 ```
 
@@ -255,8 +256,9 @@ Fetches the registry cell at the given outpoint via `get_live_cell` and parses i
 
 ```ts
 async function findRegistryCell(
-  rpcUrl: string,
-  spec:   RegistrySpecLike,
+  rpcUrl:    string,
+  spec:      RegistrySpecLike,
+  timeoutMs?: number,   // default: 15000
 ): Promise<{ txHash: string; index: number }>
 ```
 
@@ -430,3 +432,14 @@ function isFirewallSdkError(err: unknown): err is FirewallSdkError
 ```
 
 Type guard. Returns `true` if `err` is a `FirewallSdkError` instance — i.e., one of the four typed error classes above.
+
+## See also
+
+- [How to run a pre-flight check in TypeScript](/how-to/preflight-typescript/) — patterns: `preflightCheck` vs `TransactionFirewall.checkTransaction`
+- [How to check a single address](/how-to/single-address-check/) — `isBlacklisted` without a full transaction
+- [How to handle time-based entries](/how-to/time-based-entries/) — `header_deps` for `expiresAt` entries
+- [How to build a firewall lock script](/how-to/build-firewall-lock-script/) — `buildFirewallLockScript`
+- [How to build cell deps for spending](/how-to/build-spend-cell-deps/) — `buildFirewallSpendCellDeps`
+- [Error codes](/reference/error-codes/) — what each numeric code means
+- [Example: wallet-feedback](/examples/wallet-feedback/) — runnable demo of all three pre-flight outcomes
+- [Example: agent-preflight](/examples/agent-preflight/) — SDK in an AI agent tool

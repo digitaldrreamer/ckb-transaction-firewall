@@ -104,3 +104,11 @@ The inner lock is expected to verify the signature and exit `0` on success or an
 - Builder (SDK): `sdk/typescript/src/builder.ts` — `buildFirewallLockArgs`, `buildFirewallLockScript`
 - Parser (Rust): `contracts/firewall-lock/src/main.rs` — `FirewallLockArgs::parse`
 - Inner lock: `contracts/spawn-aware-secp256k1/src/main.rs`
+
+## See also
+
+- [How to build a firewall lock script](/how-to/build-firewall-lock-script/) — construct v2 lock args using the SDK
+- [How to build cell deps for spending](/how-to/build-spend-cell-deps/) — assemble cell deps for a spending transaction
+- [How to configure multiple registries](/how-to/multi-registry-lock/) — registry_count > 1
+- [Spawn-Aware Secp256k1](/reference/spawn-aware-secp256k1/) — the canonical inner lock contract
+- [CKB cell model and lock scripts](/concepts/ckb-background/) — what lock scripts are and how they run

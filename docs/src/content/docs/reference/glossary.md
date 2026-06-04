@@ -9,6 +9,15 @@ Terms are grouped by topic. General CKB and blockchain concepts are omitted; thi
 
 ## Binary formats
 
+### PBLK
+
+The binary payload stored in a **proposal cell** — a live CKB cell created by `ckb-firewall anchor` to commit a blacklist change proposal on-chain. The magic bytes are `PBLK` (`0x50 0x42 0x4c 0x4b`).
+
+- **v1** — add or remove a single blacklist entry. Fields include magic, version, `registry_type_id_value`, action (add/remove), identifier, `expires_at`, and an evidence hash.
+- **v2** — set-treasury metadata. Fields include magic, version, `registry_type_id_value`, action (set-treasury), `treasury_lock_hash`, and an evidence hash.
+
+Full spec: [PBLK Proposal Cell](/reference/pblk-cell/)
+
 ### BLKL
 
 The binary payload format stored in the live registry cell. The name is the 4-byte ASCII magic (`0x42 0x4c 0x4b 0x4c`). The current version is **v2**.
@@ -70,6 +79,18 @@ Full spec: [Firewall Lock Args](/reference/firewall-lock-args/)
 
 ## Contracts
 
+### proposal-anchor
+
+The CKB **type script** that governs the lifecycle of treasury-funded `PBLK` proposal cells. Enforces: valid PBLK payload on cell creation, proper treasury lock on the input, capacity return to the treasury on reclaim or execute. Error codes 31–36.
+
+Full spec: [Proposal anchor contract](/reference/proposal-anchor/)
+
+### treasury-lock
+
+An autonomous CKB lock script that holds the registry governance treasury pool. Anyone can send CKB to the treasury address. Funds can only leave in ways the contract permits: creating a valid `proposal-anchor`-typed PBLK cell, or covering registry cell capacity growth during a governance update. No private key is required. The treasury-lock args encode the Type IDs of the `governance-lock` and `proposal-anchor` contracts, fixing which contracts are authorised to spend treasury funds.
+
+See: [The autonomous treasury model](/concepts/treasury-design/)
+
 ### blacklist-registry
 
 The CKB **type script** that validates every registry cell update. Enforces: correct BLKL v2 payload structure, strict ascending entry sort order, governance-lock identity on the output cell, valid GOV1 v4 witness binding, and an exact match to the anchored `PBLK` proposal cell. Its Type ID is the stable registry identity — the `type_id_value` in the registry type args never changes across governance updates.
@@ -89,6 +110,24 @@ The canonical inner lock for standard secp256k1-blake160 wallets. Unlike a regul
 ---
 
 ## Architecture concepts
+
+### Type ID
+
+A CKB mechanism that gives a cell a stable identity that survives being consumed and re-created. The Type ID value is computed once at bootstrap — `blake2b(first_input_outpoint || output_index_u64_le)` — and embedded in every successor cell's type args. Used by the firewall system so that the `type_id_value` embedded in lock args remains valid across registry governance updates, even though the registry cell outpoint changes every time.
+
+See: [CKB cell model and lock scripts](/concepts/ckb-background/)
+
+### blake160
+
+A 20-byte hash of a 33-byte compressed secp256k1 public key, computed as `blake2b256(pubkey)[0..20]`. Used as the identity field for standard CKB secp256k1 wallets — it is the `inner_args` value in a firewall lock configuration that uses `spawn-aware-secp256k1` as the inner lock.
+
+### since
+
+A CKB transaction input field that encodes a minimum age condition on the input cell before the transaction can be included in a block. The governance system uses a **relative median-time-past since** value: it requires the `PBLK` proposal cell to be at least `review_delay_ms` old in median block time before the execute transaction can be mined. CKB consensus enforces this — it cannot be bypassed by transaction construction.
+
+### median block time (MTP)
+
+The **median-time-past** of the last 11 blocks, used by CKB to evaluate time-based conditions (the `since` field and expiring blacklist entries). The firewall lock reads `header_deps` to compute the chain's MTP. Without `header_deps`, the computed MTP is zero, so all temporary blacklist entries are treated as permanently active.
 
 ### cell dep
 
@@ -137,6 +176,10 @@ The 32-byte Type ID stored at bytes 34–66 of the 66-byte registry cell type ar
 ### CellDepLike
 
 Minimal cell dependency representation for firewall checking. Fields: `type?: ScriptLike | null`, `data: string` (0x-prefixed hex cell data).
+
+### GovernanceHeader
+
+The parsed governance header portion of a `RegistryPayload`. Fields: `ghVersion` (1, 2, or 3), `threshold`, `validatorCount`, `validatorMerkleRoot` (32-byte hex), `signerCount` (always 0 in current deployments), `pubkeys` (always empty), and optionally `treasuryLockHash` (v2) or the full `treasuryLockScript` (v3). The `governance-lock` reads threshold and `validatorMerkleRoot` from this header on every execute transaction.
 
 ### FirewallConfig
 
@@ -217,3 +260,11 @@ A 32-byte Merkle root committing to the authorized validator set. Leaves are `bl
 Blake2b hash of the full sorted set of vote records. Computed as `blake2b` over the canonically serialized array of `{ pubkey, vote, timestamp, signature }` objects sorted by pubkey. Recomputed by the `execute` CLI command from stored votes before building the governance transaction, and included in the GOV1 v4 witness. Any tampered or missing vote produces a different hash.
 
 All six fields must match the GOV1 v4 witness; on-chain signature verification rejects if any field has been tampered.
+
+
+## See also
+
+- [BLKL v2 Format](/reference/blkl-format/) — binary payload reference
+- [Firewall lock args v2](/reference/firewall-lock-args/) — lock configuration reference
+- [GOV1 v4 Witness](/reference/gov1-witness/) — governance witness reference
+- [Error codes](/reference/error-codes/) — error code table

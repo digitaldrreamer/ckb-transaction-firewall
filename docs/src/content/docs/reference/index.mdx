@@ -6,32 +6,42 @@ topic: reference
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-Exact byte layouts, error codes, and API documentation for implementation and debugging.
+Exact byte layouts, error codes, and API documentation for implementation and auditing.
 
 ## SDKs
 
 <CardGrid>
-	<LinkCard href="/reference/sdk-api/" title="TypeScript SDK API" description="All types, functions, and classes exported by @ckb-firewall/sdk." />
-	<LinkCard href="/reference/rust-sdk-api/" title="Rust SDK API" description="All types, functions, and errors exported by ckb-transaction-firewall-sdk." />
+  <LinkCard href="/reference/typescript-sdk/" title="TypeScript SDK API" description="All types, functions, and classes exported by @ckb-firewall/sdk." />
+  <LinkCard href="/reference/rust-sdk/" title="Rust SDK API" description="All types, functions, and errors exported by ckb-transaction-firewall-sdk." />
 </CardGrid>
 
 ## CLI
 
 <CardGrid>
-	<LinkCard href="/reference/cli/" title="CLI reference" description="Command and option reference for @ckb-firewall/cli." />
+  <LinkCard href="/reference/cli/" title="CLI Reference" description="Every command, option, and default for @ckb-firewall/cli." />
 </CardGrid>
 
-## Data Formats
+## Binary formats
 
 <CardGrid>
-	<LinkCard href="/reference/blkl-format/" title="BLKL format" description="Binary layout for the blacklist registry payload." />
-	<LinkCard href="/reference/firewall-lock-args/" title="Firewall lock args" description="How the lock encodes the registry and inner-lock identities." />
-	<LinkCard href="/reference/gov1-witness/" title="GOV1 witness" description="Witness layout used by registry update transactions." />
+  <LinkCard href="/reference/blkl-format/" title="BLKL v2 Format" description="Binary payload layout for the live registry cell." />
+  <LinkCard href="/reference/firewall-lock-args/" title="Firewall Lock Args v2" description="Binary encoding of the lock script configuration." />
+  <LinkCard href="/reference/gov1-witness/" title="GOV1 v4 Witness" description="Governance witness layout for registry update transactions." />
+  <LinkCard href="/reference/pblk-cell/" title="PBLK Proposal Cell" description="v1 and v2 proposal cell data layouts." />
 </CardGrid>
 
-## Other
+## Contracts
 
 <CardGrid>
-	<LinkCard href="/reference/error-codes/" title="Error codes" description="Stable contract and SDK error mappings." />
-	<LinkCard href="/reference/glossary/" title="Glossary" description="Terms used throughout the documentation." />
+  <LinkCard href="/reference/proposal-anchor/" title="Proposal Anchor Contract" description="Type script validation, spending conditions, and error codes 31–36." />
+  <LinkCard href="/reference/spawn-aware-secp256k1/" title="Spawn-Aware Secp256k1" description="Inner lock protocol, argv encoding, and error codes 1–7." />
+  <LinkCard href="/reference/error-codes/" title="Error Codes" description="All codes from all contracts and the SDK — stable identifiers." />
+</CardGrid>
+
+## Deployment and stability
+
+<CardGrid>
+  <LinkCard href="/reference/stability/" title="Stability Guarantees" description="What is frozen across versions and what may change." />
+  <LinkCard href="/reference/testnet-deployment/" title="Testnet Deployment" description="Live contract outpoints, registry spec, and treasury address." />
+  <LinkCard href="/reference/glossary/" title="Glossary" description="Terms specific to this project." />
 </CardGrid>

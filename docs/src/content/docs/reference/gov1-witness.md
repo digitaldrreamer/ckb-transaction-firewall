@@ -190,3 +190,11 @@ The `execute` command recomputes `vote_digest_hash` from stored votes and aborts
 - Proposal types: `sdk/cli/src/lib/proposals.ts` - `ProposalVote`, `computeVoteDigestHash`, `voteSigningMessage`
 - On-chain GOV1 parser: `contracts/blacklist-registry/src/main.rs` - `GovernanceWitness::parse`
 - On-chain validator vote verifier and relative-since check: `contracts/governance-lock/src/main.rs` - `program_entry`, `verify_relative_since_timestamp`
+
+## See also
+
+- [Governance design](/concepts/governance-design/) — why the witness layout is structured this way
+- [PBLK Proposal Cell](/reference/pblk-cell/) — the proposal cell that the GOV1 witness references
+- [How to execute an approved proposal](/how-to/execute-proposal/) — build and submit the governance transaction
+- [How to vote on a proposal](/how-to/vote-on-proposal/) — produce the validator vote entries
+- [Fix: vote digest mismatch](/how-to/fix-vote-digest-mismatch/) — recover from an inconsistent voteDigestHash

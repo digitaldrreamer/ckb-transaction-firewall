@@ -139,7 +139,7 @@ pub struct GovernanceHeader {
 }
 ```
 
-Governance metadata embedded in every BLKL v2 registry payload. `pubkeys` are the on-chain governance committee; `validator_merkle_root` commits to the authorized validator set.
+Governance metadata embedded in every BLKL v2 registry payload. `validator_merkle_root` commits to the authorized validator set. `signer_count` and `pubkeys` are legacy wire-format fields retained for compatibility; they are always 0/empty in current deployments and carry no authorization weight.
 
 ---
 
@@ -423,3 +423,10 @@ Exposes the canonical testnet RPC URL, registry spec, and deployed contract outp
 |---|---|
 | `serde` | Derives `Serialize` / `Deserialize` on all public types |
 | `testnet` | Exposes the `testnet` module with testnet constants |
+
+## See also
+
+- [How to run a pre-flight check in Rust](/how-to/preflight-rust/) — `check_transaction` with a fetched registry
+- [Error codes](/reference/error-codes/) — all codes, including SDK-level mappings
+- [Example: preflight-service](/examples/preflight-service/) — complete Rust service example
+- [BLKL v2 Format](/reference/blkl-format/) — the binary format `parse_registry_payload` consumes
