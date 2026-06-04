@@ -31,18 +31,20 @@ If a blacklisted entity sends CKB to your wallet, you receive it. If your wallet
 
 ## Fail-closed behavior
 
-Missing registry dep → reject  
-More than one matching registry dep → reject  
-Malformed or unsorted registry payload → reject  
-Output matches a blacklisted identifier → reject
+[Fail-closed](/reference/glossary/#fail-closed) means when in doubt, reject — there is no "allow by default":
 
-## Time-based entries and header deps
+- Missing [registry dep](/reference/glossary/#cell-dep) → reject ([`MissingRegistryCellDep`](/reference/error-codes/#firewall-lock), code 8)
+- More than one matching registry dep → reject ([`AmbiguousRegistryCellDep`](/reference/error-codes/#firewall-lock), code 17)
+- Malformed or unsorted registry payload → reject ([`InvalidRegistryData`](/reference/error-codes/#firewall-lock), code 9)
+- Output matches a blacklisted identifier → reject ([`BlacklistedLockArgs`](/reference/error-codes/#firewall-lock), code 11)
 
-Blacklist entries can have an `expiresAt` unix timestamp. The firewall reads the chain's median block time to evaluate expiry — and **median block time requires `header_deps` in the spending transaction**.
+## Time-based entries and header_deps
 
-If a transaction spending a firewall-protected cell omits `header_deps`, the median time evaluates to zero, and all temporary entries are treated as permanently active. The transaction does not fail with a clear error — it silently enforces the wrong policy, blocking spends it should allow.
+Blacklist entries can have an `expiresAt` unix timestamp. The firewall reads the chain's [median block time (MTP)](/reference/glossary/#median-block-time-mtp) to evaluate expiry — and **median block time requires [`header_deps`](/reference/glossary/#header_deps) in the spending transaction**.
 
-Always include a recent block hash in `header_deps` when spending a firewall-protected cell if the registry contains time-based entries.
+If a [firewall-protected cell](/reference/glossary/#firewall-protected-cell) is spent without `header_deps`, the median time evaluates to zero, and all temporary entries are treated as permanently active. The transaction does not fail with a clear error — it silently enforces the wrong policy, blocking spends it should allow.
+
+Always include a recent block hash in `header_deps` when spending a firewall-protected cell if the [registry cell](/reference/glossary/#registry-cell) contains time-based entries.
 
 ## Registry updates and in-flight transactions
 
@@ -63,3 +65,12 @@ The `governance-lock` script enforces three things:
 **Validator vote threshold.** The script reads the validator Merkle root and threshold from the BLKL v2 governance header embedded in the registry cell. Each yes vote in `WitnessArgs.lock` carries the validator pubkey, vote signature, and Merkle proof. Fewer than threshold valid validator yes votes → reject.
 
 The `execute` CLI also verifies vote signatures and Merkle proofs before building the transaction, but the on-chain governance lock is the final authority.
+
+## See also
+
+- [The two-layer model](/concepts/two-layer-model/) — why both the SDK check and the on-chain lock are necessary
+- [Trust model and guarantees](/concepts/trust-model-and-guarantees/) — exact guarantees, trust assumptions, what key compromise means
+- [Before you adopt the firewall lock](/concepts/before-you-adopt/) — irreversible operational consequences before committing
+- [How to handle time-based entries](/how-to/time-based-entries/) — how to add `header_deps` for temporary blacklist entries
+- [How to recover when the registry cell moves](/how-to/recover-stale-registry/) — registry outpoint staleness after governance updates
+- [Troubleshooting](/how-to/troubleshoot/) — symptom-to-fix routing for all error codes

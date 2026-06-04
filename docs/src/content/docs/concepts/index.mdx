@@ -1,22 +1,32 @@
 ---
 title: Concepts
-description: Read this when you need the rules behind the firewall lock and registry flow.
-topic: concepts
+description: Explanations of why the CKB Transaction Firewall is designed the way it is.
 ---
 
 import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-These pages describe the moving parts the code relies on.
+These pages explain the reasoning behind the system's design — not how to accomplish a task (see [How-to guides](/how-to/)) and not exact technical specifications (see [Reference](/reference/)).
 
-## Pages
+## Foundations
 
 <CardGrid>
-	<LinkCard href="/concepts/why-this-exists/" title="Why this exists" description="The problem the firewall addresses and why on-chain enforcement matters." />
-	<LinkCard href="/concepts/overview/" title="Overview" description="What each component does and how they connect in a typical integration." />
-	<LinkCard href="/concepts/architecture/" title="Architecture" description="How the lock, registry, SDKs, and governance fit together." />
-	<LinkCard href="/concepts/firewall-lock/" title="Firewall lock" description="The consensus-layer lock script and its checks." />
-	<LinkCard href="/concepts/blacklist-registry/" title="Blacklist registry" description="The on-chain cell that stores blacklist entries." />
-	<LinkCard href="/concepts/governance/" title="Governance" description="How registry updates move through review, vote, sign, and execute." />
-	<LinkCard href="/concepts/registry-treasury/" title="Registry treasury" description="How registry growth, anchor cells, donations, pruning, and reclaim are funded." />
-	<LinkCard href="/concepts/security-model/" title="Security model" description="What the firewall does and does not protect." />
+  <LinkCard href="/concepts/ckb-background/" title="CKB cell model and lock scripts" description="The CKB concepts you need before the rest of the docs make sense — cells, locks, cell deps, Type ID." />
+  <LinkCard href="/concepts/why-this-exists/" title="Why this exists" description="The threat this solves: compromised runtimes, prompt injection, and why application-layer checks are not enough." />
+  <LinkCard href="/concepts/two-layer-model/" title="The two-layer model" description="Why both the SDK check and the on-chain lock are necessary, and what each one actually guarantees." />
+</CardGrid>
+
+## System design
+
+<CardGrid>
+  <LinkCard href="/concepts/governance-design/" title="Governance design" description="Why proposals need on-chain anchors, why the review window is at consensus, and why the validator Merkle tree." />
+  <LinkCard href="/concepts/registry-design/" title="Registry and cell design" description="Why a single consumed-and-recreated cell, why sorted entries, and what fail-closed means operationally." />
+  <LinkCard href="/concepts/treasury-design/" title="The autonomous treasury model" description="Why an autonomous treasury instead of a funded signer, and how keyless spending works." />
+</CardGrid>
+
+## For adopters and auditors
+
+<CardGrid>
+  <LinkCard href="/concepts/security-model/" title="Security model" description="What the system protects, what it explicitly does not, and the registry serialization constraint." />
+  <LinkCard href="/concepts/before-you-adopt/" title="Before you adopt the firewall lock" description="Irreversible operational consequences — address migration, immutable lock args, governance timing." />
+  <LinkCard href="/concepts/trust-model-and-guarantees/" title="Trust model and guarantees" description="Exact guarantees, trust assumptions, what governance key compromise means, and what is auditable on-chain." />
 </CardGrid>
