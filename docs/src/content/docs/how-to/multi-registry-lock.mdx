@@ -1,0 +1,50 @@
+---
+title: How to Configure Multiple Registries in One Firewall Lock
+description: Point one firewall lock at two or more registries simultaneously.
+---
+
+The firewall lock args support up to 255 registry specs. The effective blacklist is the union of all active entries across all registries.
+
+```ts
+import { buildFirewallLockScript } from "@ckb-firewall/sdk";
+
+const lockScript = buildFirewallLockScript({
+  firewallCodeHash: "0x8192c9df809976ae9b093dd0d6b072a96101be8cffe61a7e9ac87c04e1f4dc54",
+  firewallHashType: "type",
+  flags: 0x03,
+  registries: [
+    // Community registry — required
+    {
+      codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
+      hashType:    "type",
+      typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
+      required:    true,
+    },
+    // Your private registry — optional (checked if present, skipped if absent)
+    {
+      codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
+      hashType:    "type",
+      typeIdValue: "0x<your-registry-type-id-value>",
+      required:    false,
+    },
+  ],
+  innerCodeHash: "0x9be62e0423d4278b15c071bb881a4ebf936f7e46b3df0f152de50ae416f54465",
+  innerHashType: "type",
+  innerArgs: "0x<pubkey-hash>",
+});
+```
+
+When spending a cell with this lock, both registry cell deps must be present:
+
+```ts
+const deps = buildFirewallSpendCellDeps({
+  firewallLockOutPoint: { txHash: "0x128193cc...", index: 0 },
+  innerLockOutPoint:    { txHash: "0x0fe5d476...", index: 0 },
+  registryOutPoints: [
+    communityRegistryOutPoint,
+    yourPrivateRegistryOutPoint,
+  ],
+});
+```
+
+For `required: false` registries, the firewall checks the dep if it is present and skips it if absent. An address blocked in either registry blocks the transaction.

@@ -1,0 +1,46 @@
+---
+title: How to Inspect the Live Registry
+description: View current blacklist entries, treasury balance, and registry metadata via the CLI.
+---
+
+## Show all entries
+
+```bash
+ckb-firewall inspect
+```
+
+Shows all entries in the current [registry cell](/reference/glossary/#registry-cell) with their status (active or expired), expiry timestamps, and [governance header](/reference/glossary/#governance-header) metadata (validator count, threshold, treasury balance). For the full CLI options, see the [CLI reference — inspect](/reference/cli/).
+
+## With a custom registry
+
+```bash
+ckb-firewall inspect \
+  --rpc-url https://testnet.ckb.dev \
+  --registry-tx <tx-hash> \
+  --registry-index <index>
+```
+
+## Check a single address
+
+```bash
+ckb-firewall check --lock-args 0xabc123...
+```
+
+Returns whether the address is currently blacklisted. Checks both lock args and (if configured) type args.
+
+## From the SDK
+
+```ts
+import { findRegistryCell, fetchRegistryPayload } from "@ckb-firewall/sdk";
+// findRegistryCell — discovers current outpoint via indexer
+// fetchRegistryPayload — fetches and parses the BLKL v2 payload
+
+const { txHash, index } = await findRegistryCell(rpcUrl, registrySpec);
+const registry = await fetchRegistryPayload(rpcUrl, txHash, index);
+
+console.log(`Entries: ${registry.entries.length}`);
+for (const entry of registry.entries) {
+  const expired = entry.expiresAt !== 0n && entry.expiresAt < BigInt(Math.floor(Date.now() / 1000));
+  console.log(`${entry.identifier} — ${expired ? "expired" : "active"}`);
+}
+```

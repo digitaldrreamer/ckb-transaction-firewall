@@ -1,0 +1,23 @@
+---
+title: How to Donate to the Registry Treasury
+description: Top up the treasury pool when pool usage reaches the 70% warning threshold.
+---
+
+When `ckb-firewall inspect` shows treasury usage at 70% or above, the pool needs topping up.
+
+The donation address is printed by `inspect` and shown in the GUI pool banner. Any CKB transfer to that address increases the pool:
+
+```bash
+ckb-cli --url https://testnet.ckb.dev wallet transfer \
+  --to-address <treasury-address-from-inspect> \
+  --capacity <amount-in-ckb> \
+  --fee-rate 1000
+```
+
+The canonical testnet treasury address is:
+
+```
+ckt1qzpf4txhkw8vwtycyy5vjru0jv6q5wk3cwd8w22nzsz4e2sge9h7jq546h5gm2ln9m6ehs5j68ujthe0z72g77z9m2jw2te5hq0myugugzyaany9q7kaky2wxhp29c4wjscgnqegsjqcl3avdh3u8wxd4e4py8dwlf3
+```
+
+No private key is needed by the treasury to use donated funds. The [`treasury-lock`](/reference/glossary/#treasury-lock) contract permits spending only for governance operations ([anchoring proposals](/how-to/anchor-proposal/) and covering [registry cell](/reference/glossary/#registry-cell) capacity growth).

@@ -1,0 +1,37 @@
+---
+title: How to Rotate the Validator Committee
+description: Issue a set-treasury proposal to update the validator set and Merkle root.
+---
+
+Rotating the validator committee requires a governance proposal with `--action set-treasury`. The proposal updates the [governance header](/reference/glossary/#governance-header) in the [BLKL](/reference/blkl-format/) payload, replacing the [`validatorMerkleRoot`](/reference/glossary/#validator-merkle-root) with a new one that commits to the updated [validator](/reference/glossary/#validator) set.
+
+## Step 1: Compute the new Merkle root
+
+Use the CLI to compute the Merkle root for the new validator set:
+
+```bash
+# The Merkle root is computed from the ordered list of compressed pubkeys
+# Leaves: blake2b(compressed_pubkey_33_bytes) for each validator
+# Tree padded to next power of 2, built with CKB blake2b
+```
+
+(This tooling is in development. Contact the maintainers for the current approach.)
+
+## Step 2: Create a set-treasury proposal
+
+```bash
+ckb-firewall propose \
+  --action set-treasury \
+  --treasury-lock-code-hash <treasury-lock code hash> \
+  --treasury-lock-hash-type data1 \
+  --treasury-lock-args <governance_lock_type_id(32) | proposal_anchor_type_id(32)> \
+  --evidence "https://..." \
+  --classification other \
+  --severity high \
+  --rationale "Add validator X, remove validator Y. New threshold: 4-of-7." \
+  --proposer operator
+```
+
+## Step 3: Complete the governance round
+
+[Anchor](/how-to/anchor-proposal/), [collect votes](/how-to/vote-on-proposal/) from the current committee (before rotation), and [execute](/how-to/execute-proposal/). After execution, the registry's [governance header](/reference/glossary/#governance-header) carries the new `validatorMerkleRoot` and threshold. Future proposals must be voted on by the new committee.

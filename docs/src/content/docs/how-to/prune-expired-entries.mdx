@@ -1,0 +1,26 @@
+---
+title: How to Prune Expired Entries
+description: Remove expired blacklist entries from the registry to reclaim cell capacity.
+---
+
+Expired entries (entries with a past `expiresAt` timestamp) remain in the [registry cell](/reference/glossary/#registry-cell) until explicitly removed by a governance update. They consume bytes in the cell, which holds capacity.
+
+To prune expired entries, create a [proposal](/how-to/create-proposal/) for each one using `--action remove` and [execute](/how-to/execute-proposal/) them:
+
+```bash
+# For each expired entry:
+ckb-firewall propose \
+  --action remove \
+  --lock-args <expired-entry-identifier> \
+  --evidence "Entry expired on <date>" \
+  --classification other \
+  --severity low \
+  --rationale "Pruning expired temporary entry." \
+  --proposer operator
+```
+
+The governance update builder prunes expired entries from the new [BLKL](/reference/blkl-format/) payload before adding any new entries and before drawing [treasury](/reference/glossary/#treasury-lock) capacity. This means you may not need a separate prune proposal — governance updates that add entries automatically prune expired entries as part of the update.
+
+If the registry has many expired entries and you want to reclaim capacity without adding or removing active entries, create a remove proposal for each expired entry in sequence (one governance round per entry, due to the single-cell serialization constraint).
+
+After each prune update, if the new payload is smaller than the old one, excess capacity returns to the treasury automatically.

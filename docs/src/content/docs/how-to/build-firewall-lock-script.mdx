@@ -1,0 +1,45 @@
+---
+title: How to Build a Firewall Lock Script
+description: Construct the v2 lock args for a wallet cell using buildFirewallLockScript.
+---
+
+Use `buildFirewallLockScript` to produce the lock script for a cell that enforces the blacklist at consensus:
+
+```ts
+import { buildFirewallLockScript } from "@ckb-firewall/sdk";
+import type { FirewallLockConfig } from "@ckb-firewall/sdk";
+
+const config: FirewallLockConfig = {
+  // Deployed firewall-lock code hash and hash type
+  firewallCodeHash: "0x8192c9df809976ae9b093dd0d6b072a96101be8cffe61a7e9ac87c04e1f4dc54",
+  firewallHashType: "type",
+
+  // bit 0 = check lock_args, bit 1 = check type_args
+  // 0x03 = check both (recommended)
+  flags: 0x03,
+
+  // Registry specs — one per registry the lock should consult
+  registries: [
+    {
+      codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
+      hashType:    "type",
+      typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
+      required:    true,
+    },
+  ],
+
+  // Inner lock: spawn-aware-secp256k1
+  innerCodeHash: "0x9be62e0423d4278b15c071bb881a4ebf936f7e46b3df0f152de50ae416f54465",
+  innerHashType: "type",
+
+  // 20-byte blake160 hash of the wallet's compressed secp256k1 pubkey
+  innerArgs: "0x<pubkey-hash>",
+};
+
+const lockScript = buildFirewallLockScript(config);
+// { codeHash, hashType: "type", args: "0x02030102..." }
+```
+
+The returned `lockScript` is what goes in the `lock` field of a new cell output. Any transaction that spends that cell will enforce the blacklist check before delegating to the secp256k1 inner lock.
+
+For the binary layout of the resulting `args`, see [Firewall lock args](/reference/firewall-lock-args/). For testnet contract outpoints, see [Testnet deployment](/reference/testnet-deployment/).

@@ -1,0 +1,41 @@
+---
+title: How to Build Cell Deps for Spending a Firewall-protected Cell
+description: Assemble the exact cell_deps required when spending a cell locked by the firewall lock.
+---
+
+Spending a firewall-protected cell requires three cell deps in addition to any other deps your transaction needs:
+
+1. **Firewall-lock code cell** — the RISC-V binary so nodes can execute the lock
+2. **Inner lock code cell** — the inner lock binary so the firewall can spawn it
+3. **Registry data cell** — the live BLKL v2 payload the firewall reads
+
+Use `buildFirewallSpendCellDeps` to assemble them:
+
+```ts
+import { buildFirewallSpendCellDeps, findRegistryCell } from "@ckb-firewall/sdk";
+
+// Discover the current registry outpoint
+const { txHash: registryTxHash, index: registryIndex } =
+  await findRegistryCell(rpcUrl, registrySpec);
+
+const spendDeps = buildFirewallSpendCellDeps({
+  firewallLockOutPoint: {
+    txHash: "0x128193cc2d547b224ccf10a6e299cb0749c633c5f9354ff5a9a5fd3e894318d2",
+    index: 0,
+  },
+  innerLockOutPoint: {
+    txHash: "0x0fe5d47662724a3620c002683d8c3f38103359c7e1ca697196b39442317c709e",
+    index: 0,
+  },
+  registryOutPoints: [
+    { txHash: registryTxHash, index: registryIndex },
+  ],
+});
+
+// spendDeps is TransactionCellDep[]
+// Add to your transaction's cell_deps alongside any others your transaction needs
+```
+
+The registry outpoint (`registryOutPoints`) moves after each governance update. Always use `findRegistryCell` to discover the current outpoint before building a spending transaction. Do not hardcode it.
+
+For testnet outpoints of the firewall-lock and inner lock code cells, see [Testnet deployment](/reference/testnet-deployment/). For the full type signatures, see [TypeScript SDK API](/reference/typescript-sdk/).

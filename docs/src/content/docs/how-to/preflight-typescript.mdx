@@ -1,0 +1,132 @@
+---
+title: How to Run a Pre-flight Check in TypeScript
+description: Fetch the live registry and check transaction outputs before signing using the TypeScript SDK.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+This guide shows the two ways to run a pre-flight check in TypeScript. Use `preflightCheck` when you have already fetched the registry and want to check outputs. Use `TransactionFirewall.checkTransaction` when the transaction is fully assembled with the registry in its cell deps.
+
+## Using `preflightCheck`
+
+Use this when you fetch the registry separately from building the transaction. `preflightCheck` takes already-parsed `RegistryPayload[]` and `TxOutputLike[]` — it makes no network calls.
+
+```ts
+import {
+  findRegistryCell,
+  fetchRegistryPayload,
+  preflightCheck,
+} from "@ckb-firewall/sdk";
+
+const RPC_URL = "https://testnet.ckb.dev";
+
+const REGISTRY_SPEC = {
+  codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
+  hashType:    "type" as const,
+  typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
+  required:    true,
+};
+
+// Discover the current registry cell outpoint via the CKB indexer
+const { txHash, index } = await findRegistryCell(RPC_URL, REGISTRY_SPEC);
+
+// Fetch and parse the BLKL v2 payload
+const registry = await fetchRegistryPayload(RPC_URL, txHash, index);
+
+// Synchronous check — no network calls
+const result = preflightCheck(
+  [
+    { lockArgs: "0x331cdd72ff9f7f22c53f9710d6639ca46de3ac06" },
+    { lockArgs: "0xababababababababababababababababababababab" },
+  ],
+  [registry],
+);
+
+if (!result.ok) {
+  // result.code and result.reason are narrowed by the discriminated union
+  throw new Error(`Blocked: ${result.reason} (code ${result.code})`);
+}
+```
+
+## Using `TransactionFirewall.checkTransaction`
+
+Use this when the transaction is fully assembled and the registry cell dep is already included in `cellDeps`. This confirms that the same cell dep that will be broadcast is what was validated.
+
+The `cellDeps` entry for the registry requires the raw cell type script and hex data — not the parsed `RegistryPayload`. Fetch these from the live cell:
+
+```ts
+import { TransactionFirewall } from "@ckb-firewall/sdk";
+
+// Get the raw cell type script and data from your CKB node
+// (via get_live_cell with with_data=true, or your transaction builder's cell dep lookup)
+const registryTypeScript = {
+  codeHash: "0x493f1700...",
+  hashType: "type" as const,
+  args: "0x02...", // full 66-byte v2 type args
+};
+const registryDataHex = "0x424c4b4c02..."; // raw BLKL v2 hex from cell data
+
+const firewall = new TransactionFirewall({
+  registries: [
+    {
+      codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
+      hashType:    "type",
+      typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
+      required:    true,
+    },
+  ],
+});
+
+const result = firewall.checkTransaction({
+  cellDeps: [{ type: registryTypeScript, data: registryDataHex }],
+  outputs:  [{ lockArgs: "0x..." }],
+});
+
+if (!result.ok) {
+  throw new Error(`Blocked: ${result.reason}`);
+}
+```
+
+## Handling errors from `fetchRegistryPayload`
+
+`fetchRegistryPayload` throws plain `Error` instances. The cases to handle:
+
+| Message contains | Cause | Recovery |
+|---|---|---|
+| `is not live` | Registry was updated — your cached outpoint is consumed | Call `findRegistryCell` to get the new outpoint |
+| `CKB RPC unreachable` | Network failure or wrong RPC URL | Retry or check connectivity |
+| `HTTP <status>` | Node returned non-2xx | Retry or switch node |
+| `has no data` | Outpoint points at a code cell, not the data cell | Check you are using the registry data cell outpoint |
+
+Recovery pattern for stale outpoint:
+
+```ts
+let registry;
+try {
+  registry = await fetchRegistryPayload(rpcUrl, cachedTxHash, cachedIndex);
+} catch (err) {
+  if (err instanceof Error && err.message.includes("is not live")) {
+    const fresh = await findRegistryCell(rpcUrl, registrySpec);
+    cachedTxHash = fresh.txHash;
+    cachedIndex = fresh.index;
+    registry = await fetchRegistryPayload(rpcUrl, cachedTxHash, cachedIndex);
+  } else {
+    throw err;
+  }
+}
+```
+
+## Handling the result
+
+```ts
+switch (result.code) {
+  case 8:  /* MissingRegistryCellDep — registry dep missing from cellDeps */ break;
+  case 9:  /* InvalidRegistryData — payload failed to parse */ break;
+  case 10: /* RegistryNotSorted — payload entries out of order */ break;
+  case 11: /* BlacklistedLockArgs — output lock args are on the blacklist */ break;
+  case 12: /* BlacklistedTypeArgs — output type args are on the blacklist */ break;
+  case 17: /* AmbiguousRegistryCellDep — more than one matching registry dep */ break;
+}
+```
+
+See [Error codes](/reference/error-codes/) for the full table. See [TypeScript SDK API](/reference/typescript-sdk/) for complete type signatures.

@@ -1,0 +1,24 @@
+---
+title: "Fix: Transaction Rejected — AmbiguousRegistryCellDep (Code 17)"
+description: Diagnose and fix a transaction rejected because more than one registry cell dep matched the configured identity.
+---
+
+## Symptom
+
+A transaction is rejected with `AmbiguousRegistryCellDep` (code 17), or the SDK returns `{ ok: false, code: 17, reason: "AmbiguousRegistryCellDep" }`.
+
+## Cause
+
+Two or more [cell deps](/reference/glossary/#cell-dep) in the transaction have a type script where bytes 34–65 of the type args match the [`typeIdValue`](/reference/glossary/#type_id_value) configured in the [firewall lock args](/reference/firewall-lock-args/). The firewall requires exactly one matching dep — it fails closed rather than picking one arbitrarily.
+
+Common causes:
+- A transaction builder that adds cell deps from multiple sources accidentally included the registry dep twice
+- A multi-registry configuration added the same registry spec under two different entries
+
+## Fix
+
+Remove the duplicate registry dep from the transaction's `cell_deps`. Each registry spec configured in the firewall lock args should appear exactly once in `cell_deps`.
+
+If using `buildFirewallSpendCellDeps`, ensure you are not also adding the registry dep manually elsewhere in the transaction builder.
+
+If you have a multi-registry configuration, verify that each `typeIdValue` in the config is unique — two specs with the same `typeIdValue` will always produce this error.

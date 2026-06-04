@@ -1,0 +1,61 @@
+---
+title: "Fix: Transaction Rejected — MissingRegistryCellDep (Code 8)"
+description: Diagnose and fix a transaction rejected because the registry cell dep is missing or does not match.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Symptom
+
+A transaction spending a firewall-protected cell is rejected by the network or by the SDK with:
+
+- `MissingRegistryCellDep` (code 8)
+- Or the SDK throws a `MissingRegistryCellDepError`
+
+## Causes
+
+### 1. The registry cell dep is not in `cell_deps` at all
+
+The firewall lock requires a cell dep whose type script matches the configured registry identity. If `cell_deps` does not contain any entry matching the configured `typeIdValue`, the lock rejects.
+
+**Fix:** Add the live registry cell as a code cell dep. Use `findRegistryCell` and `fetchRegistryPayload` to get the current outpoint, then include it:
+
+```ts
+import { findRegistryCell } from "@ckb-firewall/sdk";
+
+const { txHash, index } = await findRegistryCell(rpcUrl, registrySpec);
+// Add { out_point: { tx_hash: txHash, index }, dep_type: "code" } to your cell_deps
+```
+
+### 2. You are including the contract binary cell instead of the registry data cell
+
+The `blacklist-registry` contract deploys two cells: the code cell (RISC-V binary) and the registry data cell (BLKL v2 payload). The firewall needs the **data cell** as a dep, not the code cell.
+
+**Confirm which cell you have:** fetch the cell and check its data. The data cell starts with `0x424c4b4c` (ASCII `BLKL`). If the data starts with `0x7f454c46` (ELF header), you have the binary cell.
+
+### 3. The registry dep type script args do not match
+
+The firewall matches the registry dep by comparing `dep.type.args[34..66]` against `typeIdValue` in the firewall lock args. If the type args are wrong length (not 66 bytes = 132 hex chars), or if bytes 34–65 do not match `typeIdValue`, the dep is rejected.
+
+**Check the dep's type args:** they must be exactly 132 hex chars after `0x`. Bytes 34–65 must equal the `typeIdValue` in the firewall lock configuration.
+
+### 4. The registry cell was updated and the outpoint you cached is now consumed
+
+After a governance update, the old registry cell is consumed. If your code has a hardcoded outpoint and the cell is no longer live, the dep is missing from the perspective of the lock.
+
+**Fix:** Use `findRegistryCell` instead of a hardcoded outpoint. See [How to recover from a stale registry cell](/how-to/fix-stale-registry-cell/).
+
+<Aside type="tip">
+Run `ckb-firewall inspect` to see the current live registry cell outpoint. Use that outpoint in your `cell_deps`.
+</Aside>
+
+## Verify the fix
+
+After correcting `cell_deps`, run `preflightCheck` with the updated deps:
+
+```ts
+const result = preflightCheck(outputs, [registry]);
+if (result.ok) console.log("Clean — ready to broadcast");
+```
+
+If the fix works, the SDK returns `{ ok: true }` (or one of the other error codes if there is a different problem). See [Error codes](/reference/error-codes/) for the full table.

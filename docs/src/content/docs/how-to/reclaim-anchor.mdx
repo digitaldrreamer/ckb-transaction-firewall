@@ -1,0 +1,26 @@
+---
+title: How to Reclaim an Abandoned Proposal Anchor
+description: Recover treasury capacity from a rejected or abandoned PBLK proposal cell using ckb-firewall reclaim.
+---
+
+If a proposal is rejected, abandoned, or never gathers enough votes, the [`PBLK`](/reference/pblk-cell/) proposal anchor cell's capacity can be recovered by reclaim.
+
+```bash
+ckb-firewall reclaim \
+  --proposal <id> \
+  --tx-out gov_reclaim_tx.json
+```
+
+The CLI verifies:
+- The proposal anchor is locked by the [registry treasury lock](/reference/glossary/#treasury-lock)
+- The anchor carries the [`proposal-anchor`](/reference/proposal-anchor/) type args
+- The anchor has aged past the reclaim delay
+- The proposal is not still in its [review window](/reference/glossary/#review-window) or executable
+
+By default, reclaim refuses proposals that are still executable. Use `--force` only after the governance committee has decided not to execute:
+
+```bash
+ckb-firewall reclaim --proposal <id> --force
+```
+
+All recovered capacity returns to the [treasury lock](/reference/glossary/#treasury-lock) automatically.

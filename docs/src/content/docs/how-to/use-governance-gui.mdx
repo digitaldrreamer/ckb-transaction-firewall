@@ -1,0 +1,39 @@
+---
+title: How to Use the Governance Dashboard
+description: Launch and navigate the browser-based GUI for inspecting the registry and running governance operations.
+---
+
+```bash
+ckb-firewall gui
+```
+
+Opens the governance dashboard at `http://ckb-firewall.localhost` (port 80) or falls back to `http://ckb-firewall.localhost:7979` if port 80 is unavailable.
+
+## Custom port
+
+```bash
+ckb-firewall gui --port 8080
+```
+
+## Without auto-opening a browser
+
+```bash
+ckb-firewall gui --no-open
+```
+
+## Grant low-port access (Linux)
+
+To get the portless URL without `sudo`:
+
+```bash
+sudo setcap cap_net_bind_service+eip $(which node)
+```
+
+## What the GUI shows
+
+- Live [registry cell](/reference/glossary/#registry-cell) entries with status and expiry
+- [Treasury pool](/reference/glossary/#treasury-lock) usage and donation address
+- [Proposal](/how-to/check-proposal-status/) list with status and vote counts
+- Proposal creation, [anchoring](/how-to/anchor-proposal/), [voting](/how-to/vote-on-proposal/), and [execution](/how-to/execute-proposal/) forms
+
+Press `Ctrl+C` to stop the server.

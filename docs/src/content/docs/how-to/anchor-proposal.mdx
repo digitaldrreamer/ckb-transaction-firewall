@@ -1,0 +1,47 @@
+---
+title: How to Anchor a Proposal On-chain
+description: Create the PBLK proposal cell that starts the review window clock.
+---
+
+Anchoring locks the proposal on-chain as a [`PBLK` cell](/reference/pblk-cell/). The governance transaction spends this cell with a relative [`since`](/reference/glossary/#since) delay, so CKB consensus enforces the [72-hour review window](/reference/glossary/#review-window).
+
+## Treasury-funded anchor (keyless)
+
+For registries with a treasury-lock (the canonical testnet registry):
+
+```bash
+# Build and write the anchor tx to a file
+ckb-firewall anchor --proposal <id> --tx-out gov_anchor_tx.json
+
+# Or build and submit in one step
+ckb-firewall anchor --proposal <id> --submit
+```
+
+No private key required. The CLI auto-discovers [treasury cells](/reference/glossary/#treasury-lock) from the registry's v3 [governance header](/reference/glossary/#governance-header).
+
+## Non-treasury anchor
+
+For registries without a treasury:
+
+```bash
+ckb-firewall anchor \
+  --proposal <id> \
+  --to-address <proposal-cell-owner-address> \
+  --from-account <funding-address> \
+  --submit
+```
+
+Without `--submit`, the CLI prints the exact `ckb-cli wallet transfer --to-data ...` command. Run that command, then record the accepted outpoint:
+
+```bash
+ckb-firewall anchor \
+  --proposal <id> \
+  --proposal-tx <anchor-tx-hash> \
+  --proposal-index <data-output-index>
+```
+
+## After anchoring
+
+The proposal anchor outpoint is stored on the proposal JSON. Export and share the proposal with validators — see [How to share proposals](/how-to/share-proposals/). Validators can now vote.
+
+The review window clock starts when the anchor transaction is mined.

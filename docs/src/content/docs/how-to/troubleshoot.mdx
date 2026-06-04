@@ -1,0 +1,36 @@
+---
+title: Troubleshooting Index
+description: Route from your symptom to the right fix — all error scenarios in one place.
+---
+
+Find your symptom. Each entry links to the page that explains the cause and fix.
+
+## Transaction rejected by the network
+
+| Symptom | Page |
+|---|---|
+| `MissingRegistryCellDep` (code 8) — transaction rejected, registry dep missing | [Fix: MissingRegistryCellDep](/how-to/fix-missing-registry-dep/) |
+| `AmbiguousRegistryCellDep` (code 17) — more than one matching registry dep | [Fix: AmbiguousRegistryCellDep](/how-to/fix-ambiguous-registry-dep/) |
+| `InvalidRegistryData` (code 9) — payload failed to parse | Usually a wrong outpoint — see [Fix: stale registry cell](/how-to/fix-stale-registry-cell/) |
+| Pre-flight passes but transaction fails on-chain | [Fix: pre-flight passes, on-chain fails](/how-to/fix-preflight-passes-onchain-fails/) |
+
+## SDK errors
+
+| Symptom | Page |
+|---|---|
+| `fetchRegistryPayload` throws "is not live" | [Fix: stale registry cell](/how-to/fix-stale-registry-cell/) |
+| In-flight transaction fails after a governance update | [Fix: in-flight failure](/how-to/fix-in-flight-failure/) |
+| Temporary entry blocks a spend it should allow | Add `header_deps` — see [How to handle time-based entries](/how-to/time-based-entries/) |
+
+## Governance CLI errors
+
+| Symptom | Page |
+|---|---|
+| `execute` fails: vote digest mismatch | [Fix: vote digest mismatch](/how-to/fix-vote-digest-mismatch/) |
+| `vote` rejects key: "not in validator set" | Your pubkey is not committed by the `validatorMerkleRoot` in the registry — see [Join governance](/how-to/join-governance/) |
+| `execute` fails: review window not met | The proposal anchor has not aged long enough. Check on-chain confirmation time and wait. |
+| `execute` fails: threshold not met | Not enough yes-votes. Collect more validator votes via `vote` and `import`. |
+
+## Not in this list?
+
+Check the full [error codes reference](/reference/error-codes/) for error code definitions from all contracts. For SDK error types, see the [TypeScript SDK API](/reference/typescript-sdk/) or [Rust SDK API](/reference/rust-sdk/).

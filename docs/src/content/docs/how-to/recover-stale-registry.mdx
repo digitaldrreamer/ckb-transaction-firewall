@@ -1,0 +1,70 @@
+---
+title: How to Recover When the Registry Cell Moves
+description: What to do when the registry outpoint you cached is no longer valid after a governance update.
+---
+
+The registry cell outpoint changes every time a governance update is confirmed. If your application caches the outpoint, it will eventually become stale. This page shows how to detect and recover from that situation.
+
+## Detection
+
+`fetchRegistryPayload` throws when the cell is no longer live:
+
+```ts
+try {
+  const registry = await fetchRegistryPayload(rpcUrl, cachedTxHash, cachedIndex);
+  // use registry
+} catch (err) {
+  if (err instanceof Error && err.message.includes("is not live")) {
+    // Registry was updated — recover
+  }
+}
+```
+
+## Recovery
+
+Use `findRegistryCell` to discover the current outpoint, then re-fetch:
+
+```ts
+import { findRegistryCell, fetchRegistryPayload } from "@ckb-firewall/sdk";
+
+const REGISTRY_SPEC = {
+  codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
+  hashType:    "type" as const,
+  typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
+  required:    true,
+};
+
+let cachedTxHash = "0x...";
+let cachedIndex  = 0;
+
+async function getRegistry() {
+  try {
+    return await fetchRegistryPayload(rpcUrl, cachedTxHash, cachedIndex);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("is not live")) {
+      const { txHash, index } = await findRegistryCell(rpcUrl, REGISTRY_SPEC);
+      cachedTxHash = txHash;
+      cachedIndex  = index;
+      await persistOutpoint(txHash, index); // update your cache
+      return await fetchRegistryPayload(rpcUrl, txHash, index);
+    }
+    throw err;
+  }
+}
+```
+
+`findRegistryCell` queries `get_cells` on the CKB indexer and filters by `typeIdValue` — it finds the correct cell regardless of how many governance updates have occurred since your last fetch.
+
+## Prefer findRegistryCell always
+
+For applications that need robustness, call `findRegistryCell` before every transaction build rather than caching:
+
+```ts
+const { txHash, index } = await findRegistryCell(rpcUrl, registrySpec);
+const registry = await fetchRegistryPayload(rpcUrl, txHash, index);
+// build and check transaction
+```
+
+The extra indexer call adds a small latency (one round-trip) but eliminates the stale-outpoint failure mode entirely.
+
+For in-flight transaction failures caused by a governance update, see [Fix: in-flight transaction fails after a governance update](/how-to/fix-in-flight-failure/).

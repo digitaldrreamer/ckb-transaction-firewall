@@ -1,0 +1,61 @@
+---
+title: How to Deploy a Private Registry
+description: Full deployment guide — contracts, bootstrap, treasury, and first governance round.
+---
+
+For a step-by-step tutorial with visible results at each step, see [Get started: registry operator](/get-started/operator/).
+
+This page covers the full deployment with all options.
+
+## Deploy contracts
+
+```bash
+./scripts/deploy.sh \
+  --network testnet \
+  --rpc-url https://testnet.ckb.dev \
+  --from-address <YOUR_CKT1_ADDRESS> \
+  [--no-build]         # skip cargo build if binaries are fresh
+  [--dry-run]          # generate txs without signing
+```
+
+Outputs:
+- `deploy/info.json` — deployment metadata, Type IDs, tx hashes
+- `deploy/migrations/` — migration files for `ckb-cli deploy apply-txs`
+
+To reuse the community contract binaries without redeploying, use the community Type IDs directly and skip this step — your registry will have a unique `type_id_value` from your bootstrap transaction.
+
+## Bootstrap the registry cell
+
+```bash
+./scripts/bootstrap-registry.sh \
+  --rpc-url https://testnet.ckb.dev \
+  --from-address <YOUR_CKT1_ADDRESS> \
+  --governance-lock-type-id <from deploy/info.json> \
+  --blacklist-registry-type-id <from deploy/info.json> \
+  --threshold 3 \
+  --validator-pubkey 0x03... \
+  --validator-pubkey 0x03... \
+  --validator-pubkey 0x03... \
+  --validator-pubkey 0x03... \
+  --validator-pubkey 0x03...
+```
+
+Record the `type_id_value` (bytes 34–65 of the registry cell's 66-byte v2 type args). This never changes.
+
+## Deploy and seed the treasury
+
+See [How to deploy the treasury](/how-to/deploy-treasury/).
+
+## Configure the firewall lock
+
+See [How to build a firewall lock script](/how-to/build-firewall-lock-script/).
+
+## Run governance
+
+Override the default registry with `--registry-tx` and `--registry-index` for all CLI commands:
+
+```bash
+ckb-firewall propose ... --registry-tx <tx> --registry-index 0
+ckb-firewall anchor  ... --registry-tx <tx> --registry-index 0
+ckb-firewall execute ... --registry-tx <tx> --registry-index 0
+```

@@ -1,0 +1,65 @@
+---
+title: How to Run a Pre-flight Check in Rust
+description: In-process blacklist check with check_transaction — no network dependency at check time.
+---
+
+Add the SDK to your `Cargo.toml`:
+
+```toml
+[dependencies]
+ckb-transaction-firewall-sdk = "0.3"
+```
+
+Fetch the live registry cell via HTTP (the Rust SDK has no built-in RPC client — use `ureq`, `reqwest`, or similar), parse it, and run the check:
+
+```rust
+use ckb_transaction_firewall_sdk::{
+    check_transaction, parse_registry_payload,
+    CellDepLike, FirewallConfig, HashType, RegistrySpec,
+    ScriptLike, TxOutputLike, UnsignedTxLike,
+};
+
+// Fetch the live cell data from your CKB node
+// (RPC: get_live_cell with with_data=true)
+let registry_data: Vec<u8> = fetch_registry_cell_data()?;
+
+// Parse the BLKL v2 payload
+let payload = parse_registry_payload(&registry_data)?;
+
+// Build the firewall config
+let spec = RegistrySpec {
+    code_hash:     hex_to_32("493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09")?,
+    hash_type:     HashType::Type,
+    type_id_value: hex_to_32("9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe")?,
+    required:      true,
+};
+let cfg = FirewallConfig { registries: vec![spec] };
+
+// Build the transaction with the registry as a cell dep
+let tx = UnsignedTxLike {
+    cell_deps: vec![CellDepLike {
+        type_script: Some(ScriptLike {
+            code_hash: spec.code_hash,
+            hash_type:  spec.hash_type.clone(),
+            args:       registry_type_args, // full 66-byte v2 type args
+        }),
+        data: registry_data.clone(),
+    }],
+    outputs: vec![TxOutputLike {
+        lock_args: recipient_lock_args,
+        type_args: None,
+    }],
+};
+
+let now_secs = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .unwrap()
+    .as_secs();
+
+match check_transaction(&cfg, &tx, now_secs) {
+    Ok(())  => { /* safe to sign */ }
+    Err(e)  => eprintln!("blocked: {} (code {})", e, e.code()),
+}
+```
+
+See the [preflight-service example](/examples/preflight-service/) for a complete working implementation including the RPC fetch. See [Rust SDK API](/reference/rust-sdk/) for full type signatures.

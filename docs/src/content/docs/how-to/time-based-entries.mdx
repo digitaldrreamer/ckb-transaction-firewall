@@ -1,0 +1,45 @@
+---
+title: How to Include header_deps for Time-based Entries
+description: Add header_deps to transactions spending firewall-protected cells when the registry contains temporary entries.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Blacklist entries with a non-zero `expiresAt` timestamp are time-based. The firewall lock evaluates them by comparing the entry's timestamp against the chain's **median block time**, not the current wall clock.
+
+Median block time is computed from `header_deps`. Without `header_deps`, the median time evaluates to zero — and all time-based entries are treated as permanently active, even if they are expired. The transaction does not fail with an error; it silently enforces the wrong policy.
+
+## When to add header_deps
+
+Add `header_deps` to any transaction that spends a firewall-protected cell if the registry contains entries with a non-zero `expiresAt`.
+
+Check whether the registry has time-based entries:
+
+```ts
+const hasTimeBasedEntries = registry.entries.some(e => e.expiresAt !== 0n);
+```
+
+If `hasTimeBasedEntries` is `true`, include a recent block hash in `header_deps`.
+
+## How to add header_deps
+
+Fetch a recent block hash from your CKB node and include it in the transaction:
+
+```ts
+// Fetch the tip block hash
+const tipHash = await fetchTipBlockHash(rpcUrl);
+
+// Include in the transaction's header_deps
+const tx = {
+  ...unsignedTx,
+  header_deps: [tipHash],
+};
+```
+
+The block must be committed (not just proposed). Using the tip block hash is sufficient for most cases.
+
+<Aside type="caution" title="SDK vs on-chain evaluation">
+The SDK's `preflightCheck` evaluates `expiresAt` against the current wall-clock time, not the median block time. This means the SDK may report an entry as expired while the on-chain lock still treats it as active — if the chain's median time lags the wall clock, or if `header_deps` are omitted.
+
+Always include `header_deps` in production spending transactions when the registry has time-based entries.
+</Aside>
