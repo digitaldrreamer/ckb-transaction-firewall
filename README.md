@@ -147,7 +147,7 @@ ckb-firewall vote --proposal <id> --vote yes
 ckb-firewall execute --proposal <id>
 ```
 
-For multi-registry deployments or self-managed registries, see [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/).
+For multi-registry deployments or self-managed registries, see [Private registry](https://ckb-firewall.drreamer.digital/how-to/deploy-private-registry/).
 
 ---
 
@@ -192,7 +192,7 @@ Real entries confirmed on the testnet registry as of 2026-06-02:
 
 **Does not protect against:** addresses not yet on the list; non-address exploit classes; cells that do not use the firewall lock; governance key compromise.
 
-**Fail-closed:** missing, invalid, or ambiguous registry dep → reject. See [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/).
+**Fail-closed:** missing, invalid, or ambiguous registry dep → reject. See [Two-layer model](https://ckb-firewall.drreamer.digital/concepts/two-layer-model/).
 
 ---
 
@@ -205,37 +205,34 @@ Real entries confirmed on the testnet registry as of 2026-06-02:
 | | |
 |---|---|
 | [Why this exists](https://ckb-firewall.drreamer.digital/concepts/why-this-exists/) | What the firewall does and does not do |
-| [Architecture](https://ckb-firewall.drreamer.digital/concepts/architecture/) | Lock, registry, SDK, and governance |
+| [Two-layer model](https://ckb-firewall.drreamer.digital/concepts/two-layer-model/) | Lock, registry, SDK, and governance |
+| [Governance design](https://ckb-firewall.drreamer.digital/concepts/governance-design/) | How registry updates are authorised |
 | [Security model](https://ckb-firewall.drreamer.digital/concepts/security-model/) | What is and isn't protected |
 
-**Guides**
+**How-to guides**
 
 | | |
 |---|---|
-| [Pre-flight check (TypeScript)](https://ckb-firewall.drreamer.digital/guides/typescript-preflight/) | Fetch the registry and reject blacklisted outputs before signing |
-| [Pre-flight check (Rust)](https://ckb-firewall.drreamer.digital/guides/rust-preflight/) | In-process blacklist check with no network dependency |
-| [Wallet integration](https://ckb-firewall.drreamer.digital/guides/typescript-wallet-integration/) | Wrap a secp256k1 wallet cell with the firewall lock |
-| [Blacklisting an address](https://ckb-firewall.drreamer.digital/guides/governance-blacklist/) | Full governance lifecycle — propose, vote, sign, execute |
-| [CLI walkthrough](https://ckb-firewall.drreamer.digital/guides/cli-walkthrough/) | Inspect the registry and run governance commands |
+| [Pre-flight check (TypeScript)](https://ckb-firewall.drreamer.digital/how-to/preflight-typescript/) | Fetch the registry and reject blacklisted outputs before signing |
+| [Pre-flight check (Rust)](https://ckb-firewall.drreamer.digital/how-to/preflight-rust/) | In-process blacklist check with no network dependency |
+| [Build a firewall lock script](https://ckb-firewall.drreamer.digital/how-to/build-firewall-lock-script/) | Wrap a secp256k1 wallet cell with the firewall lock |
+| [Create a proposal](https://ckb-firewall.drreamer.digital/how-to/create-proposal/) | Full governance lifecycle — propose, anchor, vote, execute |
+| [Use the governance GUI](https://ckb-firewall.drreamer.digital/how-to/use-governance-gui/) | Browser dashboard for governance operations |
+| [Deploy a private registry](https://ckb-firewall.drreamer.digital/how-to/deploy-private-registry/) | Multi-registry deployment and self-managed blacklists |
 
 **Reference**
 
 | | |
 |---|---|
-| [TypeScript SDK API](https://ckb-firewall.drreamer.digital/reference/sdk-api/) | All types, classes, and functions |
-| [Rust SDK API](https://ckb-firewall.drreamer.digital/reference/rust-sdk-api/) | All types and functions |
+| [TypeScript SDK API](https://ckb-firewall.drreamer.digital/reference/typescript-sdk/) | All types, classes, and functions |
+| [Rust SDK API](https://ckb-firewall.drreamer.digital/reference/rust-sdk/) | All types and functions |
 | [CLI reference](https://ckb-firewall.drreamer.digital/reference/cli/) | All commands and options |
 | [BLKL format](https://ckb-firewall.drreamer.digital/reference/blkl-format/) | Binary registry payload layout |
 | [Firewall lock args](https://ckb-firewall.drreamer.digital/reference/firewall-lock-args/) | Lock script args encoding |
+| [GOV1 witness](https://ckb-firewall.drreamer.digital/reference/gov1-witness/) | Governance witness format |
 | [Error codes](https://ckb-firewall.drreamer.digital/reference/error-codes/) | All SDK and on-chain error codes |
-
-**Operations**
-
-| | |
-|---|---|
-| [Testnet deployment](https://ckb-firewall.drreamer.digital/operations/testnet-deployment/) | Live outpoints and registry values |
-| [Governance runbook](https://ckb-firewall.drreamer.digital/operations/governance-runbook/) | Multi-party update coordination |
-| [Private registry](https://ckb-firewall.drreamer.digital/operations/private-registry/) | Multi-registry deployment and self-managed blacklist registries |
+| [Testnet deployment](https://ckb-firewall.drreamer.digital/reference/testnet-deployment/) | Live outpoints and registry values |
+| [Glossary](https://ckb-firewall.drreamer.digital/reference/glossary/) | Key terms and definitions |
 
 ---
 
