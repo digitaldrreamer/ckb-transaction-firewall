@@ -81,7 +81,7 @@ All remote RPC calls require HTTPS. The CLI enforces this at the call site and w
 | H1 | High | Fixed | governance-lock module comment vs. implementation mismatch |
 | H2 | High | Fixed | HTTPS not enforced (now throws) |
 | H3 | High | Fixed | Review window now enforced on-chain via GOV1 v4 + CKB `since` |
-| M1 | Medium | Open | `VOTE_THRESHOLD` hardcoded at 3 in `proposals.ts`; on-chain threshold not read for vote approval |
+| M1 | Medium | Fixed | `isVoteApproved` now accepts on-chain threshold from governance header; `execute` passes it after loading registry state |
 | M2 | Medium | Removed | `placeholderSigners` in `sign.ts` — `sign` command deleted in v0.4.0 |
 | M3 | Medium | Fixed | `proposalPath` lacked hex format validation |
 | M4 | Medium | Accepted | Vote timestamp uses local clock |
@@ -90,7 +90,7 @@ All remote RPC calls require HTTPS. The CLI enforces this at the call site and w
 | L2 | Low | Fixed | `flags` validation didn't guard against non-integer values |
 | L3 | Low | Removed | `registryIndex` not validated in `sign.ts` — `sign` command deleted in v0.4.0 |
 | L4 | Low | Fixed | `expiresAt * 1000` used Number instead of BigInt |
-| L6 | Low | Open | `header_deps: []` has no explanatory comment in `execute.ts`, `anchor.ts`, `reclaim.ts` |
+| L6 | Low | Fixed | `header_deps: []` comment added to `execute.ts`, `anchor.ts`, `reclaim.ts` explaining CKB consensus enforces `since` MTP |
 | L7 | Low | Accepted | `get_median_time` returns 0 on no header_deps (conservative) |
 
 ---

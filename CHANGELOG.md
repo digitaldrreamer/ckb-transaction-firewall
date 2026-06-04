@@ -2,6 +2,11 @@
 
 ## 2026-06-04
 
+### `@ckb-firewall/cli` v0.5.2
+
+- **Security (M1)**: `isVoteApproved` now accepts an optional `threshold` parameter (default: `VOTE_THRESHOLD`). `executeCommand` passes the on-chain threshold from the governance header after loading registry state — private registry operators with a non-default threshold no longer see incorrect "vote passed" results from the hardcoded value.
+- **Docs (L6)**: Added explanatory comments to `header_deps: []` in `execute.ts`, `anchor.ts`, and `reclaim.ts`. The `since` MTP delay is enforced by CKB consensus; no scripts in this project call `load_header()`, so `header_deps` is always empty.
+
 ### `@ckb-firewall/cli` v0.5.0
 
 - **`ckb-firewall config`** — new command that reads and writes `~/.ckb-firewall/config.json`. `--proposer <name>` sets the default proposer name non-interactively; running without flags shows current config and opens an interactive menu.
