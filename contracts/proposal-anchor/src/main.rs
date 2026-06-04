@@ -161,16 +161,20 @@ fn running_type_args() -> Result<AnchorArgs, SysError> {
         return Err(error::to_sys_error(error::INVALID_TYPE_ARGS));
     }
     let args_off = u32::from_le_bytes([raw[12], raw[13], raw[14], raw[15]]) as usize;
-    if args_off + 4 > raw.len() {
+    let args_data_start = args_off
+        .checked_add(4)
+        .ok_or_else(|| error::to_sys_error(error::INVALID_TYPE_ARGS))?;
+    if args_data_start > raw.len() {
         return Err(error::to_sys_error(error::INVALID_TYPE_ARGS));
     }
     let data_len = u32::from_le_bytes([raw[args_off], raw[args_off+1], raw[args_off+2], raw[args_off+3]]) as usize;
-    let end = args_off.checked_add(4).and_then(|v| v.checked_add(data_len))
+    let end = args_data_start
+        .checked_add(data_len)
         .ok_or_else(|| error::to_sys_error(error::INVALID_TYPE_ARGS))?;
     if end > raw.len() {
         return Err(error::to_sys_error(error::INVALID_TYPE_ARGS));
     }
-    AnchorArgs::parse(&raw[args_off + 4 .. end])
+    AnchorArgs::parse(&raw[args_data_start .. end])
 }
 
 fn matching_anchor_indices(source: Source, self_hash: &[u8; 32]) -> Result<Vec<usize>, SysError> {
