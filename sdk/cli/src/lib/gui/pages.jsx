@@ -55,19 +55,20 @@ function TFW_TreasuryBanner({ treasury, compact = false }) {
 function OverviewPage({ state, actions }) {
   const { proposals, registry, meta } = state;
   const now = Date.now() / 1000;
+  const reg = registry || [];
 
-  const activeReg = registry.filter(e => !e.expiresAt || Number(e.expiresAt) > now).length;
-  const expiredReg = registry.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
+  const activeReg = reg.filter(e => !e.expiresAt || Number(e.expiresAt) > now).length;
+  const expiredReg = reg.filter(e => e.expiresAt && Number(e.expiresAt) <= now).length;
 
   const open = proposals.filter(p => p.status === "pending-review" || p.status === "voting");
-  const action = open.filter(p => !(p.votes || []).some(v => v.pubkey === meta.yourPubkey));
+  const yourPk = (meta.yourPubkey || "").toLowerCase();
+  const action = open.filter(p => !yourPk || !(p.votes || []).some(v => (v.pubkey || "").toLowerCase() === yourPk));
   const recent = [...proposals]
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
     .slice(0, 6);
 
   // your-vote indicators
-  const yourPk = meta.yourPubkey;
-  const youHaventVoted = open.filter(p => !(p.votes || []).some(v => v.pubkey === yourPk));
+  const youHaventVoted = open.filter(p => !yourPk || !(p.votes || []).some(v => (v.pubkey || "").toLowerCase() === yourPk));
 
   return (
     <div className="tfw-page tfw-page--overview">
@@ -279,7 +280,7 @@ function RegistryPage({ state, actions }) {
 
       {filtered.length === 0 ? (
         <TFW_EmptyState
-          title={query ? "No matching entries" : (registry.length === 0 ? "Registry is empty" : "No active entries")}
+          title={query ? "No matching entries" : ((registry || []).length === 0 ? "Registry is empty" : "No active entries")}
           sub={
             query
               ? "Try a different search"
@@ -369,6 +370,7 @@ function ProposalsPage({ state, actions }) {
   const { proposals, registry, meta } = state;
   const [filter, setFilter] = React.useState("all");
   const [query, setQuery] = React.useState("");
+  const yourPk = (meta.yourPubkey || "").toLowerCase();
 
   const filtered = proposals
     .filter(p => {
@@ -376,8 +378,8 @@ function ProposalsPage({ state, actions }) {
       if (filter === "all") return true;
       if (filter === "action") {
         const isOpen = p.status === "pending-review" || p.status === "voting";
-        if (!meta.yourPubkey) return isOpen;
-        return isOpen && !(p.votes || []).some(v => v.pubkey === meta.yourPubkey);
+        if (!yourPk) return isOpen;
+        return isOpen && !(p.votes || []).some(v => (v.pubkey || "").toLowerCase() === yourPk);
       }
       return ds === filter;
     })
@@ -397,7 +399,7 @@ function ProposalsPage({ state, actions }) {
     const ds = TFW_displayStatus(p);
     counts[ds] = (counts[ds] || 0) + 1;
     if (p.status === "pending-review" || p.status === "voting") {
-      if (!meta.yourPubkey || !(p.votes || []).some(v => v.pubkey === meta.yourPubkey)) {
+      if (!yourPk || !(p.votes || []).some(v => (v.pubkey || "").toLowerCase() === yourPk)) {
         counts.action = (counts.action || 0) + 1;
       }
     }
