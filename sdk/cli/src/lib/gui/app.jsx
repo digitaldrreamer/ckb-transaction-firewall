@@ -192,7 +192,7 @@ function App() {
             </div>
             <div className="tfw-brand__text">
               <div className="tfw-brand__name">Transaction Firewall</div>
-              <div className="tfw-brand__sub">{state.meta?.cliVersion || "v0.4.0"} · validator console</div>
+              <div className="tfw-brand__sub">{state.meta?.cliVersion || "v0.5.0"} · validator console</div>
             </div>
           </div>
         </div>
@@ -328,6 +328,7 @@ function App() {
         subtitle="Will enter a 72-hour review window before voting opens."
       >
         <TFW_CreateForm
+          meta={state.meta}
           onSubmit={(p) => {
             dispatch({ type: "ADD_PROPOSAL", proposal: p });
             addToast("success", `Proposal #${p.id} created`);
