@@ -462,6 +462,7 @@ async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<obj
     signatures: {},
   };
 
+  proposal.status = "executed";
   saveProposal(proposal);
   return {
     ok: true,
