@@ -192,7 +192,7 @@ function App() {
             </div>
             <div className="tfw-brand__text">
               <div className="tfw-brand__name">Transaction Firewall</div>
-              <div className="tfw-brand__sub">{state.meta?.cliVersion || "v0.5.0"} · validator console</div>
+              <div className="tfw-brand__sub">{state.meta?.cliVersion} · validator console</div>
             </div>
           </div>
         </div>

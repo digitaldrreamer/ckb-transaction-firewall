@@ -1,6 +1,10 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { program } from "commander";
 import cfonts from "cfonts";
+
+const _require = createRequire(import.meta.url);
+const _version: string = (_require("../package.json") as { version: string }).version;
 import { inspectCommand, inspectDefaults } from "./commands/inspect.js";
 import { proposeCommand } from "./commands/propose.js";
 import { proposalsCommand } from "./commands/proposals.js";
@@ -30,7 +34,7 @@ function printBanner(): void {
 program
   .name("ckb-firewall")
   .description("Manage the CKB Transaction Firewall blacklist registry")
-  .version("0.5.0")
+  .version(_version)
   .addHelpCommand(false);
 
 // ── inspect ──────────────────────────────────────────────────────────────────
