@@ -251,7 +251,7 @@ ckb-firewall gui
 
 Press `Ctrl+C` to stop the server. The server uses the same `--rpc-url` and registry defaults as `inspect`.
 
-For a walkthrough of the GUI interface see [GUI mode](/guides/cli-gui/).
+For a walkthrough of the GUI interface see [GUI mode](/how-to/use-governance-gui/).
 
 ---
 

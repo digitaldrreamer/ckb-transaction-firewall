@@ -3,7 +3,7 @@ title: TypeScript SDK API
 description: Complete reference for all types, functions, and classes exported by @ckb-firewall/sdk.
 ---
 
-Complete reference for `@ckb-firewall/sdk`. For task-oriented usage patterns see [Pre-flight Check (TypeScript)](/guides/typescript-preflight/).
+Complete reference for `@ckb-firewall/sdk`. For task-oriented usage patterns see [Pre-flight Check (TypeScript)](/how-to/preflight-typescript/).
 
 ---
 
@@ -248,7 +248,7 @@ async function fetchRegistryPayload(
 ): Promise<RegistryPayload>
 ```
 
-Fetches the registry cell at the given outpoint via `get_live_cell` and parses its BLKL v2 data. Throws a plain `Error` (not a `FirewallSdkError`) if the cell is not live, the network is unreachable, or the payload fails to parse. See [error handling](/guides/typescript-preflight/#fetchregistrypayload-error-handling) for the recovery pattern.
+Fetches the registry cell at the given outpoint via `get_live_cell` and parses its BLKL v2 data. Throws a plain `Error` (not a `FirewallSdkError`) if the cell is not live, the network is unreachable, or the payload fails to parse. See [error handling](/how-to/preflight-typescript/#error-handling) for the recovery pattern.
 
 ---
 

@@ -3,7 +3,7 @@ title: Rust SDK API
 description: Complete reference for all types, functions, and errors exported by ckb-transaction-firewall-sdk.
 ---
 
-Complete reference for `ckb-transaction-firewall-sdk` (v0.3). For task-oriented usage patterns see [Pre-flight Check (Rust)](/guides/rust-preflight/).
+Complete reference for `ckb-transaction-firewall-sdk` (v0.3). For task-oriented usage patterns see [Pre-flight Check (Rust)](/how-to/preflight-rust/).
 
 Full Rustdoc is available on [docs.rs](https://docs.rs/ckb-transaction-firewall-sdk).
 
@@ -413,7 +413,7 @@ pub mod testnet {
 }
 ```
 
-Exposes the canonical testnet RPC URL, registry spec, and deployed contract outpoints. Only available when compiled with the `testnet` feature. See [Testnet Deployment](/operations/testnet-deployment/) for the current values.
+Exposes the canonical testnet RPC URL, registry spec, and deployed contract outpoints. Only available when compiled with the `testnet` feature. See [Testnet Deployment](/reference/testnet-deployment/) for the current values.
 
 ---
 
