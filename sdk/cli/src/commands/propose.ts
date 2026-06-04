@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import logSymbols from "log-symbols";
 import inquirer from "inquirer";
+import { loadConfig, saveConfig } from "../lib/config.js";
 import {
   computeProposalIdHash,
   computeVoteDigestHash,
@@ -253,15 +254,33 @@ export async function proposeCommand(opts: ProposeOptions): Promise<void> {
   if (opts.proposer?.trim()) {
     proposer = opts.proposer.trim();
   } else {
+    const config = loadConfig();
+    const savedName = config.proposerName;
     const { prop } = await inquirer.prompt<{ prop: string }>([
       {
         type: "input",
         name: "prop",
-        message: "Your name / identifier (proposer):",
+        message: "Proposer name:",
+        ...(savedName ? { default: savedName } : {}),
         validate: (v: string) => v.trim().length > 0 || "Required.",
       },
     ]);
     proposer = prop.trim();
+    if (proposer !== savedName) {
+      const { save } = await inquirer.prompt<{ save: boolean }>([
+        {
+          type: "confirm",
+          name: "save",
+          message: `Save "${proposer}" as your default proposer name?`,
+          default: true,
+        },
+      ]);
+      if (save) {
+        config.proposerName = proposer;
+        saveConfig(config);
+        process.stdout.write(chalk.dim(`  Default proposer saved (ckb-firewall config to change)\n`));
+      }
+    }
   }
 
   // ── create proposal ──────────────────────────────────────────────────────
