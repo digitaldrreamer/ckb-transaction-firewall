@@ -69,7 +69,7 @@ These codes are returned by `governance-lock` when a registry update transaction
 - `23` `UnsupportedRegistryVersion`
 - `24` `InvalidGovernanceWitness`
 - `25` `UnauthorizedGovernanceLock`
-- ~~`26`~~ — reserved (removed during development; not emitted by any contract)
+- ~~`26`~~ — intentional gap; skipped when `27` was assigned (never defined or emitted)
 - `27` `InvalidTypeId`
 - `28` `InvalidProposalCell` — the `PBLK` proposal cell data is malformed or does not match the registry transition
 
