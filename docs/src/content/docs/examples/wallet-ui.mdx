@@ -1,0 +1,30 @@
+---
+title: "Example: wallet-ui"
+description: A browser UI with live firewall decisions served by a local HTTP server.
+---
+
+**Location:** `examples/typescript/src/wallet-ui.ts`
+
+**Run:**
+```bash
+cd examples/typescript
+npm run wallet-ui
+open http://localhost:4173
+```
+
+**Environment variables:**
+
+| Variable | Default | Notes |
+|---|---|---|
+| `PORT` | `4173` | Local server port |
+| `CKB_RPC_URL` | `https://testnet.ckb.dev` | CKB node RPC URL |
+| `CANDIDATE_LOCK_ARGS` | governance key 0 | Pre-filled clean address |
+
+## What it demonstrates
+
+A minimal HTTP server (`http.createServer`) with a browser UI. The page has two buttons — one prefills a known clean address, the other prefills the first active blacklisted address from the live registry. Clicking **Check transfer** sends a POST to `/api/check`, which calls `preflightCheck` server-side and returns the result as JSON.
+
+**SDK patterns:**
+- Server-side `preflightCheck` per request — the SDK runs in the Node.js process, not in the browser
+- The registry payload is fetched once at startup and refreshed on each request
+- `firstActiveEntry` extracts the first non-expired blacklist entry for the "blocked" demo button

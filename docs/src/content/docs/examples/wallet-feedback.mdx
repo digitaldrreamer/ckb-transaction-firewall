@@ -1,0 +1,64 @@
+---
+title: "Example: wallet-feedback"
+description: A wallet send flow showing all three pre-flight outcomes — clean, blocked, and fail-closed.
+---
+
+**Location:** `examples/typescript/src/wallet-feedback.ts`
+
+**Run:**
+```bash
+cd examples/typescript
+npm run wallet
+```
+
+## What it demonstrates
+
+A wallet's send flow. The example builds three candidate transactions and runs each through `TransactionFirewall.checkTransaction` against the live testnet registry before any signing step is reached.
+
+**Outcome 1 — approved:** The recipient is not blacklisted. `result.ok === true`. The wallet proceeds to signing.
+
+**Outcome 2 — blocked (blacklisted recipient):** The recipient's lock args match an active entry in the live registry. `result.ok === false`, `result.code === 11`, `result.reason === "BlacklistedLockArgs"`. The wallet rejects the transaction before signing.
+
+**Outcome 3 — blocked (missing dep, fail-closed):** The transaction's `cellDeps` is empty — no registry dep. `result.ok === false`, `result.code === 8`, `result.reason === "MissingRegistryCellDep"`. The firewall is fail-closed: if the registry dep is missing, the transaction is blocked, not allowed.
+
+## SDK patterns
+
+- `findRegistryCell` — discovers the current registry outpoint via the CKB indexer
+- `parseRegistryPayload` — parses the BLKL v2 payload
+- `TransactionFirewall.checkTransaction` — resolves the registry from cell deps and checks outputs
+
+## Source
+
+```ts
+import { TransactionFirewall } from "@ckb-firewall/sdk";
+import { fetchLiveRegistry, firstActiveEntry, TESTNET_REGISTRY_SPEC } from "./live-registry.js";
+
+const registry = await fetchLiveRegistry();
+const firewall = new TransactionFirewall({ registries: [TESTNET_REGISTRY_SPEC] });
+
+// Outcome 1: clean recipient
+const clean = firewall.checkTransaction({
+  cellDeps: [registry.cellDep],
+  outputs: [{ lockArgs: "0x331cdd72ff9f7f22c53f9710d6639ca46de3ac06" }],
+});
+// clean.ok === true
+
+// Outcome 2: blacklisted recipient (first active entry from live registry)
+const activeEntry = firstActiveEntry(registry.payload);
+if (activeEntry) {
+  const blocked = firewall.checkTransaction({
+    cellDeps: [registry.cellDep],
+    outputs: [{ lockArgs: activeEntry }],
+  });
+  // blocked.ok === false, blocked.code === 11
+}
+
+// Outcome 3: missing registry dep — fail-closed
+const missingDep = firewall.checkTransaction({
+  cellDeps: [],
+  outputs: [{ lockArgs: "0x331cdd72ff9f7f22c53f9710d6639ca46de3ac06" }],
+});
+// missingDep.ok === false, missingDep.code === 8
+```
+
+See [TypeScript SDK API](/reference/typescript-sdk/) for full type signatures.

@@ -1,0 +1,47 @@
+---
+title: "Example: preflight-service (Rust)"
+description: A Rust backend transaction service that checks candidates and forwards only clean ones to the signing queue.
+---
+
+**Location:** `examples/rust/src/bin/preflight_service.rs`
+
+**Run:**
+```bash
+cd examples/rust
+cargo run --bin preflight_service
+```
+
+## What it demonstrates
+
+A custodian or relayer service in Rust that:
+1. Fetches the live registry via HTTP (`ureq`) using `get_cells` to discover the current outpoint
+2. Parses the BLKL v2 payload with `parse_registry_payload`
+3. Checks three candidate transactions with `check_transaction`
+4. Accepts clean candidates, rejects blacklisted ones, and rejects missing-dep transactions (fail-closed)
+
+Outputs:
+
+```
+candidate-payment: accepted for signing
+blacklisted-payment: rejected — BlacklistedLockArgs (code -11)
+missing-registry-dep: rejected — MissingRegistryCellDep (code -8)
+```
+
+If the live registry has no active entries, the blacklisted-payment branch is reported as unavailable rather than fabricated.
+
+## SDK patterns
+
+- Manual `get_cells` RPC call to discover registry outpoint (no `findRegistryCell` in Rust SDK — implement using the indexer directly)
+- `parse_registry_payload` to parse the fetched cell data bytes
+- `check_transaction` with `now_secs` for time-based entry evaluation
+
+## Production note
+
+This example uses a local path dependency (`../../sdk/rust`). In a real project, use the published crate:
+
+```toml
+[dependencies]
+ckb-transaction-firewall-sdk = "0.3"
+```
+
+See [Rust SDK API](/reference/rust-sdk/) for full type signatures and [Pre-flight check in Rust](/how-to/preflight-rust/) for the complete how-to.
