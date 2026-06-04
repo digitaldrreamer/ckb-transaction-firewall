@@ -208,7 +208,11 @@ export async function executeCommand(opts: ExecuteOptions): Promise<void> {
     // Re-check vote threshold using the on-chain value from the governance header.
     // The earlier check used the hardcoded default (VOTE_THRESHOLD); this catches
     // private registries deployed with a non-default threshold.
-    const onChainThreshold = state.governanceHeader?.threshold ?? VOTE_THRESHOLD;
+    if (!state.governanceHeader) {
+      spinner.fail("Could not parse governance header from registry cell — cannot verify vote authorization.");
+      process.exit(1);
+    }
+    const onChainThreshold = state.governanceHeader.threshold;
     if (!isVoteApproved(proposal, onChainThreshold)) {
       spinner.fail(`Vote threshold not met — on-chain requires ${onChainThreshold} yes votes, got ${proposal.votes.filter(v => v.vote === "yes").length}.`);
       process.exit(1);
