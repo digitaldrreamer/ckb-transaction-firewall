@@ -8,3 +8,5 @@ deploy/
 .llm/
 .codex
 notes/internal/
+gov_anchor_tx*.json
+gov_execute_tx*.json
