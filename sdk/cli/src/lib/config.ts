@@ -24,6 +24,10 @@ export function loadConfig(): CliConfig {
 
 export function saveConfig(config: CliConfig): void {
   const path = getConfigPath();
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(config, null, 2) + "\n", "utf8");
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(config, null, 2) + "\n", "utf8");
+  } catch (err) {
+    throw new Error(`Failed to write config file at ${path}: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
