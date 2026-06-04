@@ -1,0 +1,54 @@
+---
+title: "Step 5: Share Your Vote and Learn About Execute"
+description: Export the updated proposal to share with other validators, and understand when and how execute completes the governance round.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Share your vote
+
+Your vote is stored locally. To let other validators import it, export the updated proposal:
+
+```bash
+ckb-firewall export --proposal tutorial-abc123 --out proposal-tutorial-voted.json
+```
+
+Send `proposal-tutorial-voted.json` to the other governance participants. When they import it, the vote is merged into their local copy:
+
+```bash
+ckb-firewall import proposal-tutorial-voted.json
+```
+
+This is how vote state accumulates without a shared server. Participants pass the proposal JSON file back and forth, merging votes, until the threshold is met.
+
+## When execute runs
+
+Once the proposal has:
+1. Been anchored on-chain as a `PBLK` cell (done by the proposer with `ckb-firewall anchor`)
+2. Aged on-chain for at least 72 hours (enforced by CKB consensus via the `since` field)
+3. Accumulated threshold-many validator yes-votes (3 of 5 on the canonical registry)
+
+Any participant can run:
+
+```bash
+ckb-firewall execute --proposal <id>
+```
+
+`execute` does not require a private key for treasury-backed registries. It fetches the proposal anchor cell, verifies all vote signatures and Merkle proofs, builds the GOV1 v4 governance transaction, and submits it. If everything is valid, the registry cell is updated on-chain.
+
+## What you built
+
+You now know how to:
+- Import a proposal shared by another participant
+- Understand what the proposal fields commit to and why they are immutable
+- Cast a signed validator vote
+- Export the updated proposal to share your vote
+
+## Go deeper
+
+<CardGrid>
+  <LinkCard href="/how-to/create-proposal/" title="How to create a proposal" description="The proposer side: create a new blacklist addition or removal." />
+  <LinkCard href="/how-to/anchor-proposal/" title="How to anchor a proposal" description="Lock the proposal on-chain to start the review window." />
+  <LinkCard href="/how-to/execute-proposal/" title="How to execute an approved proposal" description="Run the execute transaction after the window and threshold are met." />
+  <LinkCard href="/concepts/governance-design/" title="Governance design" description="Why the system is designed the way it is — on-chain anchors, Merkle trees, keyless treasury." />
+</CardGrid>

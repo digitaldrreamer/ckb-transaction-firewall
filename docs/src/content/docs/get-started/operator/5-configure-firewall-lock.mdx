@@ -1,0 +1,72 @@
+---
+title: "Step 5: Configure a Firewall Lock"
+description: Build a FirewallLockConfig pointing at your new registry and verify the lock args encode correctly.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Now that your registry is live, configure a firewall lock that consults it.
+
+```ts
+import { buildFirewallLockScript } from "@ckb-firewall/sdk";
+
+const lockScript = buildFirewallLockScript({
+  // The deployed firewall-lock code hash (from deploy/info.json)
+  firewallCodeHash: "<firewall-lock code hash>",
+  firewallHashType: "type",
+
+  // bit 0 = check lock_args, bit 1 = check type_args. 0x03 = both.
+  flags: 0x03,
+
+  registries: [
+    {
+      // The blacklist-registry code hash (from deploy/info.json)
+      codeHash:    "<blacklist-registry code hash>",
+      hashType:    "type",
+      // The type_id_value from Step 2 — stable across all governance updates
+      typeIdValue: "<your registry type_id_value>",
+      required:    true,
+    },
+  ],
+
+  // The spawn-aware-secp256k1 inner lock
+  innerCodeHash: "0x9be62e0423d4278b15c071bb881a4ebf936f7e46b3df0f152de50ae416f54465",
+  innerHashType: "type",
+  // 20-byte blake160 hash of the wallet's compressed secp256k1 pubkey
+  innerArgs: "0x<pubkey-hash>",
+});
+
+console.log("Lock script:", JSON.stringify(lockScript, null, 2));
+console.log("Args length:", (lockScript.args.length - 2) / 2, "bytes");
+```
+
+Expected output:
+
+```json
+{
+  "codeHash": "0x...",
+  "hashType": "type",
+  "args": "0x02030102..."
+}
+Args length: 124 bytes
+```
+
+124 bytes is correct for a v2 lock args with one registry spec and a 20-byte secp256k1 pubkey hash. See [Firewall lock args](/reference/firewall-lock-args/) for the full encoding.
+
+This lock script is what you use as the `lock` field when creating a wallet cell. Any spend of a cell with this lock will enforce your private registry's blacklist at consensus.
+
+## What you have built
+
+Your private registry is:
+- Live on CKB testnet with a verified governance round
+- Funded by an autonomous treasury (no private key needed for future governance)
+- Consulted by firewall lock args that embed your `type_id_value`
+
+## Next steps
+
+<CardGrid>
+  <LinkCard href="/how-to/deploy-private-registry/" title="Full deployment reference" description="The complete deployment how-to with all options, edge cases, and production considerations." />
+  <LinkCard href="/how-to/deploy-treasury/" title="Treasury management" description="Seeding, monitoring, and maintaining the treasury pool." />
+  <LinkCard href="/concepts/before-you-adopt/" title="Before you adopt" description="Operational consequences — address migration, immutable lock args, update timing." />
+  <LinkCard href="/concepts/trust-model-and-guarantees/" title="Trust model" description="What your registry guarantees and what it does not." />
+</CardGrid>

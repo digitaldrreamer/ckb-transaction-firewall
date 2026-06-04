@@ -1,0 +1,37 @@
+---
+title: Add Blacklist Pre-flight Checking
+description: A complete tutorial for integration developers — fetch the live registry and check transaction outputs before signing.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+In this tutorial, we will add blacklist pre-flight checking to a TypeScript application. By the end, we will have code that:
+
+1. Fetches the live blacklist registry from CKB testnet
+2. Checks a list of outputs and blocks any that match a blacklisted address
+3. Recovers gracefully when the registry cell moves after a governance update
+
+Here is what the final output looks like:
+
+```
+✓ Registry loaded: 2 active entries
+✓ Output 0x331cdd72... → clean
+✗ Output 0xababababab... → BlacklistedLockArgs (code 11)
+✓ Registry refresh after stale outpoint → 2 active entries
+```
+
+**Prerequisites:** Node.js 20 or later, an internet connection to reach `https://testnet.ckb.dev`.
+
+**What you do not need:** a CKB private key, testnet funds, or any on-chain account. All checks in this tutorial are read-only.
+
+<Aside type="tip">
+If you want to understand *why* the two-layer model works before building with it, read [The two-layer model](/concepts/two-layer-model/) first. It takes about 5 minutes and makes the rest of this tutorial click.
+</Aside>
+
+<Steps>
+1. [Install the SDK](/get-started/integration/1-install/)
+2. [Fetch the live registry](/get-started/integration/2-fetch-registry/)
+3. [Check transaction outputs](/get-started/integration/3-check-transaction/)
+4. [Handle a stale registry cell](/get-started/integration/4-handle-errors/)
+5. [Where to go next](/get-started/integration/5-what-next/)
+</Steps>

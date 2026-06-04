@@ -1,0 +1,74 @@
+---
+title: "Step 4: Handle a Stale Registry Cell"
+description: Trigger and recover from the "is not live" error that happens when the registry cell moves after a governance update.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The most common production failure is a stale registry cell: the outpoint you cached was consumed by a governance update, and `fetchRegistryPayload` throws because that cell no longer exists.
+
+We will simulate this by passing a deliberately wrong transaction hash, then write the recovery pattern.
+
+Replace `check.ts` with:
+
+```ts
+import { findRegistryCell, fetchRegistryPayload, preflightCheck } from "@ckb-firewall/sdk";
+
+const RPC_URL = "https://testnet.ckb.dev";
+
+const REGISTRY_SPEC = {
+  codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
+  hashType:    "type" as const,
+  typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
+  required:    true,
+};
+
+// Simulate a stale cached outpoint
+let cachedTxHash = "0x0000000000000000000000000000000000000000000000000000000000000000";
+let cachedIndex = 0;
+
+async function loadRegistry() {
+  try {
+    return await fetchRegistryPayload(RPC_URL, cachedTxHash, cachedIndex);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("is not live")) {
+      console.log("Registry cell is stale — rediscovering via indexer...");
+      const fresh = await findRegistryCell(RPC_URL, REGISTRY_SPEC);
+      cachedTxHash = fresh.txHash;
+      cachedIndex = fresh.index;
+      return await fetchRegistryPayload(RPC_URL, cachedTxHash, cachedIndex);
+    }
+    throw err;
+  }
+}
+
+const registry = await loadRegistry();
+console.log(`Registry loaded: ${registry.entries.length} active entries`);
+console.log(`Current outpoint: ${cachedTxHash}:${cachedIndex}`);
+
+const result = preflightCheck([{ lockArgs: "0x331cdd72ff9f7f22c53f9710d6639ca46de3ac06" }], [registry]);
+console.log(result.ok ? "✓ Output is clean" : `✗ Blocked: ${result.reason}`);
+```
+
+Run it:
+
+```bash
+npx tsx check.ts
+```
+
+Expected output:
+
+```
+Registry cell is stale — rediscovering via indexer...
+Registry loaded: 2 active entries
+Current outpoint: 0xa3dcb46f...:0
+✓ Output is clean
+```
+
+The recovery pattern is: catch "is not live", call `findRegistryCell` to get the fresh outpoint, update your cache, and retry. Your application can then persist the fresh outpoint for subsequent calls.
+
+<Aside type="caution" title="Always use findRegistryCell in production">
+Hardcoding the registry outpoint means your application breaks silently after a governance update. Use `findRegistryCell` to discover the current outpoint, or subscribe to registry update events if your architecture supports it.
+</Aside>
+
+Continue to [Step 5](/get-started/integration/5-what-next/).

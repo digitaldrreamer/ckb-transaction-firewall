@@ -1,0 +1,41 @@
+---
+title: "Step 1: Deploy the Contracts"
+description: Build and deploy the four firewall contracts to CKB testnet.
+---
+
+From the repository root, build and deploy all four contracts in one command:
+
+```bash
+./scripts/deploy.sh \
+  --network testnet \
+  --rpc-url https://testnet.ckb.dev \
+  --from-address <YOUR_CKT1_ADDRESS>
+```
+
+This builds the RISC-V contract binaries and deploys:
+- [`governance-lock`](/reference/glossary/#governance-lock) — verifies [validator](/reference/glossary/#validator) votes and enforces the [review window](/reference/glossary/#review-window)
+- [`blacklist-registry`](/reference/glossary/#blacklist-registry) — validates [BLKL v2](/reference/blkl-format/) registry payload updates
+- [`proposal-anchor`](/reference/proposal-anchor/) — type script for [treasury-funded](/reference/glossary/#treasury-lock) [`PBLK`](/reference/pblk-cell/) proposal cells
+- [`firewall-lock`](/reference/glossary/#firewall-lock) — the lock script that protects [firewall-protected cells](/reference/glossary/#firewall-protected-cell)
+
+The script writes deployment metadata to `deploy/info.json` and migration files to `deploy/migrations/`.
+
+After the command completes:
+
+```bash
+cat deploy/info.json | python3 -m json.tool | grep -A3 "tx_hash"
+```
+
+You should see tx hashes for each deployed contract. Confirm they are live:
+
+```bash
+TX="<governance-lock tx_hash from info.json>"
+ckb-cli --url https://testnet.ckb.dev rpc get_transaction \
+  --hash "$TX" --output-format json | python3 -m json.tool | grep '"status"'
+```
+
+Expected: `"status": "committed"`.
+
+Record the [Type IDs](/reference/glossary/#type-id) for each contract — you will need them in the next steps. They are in `deploy/info.json` under each contract's `type_id` field.
+
+Continue to [Step 2](/get-started/operator/2-bootstrap-registry/).

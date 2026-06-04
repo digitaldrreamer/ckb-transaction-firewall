@@ -1,0 +1,62 @@
+---
+title: "Step 2: Bootstrap the Registry and Treasury"
+description: Create the first BLKL v2 registry cell and treasury seed in one transaction.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The bootstrap transaction creates two cells in a single on-chain operation:
+- The **registry cell** (output index 0) — a BLKL v2 payload with the governance header and an empty blacklist
+- The **treasury seed cell** (output index 1) — the initial CKB pool that funds governance operations
+
+The bootstrap also establishes the [`type_id_value`](/reference/glossary/#type_id_value) — the stable identity of your registry — by hashing the first input outpoint and output index. This value never changes.
+
+## Build the CLI SDK
+
+The bootstrap script depends on the compiled CLI SDK:
+
+```bash
+cd sdk/cli && npm install && npm run build && cd ../..
+```
+
+## Run the bootstrap script
+
+```bash
+node scripts/build_treasury_bootstrap_tx.mjs deploy/bootstrap-tx.json
+```
+
+The script:
+1. Fetches a live funding UTXO from your wallet
+2. Computes the validator [Merkle root](/reference/glossary/#validator-merkle-root) from the configured pubkey set
+3. Encodes the [BLKL v2](/reference/blkl-format/) governance header and empty payload
+4. Builds a [GOV1 v4 witness](/reference/gov1-witness/) binding the initial state
+5. Writes an unsigned transaction to `deploy/bootstrap-tx.json`
+
+<Aside type="note" title="Adapting for a private registry">
+The script reads validator pubkeys and governance lock outpoints from `sdk/cli/dist/lib/defaults.js` — the canonical testnet committee. To deploy a private registry with your own validator set, edit the `TESTNET_GOVERNANCE_PUBKEYS` array and the governance lock outpoints in a copy of the script before running it.
+</Aside>
+
+## Sign and submit
+
+```bash
+# Sign with your CKB private key
+ckb-cli --url https://testnet.ckb.dev tx sign-inputs \
+  --tx-file deploy/bootstrap-tx.json \
+  --add-signatures
+
+# Submit
+ckb-cli --url https://testnet.ckb.dev tx send \
+  --tx-file deploy/bootstrap-tx.json
+```
+
+Record the transaction hash printed by `send`.
+
+## Confirm on-chain
+
+Wait for the transaction to confirm (~30 seconds on testnet), then continue to [Step 3](/get-started/operator/3-deploy-treasury/).
+
+## Background reading
+
+- [Registry and cell design](/concepts/registry-design/) — why [Type ID](/reference/glossary/#type-id) is used and what `type_id_value` means for governance updates
+- [The autonomous treasury model](/concepts/treasury-design/) — why the registry cell and treasury seed are bootstrapped together
+- [BLKL v2 Format](/reference/blkl-format/) — the binary format of the registry payload you are initializing

@@ -1,0 +1,30 @@
+---
+title: "Step 3: Review the Proposal"
+description: Understand what a proposal commits to and why the proposalIdHash is immutable.
+---
+
+Before voting, inspect the proposal:
+
+```bash
+ckb-firewall proposals --status voting
+```
+
+This shows proposals that are currently open for voting. Notice the fields:
+
+- **Action** — `add`, `remove`, or `set-treasury`. This tutorial uses `add`.
+- **Lock args** — the address being proposed for the blacklist
+- **Evidence** — a URL or description linking to the evidence that supports this proposal
+- **Classification** — the threat type: `theft`, `scam`, `hack`, `sanctions`, or `other`
+- **Severity** — `critical`, `high`, `medium`, or `low`
+- **Rationale** — the proposer's written case
+
+All of these fields are combined and hashed into the `proposalIdHash`. **No field can be changed after the proposal is created.** Any modification produces a different hash, which invalidates all votes for that proposal. This is what makes the vote record tamper-evident: a vote signed against `proposalIdHash = 0xabc...` only authorizes that specific proposal.
+
+The `voteDigestHash` is a rolling commitment to the set of votes cast so far. It starts as the zero hash and updates as validators add their votes. When `execute` runs, it recomputes this hash from the stored votes and checks it matches — catching any tampering with the vote records.
+
+When you have reviewed the proposal and are satisfied with its evidence and rationale, continue to [Step 4](/get-started/validator/4-vote/).
+
+## Background reading
+
+- [Governance design](/concepts/governance-design/) — why the on-chain anchor and review window enforce these properties
+- [PBLK Proposal Cell](/reference/pblk-cell/) — exact encoding of the proposal cell and its fields
