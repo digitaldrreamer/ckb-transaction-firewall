@@ -35,8 +35,8 @@ function validateAndRepair(raw: unknown): Proposal {
       throw new Error(`Missing or invalid field: "${key}"`);
     }
   }
-  if (!Array.isArray(p.votes) || !Array.isArray(p.signatures)) {
-    throw new Error("Fields 'votes' and 'signatures' must be arrays.");
+  if (!Array.isArray(p.votes)) {
+    throw new Error("Field 'votes' must be an array.");
   }
 
   if (p.action !== "add" && p.action !== "remove") {
@@ -53,14 +53,6 @@ function validateAndRepair(raw: unknown): Proposal {
     const vv = v as Record<string, unknown>;
     if (typeof vv.pubkey !== "string" || typeof vv.vote !== "string" || typeof vv.signature !== "string" || typeof vv.timestamp !== "string") {
       throw new Error("Vote entries must have string fields: pubkey, vote, signature, timestamp.");
-    }
-  }
-
-  for (const s of p.signatures as unknown[]) {
-    if (typeof s !== "object" || s === null) throw new Error("Invalid signature entry: not an object.");
-    const ss = s as Record<string, unknown>;
-    if (typeof ss.signerIndex !== "number" || typeof ss.signature !== "string") {
-      throw new Error("Signature entries must have signerIndex (number) and signature (string).");
     }
   }
 
@@ -132,47 +124,22 @@ export async function importCommand(opts: ImportOptions): Promise<void> {
     }
 
     if (existing.proposalIdHash === proposal.proposalIdHash) {
-      // Signatures freeze the vote digest — once signing has begun, votes must not change
-      // or existing signatures become invalid for the new voteDigestHash.
-      const signingStarted = existing.signatures.length > 0 || proposal.signatures.length > 0;
-
-      let mergedVotes: typeof existing.votes;
-      let mergedVoteDigest: string;
-      if (signingStarted) {
-        // Preserve whichever side has signatures; don't alter its vote set.
-        mergedVotes = existing.signatures.length > 0 ? existing.votes : proposal.votes;
-        mergedVoteDigest = existing.signatures.length > 0 ? existing.voteDigestHash : proposal.voteDigestHash;
-        if (existing.votes.length !== proposal.votes.length) {
-          process.stderr.write(
-            `Note: votes not merged for proposal ${proposal.id} — signing has already begun and the vote digest is frozen.\n`,
-          );
+      const votesByPubkey = new Map(existing.votes.map((v) => [v.pubkey.toLowerCase(), v]));
+      for (const v of proposal.votes) {
+        const key = v.pubkey.toLowerCase();
+        const prev = votesByPubkey.get(key);
+        if (!prev || v.timestamp > prev.timestamp) {
+          votesByPubkey.set(key, v);
         }
-      } else {
-        // No signatures yet — merge votes freely, preferring the newer entry per validator.
-        const votesByPubkey = new Map(existing.votes.map((v) => [v.pubkey.toLowerCase(), v]));
-        for (const v of proposal.votes) {
-          const key = v.pubkey.toLowerCase();
-          const prev = votesByPubkey.get(key);
-          if (!prev || v.timestamp > prev.timestamp) {
-            votesByPubkey.set(key, v);
-          }
-        }
-        mergedVotes = [...votesByPubkey.values()];
-        mergedVoteDigest = computeVoteDigestHash(mergedVotes);
       }
-
-      // Incoming signature always replaces existing for the same signer index.
-      const sigBySigner = new Map(existing.signatures.map((s) => [s.signerIndex, s]));
-      for (const s of proposal.signatures) {
-        sigBySigner.set(s.signerIndex, s);
-      }
-      const mergedSigs = [...sigBySigner.values()];
+      const mergedVotes = [...votesByPubkey.values()];
+      const mergedVoteDigest = computeVoteDigestHash(mergedVotes);
 
       const merged: Proposal = {
         ...proposal,
         votes: mergedVotes,
         voteDigestHash: mergedVoteDigest,
-        signatures: mergedSigs,
+        signatures: [],
         // Keep the more advanced status.
         status: rankStatus(existing.status) >= rankStatus(proposal.status)
           ? existing.status
@@ -182,9 +149,7 @@ export async function importCommand(opts: ImportOptions): Promise<void> {
       saveProposal(merged);
       console.log();
       console.log(logSymbols.success, `Proposal ${chalk.bold(proposal.id)} merged.`);
-      const votesNote = signingStarted ? "frozen — signing started" : `${mergedVotes.length - existing.votes.length} new`;
-      console.log(`  Votes:      ${mergedVotes.length} (${votesNote})`);
-      console.log(`  Signatures: ${mergedSigs.length} (${mergedSigs.length - existing.signatures.length} new)`);
+      console.log(`  Votes: ${mergedVotes.length} (${mergedVotes.length - existing.votes.length} new)`);
       console.log();
       return;
     }
@@ -206,15 +171,13 @@ export async function importCommand(opts: ImportOptions): Promise<void> {
   console.log(logSymbols.success, `Proposal ${chalk.bold(proposal.id)} imported.`);
   console.log(`  Action: ${proposal.action} ${chalk.dim(proposal.lockArgs.slice(0, 36))}${proposal.lockArgs.length > 36 ? "…" : ""}`);
   console.log(`  Status: ${proposal.status}`);
-  console.log(`  Votes:  ${proposal.votes.length}  Signatures: ${proposal.signatures.length}`);
+  console.log(`  Votes:  ${proposal.votes.length}`);
   console.log();
   console.log(chalk.dim("  Next steps:"));
   if (proposal.status === "pending-review" || proposal.status === "voting") {
     console.log(chalk.dim(`    ckb-firewall vote --proposal ${proposal.id}`));
   }
-  if (proposal.status === "approved") {
-    console.log(chalk.dim(`    ckb-firewall sign --proposal ${proposal.id}`));
-  }
+  if (proposal.status === "approved") console.log(chalk.dim(`    ckb-firewall execute --proposal ${proposal.id}`));
   console.log();
 }
 

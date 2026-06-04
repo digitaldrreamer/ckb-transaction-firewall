@@ -1,0 +1,45 @@
+---
+title: "Fix: In-flight Transaction Fails After a Governance Update"
+description: Recover when a pending transaction is rejected by miners because the registry cell it referenced was consumed.
+---
+
+## Symptom
+
+A transaction that was pre-flight checked successfully is later rejected at the miner level. The error from `ckb-cli` or your broadcast client is a "Dead reference" or "TransactionFailedToResolve" error indicating a consumed cell dep.
+
+## Cause
+
+Between when you built the transaction (with a registry cell dep) and when it was mined, a governance update confirmed. The governance transaction consumed the registry cell your transaction referenced as a dep. From the miners' perspective, your transaction's cell dep no longer exists.
+
+## Fix
+
+Rebuild the transaction with the current registry cell outpoint:
+
+1. Discover the new outpoint:
+   ```ts
+   const { txHash, index } = await findRegistryCell(rpcUrl, registrySpec);
+   ```
+
+2. Re-fetch the registry payload:
+   ```ts
+   const registry = await fetchRegistryPayload(rpcUrl, txHash, index);
+   ```
+
+3. Re-run the pre-flight check with the updated registry:
+   ```ts
+   const result = preflightCheck(outputs, [registry]);
+   ```
+
+4. Re-build the transaction with the new cell dep outpoint and re-sign.
+
+If the address you were sending to was not blacklisted before but is now — because the governance update added it — the pre-flight check will catch that before you re-sign.
+
+## Prevent future occurrences
+
+This failure mode is inherent to the single-cell registry model — one governance update invalidates all in-flight transactions that reference the old cell. Mitigations:
+
+- **Subscribe to registry updates.** If your application architecture supports it, listen for governance transactions and proactively rebuild any pending transactions when the registry cell changes.
+- **Keep the time between build and broadcast short.** The longer a transaction sits unsigned, the higher the chance a governance update occurs in that window.
+- **Coordinate governance updates.** Registry operators should announce upcoming governance updates and submit them at low-traffic periods to minimize the number of affected in-flight transactions.
+
+See [Registry design](/concepts/registry-design/) for a full discussion of the single-cell model and its implications.

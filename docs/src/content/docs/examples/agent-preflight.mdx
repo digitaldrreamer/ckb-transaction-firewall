@@ -1,0 +1,34 @@
+---
+title: "Example: agent-preflight"
+description: An AI agent with a payment tool gated by the firewall — the agent cannot bypass the check.
+---
+
+**Location:** `examples/typescript/src/agent-preflight.ts`
+
+**Run:**
+```bash
+export MISTRAL_API_KEY=sk-...
+cd examples/typescript
+npm run agent
+```
+
+**Environment variables:**
+
+| Variable | Required | Notes |
+|---|---|---|
+| `MISTRAL_API_KEY` | Yes | Mistral API key for `mistral-large-latest` |
+| `CKB_RPC_URL` | No | Defaults to `https://testnet.ckb.dev` |
+
+## What it demonstrates
+
+A Mistral `mistral-large-latest` agent (via the [Vercel AI SDK](https://sdk.vercel.ai)) is given a `proposePayment` tool. The tool:
+
+1. Receives a recipient lock args and an amount from the agent's reasoning
+2. Fetches the live registry
+3. Runs `preflightCheck` against the recipient
+4. Throws if the recipient is blacklisted
+5. Returns a payment proposal if the recipient is clean
+
+The firewall check is inside the tool implementation — not in the agent's system prompt, not in the agent's reasoning, not optional. If the agent is manipulated into proposing a blacklisted recipient, the tool throws before any payment proposal is produced.
+
+This models the correct way to gate an agent's financial actions: enforce the constraint in the tool, where it cannot be bypassed by prompt injection or adversarial instructions.

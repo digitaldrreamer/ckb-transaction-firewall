@@ -4,7 +4,7 @@ const {
   TFW_PROPOSALS, TFW_REGISTRY_ENTRIES, TFW_META,
   TFW_OverviewPage, TFW_RegistryPage, TFW_ProposalsPage,
   TFW_Modal, TFW_ProposalDetailContent, TFW_AddressDetailContent,
-  TFW_CreateForm, TFW_VoteForm, TFW_SignForm, TFW_ExecuteForm, TFW_ImportForm,
+  TFW_CreateForm, TFW_VoteForm, TFW_AnchorForm, TFW_ExecuteForm, TFW_ImportForm,
   TFW_ConnectionDot, TFW_Badge, TFW_StatusBadge, TFW_ActionPill, TFW_Toast,
   TFW_trunc, TFW_isReady, TFW_displayStatus,
 } = window;
@@ -26,18 +26,8 @@ function reducer(state, action) {
       });
       return { ...state, proposals };
     }
-    case "ADD_SIG": {
-      const proposals = state.proposals.map(p => {
-        if (p.id !== action.proposalId) return p;
-        const signatures = [...(p.signatures || []), {
-          signerIndex: action.signerIndex,
-          signature: action.signature,
-          timestamp: action.timestamp
-        }];
-        let status = p.status;
-        if (status === "voting") status = "approved";
-        return { ...p, signatures, status };
-      });
+    case "UPDATE_PROPOSAL": {
+      const proposals = state.proposals.map(p => p.id === action.proposal.id ? action.proposal : p);
       return { ...state, proposals };
     }
     case "EXECUTE": {
@@ -68,20 +58,23 @@ function reducer(state, action) {
       if (!existing) {
         return { ...state, proposals: [action.proposal, ...state.proposals] };
       }
-      // merge votes/sigs
+      // merge votes
       const votes = [
         ...(existing.votes || []),
         ...(action.proposal.votes || []).filter(v =>
           !(existing.votes || []).some(ev => ev.pubkey === v.pubkey)
         ),
       ];
-      const signatures = [
-        ...(existing.signatures || []),
-        ...(action.proposal.signatures || []).filter(s =>
-          !(existing.signatures || []).some(es => es.signerIndex === s.signerIndex)
-        ),
-      ];
-      const proposals = state.proposals.map(p => p.id === existing.id ? { ...p, votes, signatures } : p);
+      const proposals = state.proposals.map(p => p.id === existing.id ? {
+        ...p,
+        ...action.proposal,
+        votes,
+        signatures: [],
+        proposalDataHash: p.proposalDataHash || action.proposal.proposalDataHash,
+        reviewDelayMs: p.reviewDelayMs || action.proposal.reviewDelayMs,
+        proposalCellTxHash: p.proposalCellTxHash || action.proposal.proposalCellTxHash,
+        proposalCellIndex: p.proposalCellIndex ?? action.proposal.proposalCellIndex,
+      } : p);
       return { ...state, proposals };
     }
     case "SET_DATA":
@@ -90,7 +83,6 @@ function reducer(state, action) {
         proposals: action.proposals,
         registry: action.registry,
         meta: { ...action.meta,
-          yourSignerIndex: state.meta.yourSignerIndex || 0,
           yourPubkey: state.meta.yourPubkey },
       };
     default:
@@ -129,6 +121,9 @@ function App() {
           meta: Object.assign({}, d.meta || {}, {
             registryTxHash: d.registry && d.registry.txHash,
             registryError: d.registry && d.registry.error,
+            treasury: (d.registry && d.registry.treasury) || null,
+            threshold: (d.registry && d.registry.threshold) || null,
+            governanceSetSize: (d.registry && d.registry.validatorCount) || null,
           }),
         });
       })
@@ -149,7 +144,7 @@ function App() {
     openAddr:     (id) => setModal({ kind: "addr",     payload: id }),
     openCreate:   ()   => setModal({ kind: "create" }),
     openVote:     (id) => setModal({ kind: "vote",     payload: id }),
-    openSign:     (id) => setModal({ kind: "sign",     payload: id }),
+    openAnchor:   (id) => setModal({ kind: "anchor",   payload: id }),
     openExecute:  (id) => setModal({ kind: "execute",  payload: id }),
     openImport:   ()   => setModal({ kind: "import" }),
     exportProposal: (p) => {
@@ -170,7 +165,7 @@ function App() {
 
   // resolve proposal for active modal
   const modalProposal = useMemo(() => {
-    if (!modal || !["proposal", "vote", "sign", "execute"].includes(modal.kind)) return null;
+    if (!modal || !["proposal", "vote", "anchor", "execute"].includes(modal.kind)) return null;
     return state.proposals.find(p => p.id === modal.payload);
   }, [modal, state.proposals]);
 
@@ -190,14 +185,14 @@ function App() {
       <header className="tfw-header">
         <div className="tfw-header__left">
           <div className="tfw-brand">
-            <div className="tfw-brand__mark">
+              <div className="tfw-brand__mark">
               <span className="tfw-brand__mark-bar" />
               <span className="tfw-brand__mark-bar" />
               <span className="tfw-brand__mark-bar" />
             </div>
             <div className="tfw-brand__text">
               <div className="tfw-brand__name">Transaction Firewall</div>
-              <div className="tfw-brand__sub">{state.meta?.cliVersion || "v0.4.0"} · 3-of-5 multisig</div>
+              <div className="tfw-brand__sub">{state.meta?.cliVersion || "v0.4.0"} · validator console</div>
             </div>
           </div>
         </div>
@@ -246,7 +241,7 @@ function App() {
             <div className="tfw-you__avatar">{state.meta?.yourPubkey ? state.meta.yourPubkey.slice(2,4).toUpperCase() : "?"}</div>
             <div className="tfw-you__text">
               <div className="tfw-you__line1">{state.meta?.yourPubkey ? TFW_trunc(state.meta.yourPubkey, 16) : "anonymous"}</div>
-              <div className="tfw-you__line2 tfw-mono">SIGNER #{state.meta.yourSignerIndex}</div>
+              <div className="tfw-you__line2 tfw-mono">validator key</div>
             </div>
           </div>
         </div>
@@ -300,6 +295,7 @@ function App() {
           <TFW_ProposalDetailContent
             proposal={modalProposal}
             registry={state.registry}
+            meta={state.meta}
             actions={actions}
             onClose={closeModal}
           />
@@ -361,19 +357,20 @@ function App() {
       </TFW_Modal>
 
       <TFW_Modal
-        open={modal?.kind === "sign" && !!modalProposal}
+        open={modal?.kind === "anchor" && !!modalProposal}
         onClose={closeModal}
         size="md"
-        eyebrow={modalProposal ? `SIGN · PROPOSAL № ${modalProposal.id}` : ""}
-        title="Add multisig signature"
+        eyebrow={modalProposal ? `ANCHOR · PROPOSAL № ${modalProposal.id}` : ""}
+        title="Anchor proposal"
+        subtitle="Creates or records the on-chain proposal anchor used to enforce the review window."
       >
         {modalProposal && (
-          <TFW_SignForm
+          <TFW_AnchorForm
             proposal={modalProposal}
             meta={state.meta}
-            onSubmit={(s) => {
-              dispatch({ type: "ADD_SIG", ...s });
-              addToast("success", `Signature added by signer #${s.signerIndex}`);
+            onSubmit={(p) => {
+              dispatch({ type: "UPDATE_PROPOSAL", proposal: p });
+              addToast("success", p.proposalCellTxHash ? "Proposal cell outpoint recorded" : "Proposal cell data prepared");
             }}
             onClose={closeModal}
           />
@@ -390,7 +387,9 @@ function App() {
         {modalProposal && (
           <TFW_ExecuteForm
             proposal={modalProposal}
-            onSubmit={(pid) => {
+            meta={state.meta}
+            onSubmit={(result) => {
+              if (result.proposal) dispatch({ type: "UPDATE_PROPOSAL", proposal: result.proposal });
               addToast("success", "TX downloaded — broadcast it via ckb-cli to complete execution.");
             }}
             onClose={closeModal}

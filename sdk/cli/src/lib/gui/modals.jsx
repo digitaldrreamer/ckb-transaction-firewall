@@ -1,13 +1,21 @@
-// Modals: detail (proposal, address) and forms (create, vote, sign, execute, import)
+// Modals: detail (proposal, address) and forms (create, vote, anchor, execute, import)
 
 const {
   TFW_Badge, TFW_StatusBadge, TFW_ActionPill, TFW_SeverityChip,
-  TFW_VoteDots, TFW_SigDots, TFW_Address, TFW_ClassificationTag,
+  TFW_VoteDots, TFW_Address, TFW_ClassificationTag,
   TFW_CodeBlock, TFW_Stat,
   TFW_trunc, TFW_fmtDate, TFW_fmtDateShort, TFW_relTime, TFW_reviewCountdown,
-  TFW_countYes, TFW_countNo, TFW_countAbstain, TFW_sigCount,
+  TFW_countYes, TFW_countNo, TFW_countAbstain,
   TFW_reviewPassed, TFW_isReady, TFW_displayStatus,
 } = window;
+
+function safeUnixToISO(unixSeconds) {
+  try {
+    const num = Number(unixSeconds);
+    if (!num || isNaN(num) || num <= 0) return null;
+    return new Date(num * 1000).toISOString();
+  } catch { return null; }
+}
 
 // ─── Modal shell ─────────────────────────────────────────────────────────────
 function Modal({ open, onClose, eyebrow, title, subtitle, children, size = "md", footer }) {
@@ -53,8 +61,9 @@ function Modal({ open, onClose, eyebrow, title, subtitle, children, size = "md",
 }
 
 // ─── Proposal detail content ─────────────────────────────────────────────────
-function ProposalDetailContent({ proposal, registry, actions, onClose }) {
+function ProposalDetailContent({ proposal, registry, meta, actions, onClose }) {
   const p = proposal;
+  const [showAdvancedActions, setShowAdvancedActions] = React.useState(false);
   const reg = registry.find(e => e.identifier.toLowerCase() === p.lockArgs.toLowerCase());
   const now = Date.now() / 1000;
   const inReg = !!reg;
@@ -63,27 +72,21 @@ function ProposalDetailContent({ proposal, registry, actions, onClose }) {
   const yes = TFW_countYes(p);
   const no = TFW_countNo(p);
   const abs = TFW_countAbstain(p);
-  const sigs = TFW_sigCount(p);
   const review = TFW_reviewCountdown(p.reviewWindowEndsAt);
   const ds = TFW_displayStatus(p);
+  const yourPubkey = meta?.yourPubkey;
+  const hasVoted = yourPubkey
+    ? (p.votes || []).some(v => v.pubkey === yourPubkey)
+    : false;
+  const canVote = (p.status === "pending-review" || p.status === "voting") && !hasVoted;
+  const hasAdvancedActions = (
+    (!p.proposalCellTxHash && p.status !== "executed" && p.status !== "rejected") ||
+    TFW_isReady(p)
+  );
 
-  // pipeline steps
-  const steps = [
-    { key: "submit",   label: "Submitted",    done: true },
-    { key: "review",   label: "Review",       done: TFW_reviewPassed(p), active: !TFW_reviewPassed(p) },
-    { key: "vote",     label: "Vote",         done: yes >= 3, active: TFW_reviewPassed(p) && yes < 3 },
-    { key: "sign",     label: "Multisig",     done: sigs >= 3, active: TFW_reviewPassed(p) && yes >= 3 && sigs < 3 },
-    { key: "execute",  label: "Executed",     done: p.status === "executed", active: TFW_isReady(p) },
-  ];
-  if (p.status === "rejected") {
-    steps[2] = { key: "vote", label: "Vote", done: false, rejected: true };
-    steps[3] = { key: "sign", label: "Multisig", done: false };
-    steps[4] = { key: "execute", label: "Rejected", done: false, rejected: true };
-  }
-
-  // primary actions
+  // Primary validator actions
   const buttons = [];
-  if ((p.status === "pending-review" || p.status === "voting") && sigs === 0) {
+  if (canVote) {
     buttons.push(
       <button key="vote" type="button" className="tfw-btn tfw-btn--primary"
               onClick={() => { onClose(); actions.openVote(p.id); }}>
@@ -91,50 +94,16 @@ function ProposalDetailContent({ proposal, registry, actions, onClose }) {
       </button>
     );
   }
-  if (TFW_reviewPassed(p) && yes >= 3 && p.status !== "executed" && p.status !== "rejected" && !TFW_isReady(p)) {
-    buttons.push(
-      <button key="sign" type="button" className="tfw-btn tfw-btn--accent"
-              onClick={() => { onClose(); actions.openSign(p.id); }}>
-        Sign
-      </button>
-    );
-  }
-  if (TFW_isReady(p)) {
-    buttons.push(
-      <button key="exec" type="button" className="tfw-btn tfw-btn--accent"
-              onClick={() => { onClose(); actions.openExecute(p.id); }}>
-        Build &amp; download TX
-      </button>
-    );
-  }
   buttons.push(
     <button key="export" type="button" className="tfw-btn tfw-btn--ghost"
             onClick={() => actions.exportProposal(p)}>
-      ↓ Export JSON
+      Export JSON
     </button>
   );
 
   return (
     <div className="tfw-detail">
 
-      {/* Pipeline */}
-      <div className="tfw-pipeline">
-        {steps.map((s, i) => (
-          <React.Fragment key={s.key}>
-            <div className={`tfw-pipe-step${s.done ? " tfw-pipe-step--done" : ""}${s.active ? " tfw-pipe-step--active" : ""}${s.rejected ? " tfw-pipe-step--rejected" : ""}`}>
-              <div className="tfw-pipe-step__circle">
-                {s.done ? "✓" : s.rejected ? "✕" : i + 1}
-              </div>
-              <div className="tfw-pipe-step__label">{s.label}</div>
-            </div>
-            {i < steps.length - 1 && (
-              <div className={`tfw-pipe-conn${s.done ? " tfw-pipe-conn--done" : ""}`} />
-            )}
-          </React.Fragment>
-        ))}
-      </div>
-
-      {/* Top dossier */}
       <div className="tfw-dossier">
         <div className="tfw-dossier__row">
           <div className="tfw-dossier__label">ACTION</div>
@@ -158,12 +127,12 @@ function ProposalDetailContent({ proposal, registry, actions, onClose }) {
             {!inReg && <span className="tfw-dossier__none">Not on chain</span>}
             {inReg && isExpReg && (
               <TFW_Badge tone="red" size="sm">
-                expired — {TFW_fmtDateShort(new Date(Number(reg.expiresAt) * 1000).toISOString())}
+                expired — {TFW_fmtDateShort(safeUnixToISO(reg.expiresAt))}
               </TFW_Badge>
             )}
             {inReg && !isExpReg && reg.expiresAt && (
               <TFW_Badge tone="green" size="sm">
-                active — expires {TFW_fmtDateShort(new Date(Number(reg.expiresAt) * 1000).toISOString())}
+                active — expires {TFW_fmtDateShort(safeUnixToISO(reg.expiresAt))}
               </TFW_Badge>
             )}
             {inReg && !isExpReg && !reg.expiresAt && (
@@ -187,18 +156,16 @@ function ProposalDetailContent({ proposal, registry, actions, onClose }) {
           <div className="tfw-dossier__val tfw-mono">{TFW_fmtDate(p.submittedAt)} ({TFW_relTime(p.submittedAt)})</div>
         </div>
         <div className="tfw-dossier__row">
-          <div className="tfw-dossier__label">REVIEW ENDS</div>
+          <div className="tfw-dossier__label">REVIEW</div>
           <div className="tfw-dossier__val tfw-mono">
-            {TFW_fmtDate(p.reviewWindowEndsAt)}
-            {!review.done && <span style={{ color: "var(--c-amber)", marginLeft: 8 }}>({review.text} left)</span>}
-            {review.done && <span style={{ color: "var(--c-green)", marginLeft: 8 }}>(complete)</span>}
+            {review.done ? "complete" : `${review.text} left`}
           </div>
         </div>
         {p.expiresAt && p.expiresAt !== "0" && (
           <div className="tfw-dossier__row">
             <div className="tfw-dossier__label">ENTRY EXPIRES</div>
             <div className="tfw-dossier__val tfw-mono">
-              {TFW_fmtDate(new Date(Number(p.expiresAt) * 1000).toISOString())}
+              {TFW_fmtDate(safeUnixToISO(p.expiresAt))}
             </div>
           </div>
         )}
@@ -257,44 +224,36 @@ function ProposalDetailContent({ proposal, registry, actions, onClose }) {
         )}
       </div>
 
-      {/* Signatures */}
-      <div className="tfw-detail-sec">
-        <div className="tfw-detail-sec__head">
-          SIGNATURES <span className="tfw-detail-sec__meta">{sigs} / 3 required</span>
-        </div>
-        {sigs === 0 ? (
-          <div className="tfw-detail-sec__empty">No signatures yet.</div>
-        ) : (
-          <div className="tfw-list">
-            {p.signatures.map((s, i) => (
-              <div key={i} className="tfw-list-row">
-                <div className="tfw-list-row__sigidx tfw-mono">SIGNER #{s.signerIndex}</div>
-                <code className="tfw-mono tfw-list-row__id">{TFW_trunc(s.signature, 34)}</code>
-                <span className="tfw-list-row__time">{TFW_fmtDate(s.timestamp)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* CLI commands */}
-      <div className="tfw-detail-sec">
-        <div className="tfw-detail-sec__head">CLI COMMANDS</div>
-        {(p.status === "pending-review" || p.status === "voting") && (
-          <TFW_CodeBlock label="Vote on this proposal">{`ckb-firewall vote --proposal ${p.id}`}</TFW_CodeBlock>
-        )}
-        {(p.status === "approved" || (TFW_reviewPassed(p) && yes >= 3)) && p.status !== "executed" && (
-          <TFW_CodeBlock label="Sign (3-of-5 required)">{`ckb-firewall sign --proposal ${p.id}`}</TFW_CodeBlock>
-        )}
-        {TFW_isReady(p) && (
-          <TFW_CodeBlock label="Execute on-chain">{`ckb-firewall execute --proposal ${p.id}`}</TFW_CodeBlock>
-        )}
-        <TFW_CodeBlock label="Export JSON">{`ckb-firewall export --proposal ${p.id} --out proposal-${p.id}.json`}</TFW_CodeBlock>
-        <TFW_CodeBlock label="Check this address in registry">{`ckb-firewall check --lock-args ${p.lockArgs}`}</TFW_CodeBlock>
-      </div>
-
       {/* Action bar */}
       <div className="tfw-detail-actions">{buttons}</div>
+
+      {hasAdvancedActions && (
+        <div className="tfw-detail-sec">
+          <button
+            type="button"
+            className="tfw-link"
+            onClick={() => setShowAdvancedActions(v => !v)}
+          >
+            {showAdvancedActions ? "Hide advanced actions" : "Show advanced actions"}
+          </button>
+          {showAdvancedActions && (
+            <div className="tfw-advanced-actions">
+              {!p.proposalCellTxHash && p.status !== "executed" && p.status !== "rejected" && (
+                <button type="button" className="tfw-btn tfw-btn--ghost"
+                        onClick={() => { onClose(); actions.openAnchor(p.id); }}>
+                  Anchor proposal
+                </button>
+              )}
+              {TFW_isReady(p) && (
+                <button type="button" className="tfw-btn tfw-btn--ghost"
+                        onClick={() => { onClose(); actions.openExecute(p.id); }}>
+                  Build execute transaction
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -473,7 +432,7 @@ function CreateForm({ onSubmit, onClose }) {
         </div>
       </FormField>
 
-      <FormField label="Lock args" hint="0x-prefixed hex" error={errors.lockArgs}>
+      <FormField label="Lock args" hint="hex identifier of the CKB lock script to blacklist" error={errors.lockArgs}>
         <input
           type="text"
           className="tfw-input tfw-mono"
@@ -536,13 +495,20 @@ function CreateForm({ onSubmit, onClose }) {
           />
         </FormField>
         {action === "add" && (
-          <FormField label="Expires at" hint="unix timestamp, 0 = never">
+          <FormField
+            label="Expires at"
+            hint={expires && expires !== "0"
+              ? `Unix timestamp: ${expires}`
+              : "no expiry — entry is permanent"}
+          >
             <input
-              type="number"
-              className="tfw-input tfw-mono"
-              value={expires}
-              min="0"
-              onChange={e => setExpires(e.target.value)}
+              type="datetime-local"
+              className="tfw-input"
+              value={safeUnixToISO(expires)?.slice(0, 16) ?? ""}
+              min={new Date().toISOString().slice(0, 16)}
+              onChange={e => setExpires(e.target.value
+                ? String(Math.floor(new Date(e.target.value).getTime() / 1000))
+                : "0")}
             />
           </FormField>
         )}
@@ -605,8 +571,8 @@ function VoteForm({ proposal, meta, onSubmit, onClose }) {
   return (
     <div className="tfw-form">
       <SecurityNote kind="warn">
-        Your private key is posted over loopback only and zeroed immediately after the cryptographic operation.
-        It is never stored, logged, or forwarded beyond localhost.
+        Only keys in the registry governance voter set can vote. This is not a public user vote.
+        The private key is posted over loopback only, zeroed immediately after signing, and never stored.
       </SecurityNote>
 
       <FormField label="Your vote">
@@ -658,109 +624,208 @@ function VoteForm({ proposal, meta, onSubmit, onClose }) {
   );
 }
 
-// ─── Sign form ───────────────────────────────────────────────────────────────
-function SignForm({ proposal, meta, onSubmit, onClose }) {
-  const [idx, setIdx] = React.useState(String(meta.yourSignerIndex || 0));
-  const [pk, setPk] = React.useState("");
+// ─── Anchor form ─────────────────────────────────────────────────────────────
+function AnchorForm({ proposal, meta, onSubmit, onClose }) {
+  const [toAddress, setToAddress] = React.useState("");
+  const [proposalTx, setProposalTx] = React.useState(proposal.proposalCellTxHash || "");
+  const [proposalIndex, setProposalIndex] = React.useState(String(proposal.proposalCellIndex ?? 0));
+  // If already anchored, skip to step 2
+  const [step, setStep] = React.useState(proposal.proposalCellTxHash ? 2 : 1);
+  const [command, setCommand] = React.useState(null);
+  const [recordResult, setRecordResult] = React.useState(null);
   const [error, setError] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
-  const [success, setSuccess] = React.useState(false);
+  const treasuryBacked = Boolean(meta?.treasury);
 
-  const submit = () => {
+  const generateCommand = () => {
     setError("");
-    const i = Number(idx);
-    if (!Number.isInteger(i) || i < 0 || i > 4) {
-      setError("Signer index must be 0–4");
-      return;
-    }
-    if ((proposal.signatures || []).some(s => s.signerIndex === i)) {
-      setError("Signer #" + i + " has already signed.");
-      return;
-    }
-    if (!/^0x[0-9a-fA-F]{64}$/.test(pk.trim())) {
-      setError("Private key must be 0x + 64 hex chars");
+    if (!treasuryBacked && !toAddress.trim()) {
+      setError("Payment recipient address is required for non-treasury registries.");
       return;
     }
     setSubmitting(true);
-    fetch('/api/sign', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proposalId: proposal.id, signerIndex: i, privateKey: pk.trim() }) })
+    fetch('/api/anchor', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proposalId: proposal.id,
+        toAddress: treasuryBacked ? undefined : toAddress.trim(),
+      }) })
       .then(r => r.json())
       .then(d => {
         setSubmitting(false);
-        setPk("");
         if (!d.ok) { setError(d.error || 'Server error'); return; }
-        onSubmit({ proposalId: proposal.id, signerIndex: i, signature: d.signature || '', timestamp: new Date().toISOString() });
-        setSuccess(true);
-        setTimeout(onClose, 1100);
+        setCommand(d.command);
+        if (d.proposal) onSubmit(d.proposal);
+        setStep(2);
       })
-      .catch(e => { setSubmitting(false); setPk(""); setError(e.message); });
+      .catch(e => { setSubmitting(false); setError(e.message); });
   };
 
-  if (success) {
-    return (
-      <div className="tfw-form-success">
-        <div className="tfw-form-success__glyph">✓</div>
-        <div className="tfw-form-success__title">Signature added</div>
-        <div className="tfw-form-success__sub">Signature recorded.</div>
-      </div>
-    );
-  }
+  const recordAnchor = () => {
+    setError("");
+    if (!/^0x[0-9a-fA-F]{64}$/.test(proposalTx.trim())) {
+      setError("Proposal tx must be 0x + 64 hex chars");
+      return;
+    }
+    if (!/^\d+$/.test(proposalIndex.trim())) {
+      setError("Proposal index must be a non-negative integer");
+      return;
+    }
+    setSubmitting(true);
+    fetch('/api/anchor', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proposalId: proposal.id,
+        proposalTx: proposalTx.trim(),
+        proposalIndex: proposalIndex.trim(),
+        toAddress: treasuryBacked ? undefined : toAddress.trim(),
+      }) })
+      .then(r => r.json())
+      .then(d => {
+        setSubmitting(false);
+        if (!d.ok) { setError(d.error || 'Server error'); return; }
+        setRecordResult(d);
+        onSubmit(d.proposal);
+      })
+      .catch(e => { setSubmitting(false); setError(e.message); });
+  };
 
   return (
     <div className="tfw-form">
-      <SecurityNote kind="warn">
-        Your private key is posted over loopback only and zeroed immediately after the cryptographic operation. It is never stored, logged, or forwarded beyond localhost.
+      <SecurityNote kind="info">
+        Anchoring writes a proposal cell on-chain that enforces the 72-hour review window via CKB consensus.
+        {!treasuryBacked && " This registry has no treasury — you'll need a recipient address for the proposal cell deposit."}
       </SecurityNote>
 
-      <FormField label="Signer index" hint="0–4, your slot in the 5-key governance set">
-        <input
-          type="number"
-          className="tfw-input tfw-mono"
-          min="0"
-          max="4"
-          value={idx}
-          onChange={e => setIdx(e.target.value)}
-        />
-      </FormField>
+      {!treasuryBacked && step === 1 && (
+        <FormField label="Address for proposal-cell deposit" hint="who pays the on-chain capacity">
+          <input
+            className="tfw-input tfw-mono"
+            value={toAddress}
+            onChange={e => setToAddress(e.target.value)}
+            placeholder="ckt1..."
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </FormField>
+      )}
 
-      <FormField label="Private key" hint="32 bytes, hex" error={error}>
-        <input
-          type="password"
-          className="tfw-input tfw-mono"
-          value={pk}
-          onChange={e => setPk(e.target.value)}
-          placeholder="0x… (64 hex chars)"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </FormField>
+      {/* ── Step 1: generate the CLI command ── */}
+      <div className="tfw-step">
+        <div className="tfw-step__label">Step 1 — Generate the anchor command</div>
+        {command ? (
+          <>
+            <TFW_CodeBlock label={treasuryBacked ? "Run in your terminal" : "Run in your terminal (ckb-cli)"}>{command}</TFW_CodeBlock>
+            <div className="tfw-field__hint">
+              Copy and run the command above. Wait until the transaction is accepted on-chain, then complete Step 2.
+            </div>
+          </>
+        ) : step === 1 ? (
+          <>
+            <div className="tfw-field__hint">
+              This generates the CLI command to create the proposal cell. You will run it in a terminal.
+            </div>
+            <button
+              type="button"
+              className="tfw-btn tfw-btn--accent"
+              style={{ alignSelf: "flex-start" }}
+              onClick={generateCommand}
+              disabled={submitting}
+            >
+              {submitting ? "Preparing…" : "Generate anchor command"}
+            </button>
+          </>
+        ) : (
+          <div className="tfw-field__hint">
+            Already done.{" "}
+            <button type="button" className="tfw-link" onClick={() => setStep(1)}>Re-generate</button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Step 2: record the accepted tx hash ── */}
+      <div className="tfw-step">
+        <div className="tfw-step__label">Step 2 — Record the accepted transaction</div>
+        {recordResult?.anchorVerified ? (
+          <div className="tfw-exec-preview">
+            <div className="tfw-exec-preview__row">
+              <span>Verified cell</span>
+              <code className="tfw-mono" style={{ fontSize: "11px" }}>
+                {TFW_trunc(recordResult.proposal.proposalCellTxHash, 22)}:{recordResult.proposal.proposalCellIndex ?? 0}
+              </code>
+            </div>
+            <div className="tfw-exec-preview__row">
+              <span>Proposal hash</span>
+              <code className="tfw-mono" style={{ fontSize: "11px" }}>{TFW_trunc(recordResult.proposalDataHash, 30)}</code>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="tfw-field__hint">
+              After the anchor transaction is accepted, paste the tx hash below to verify and record it.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 120px", gap: 12 }}>
+              <FormField label="Accepted anchor tx hash">
+                <input
+                  className="tfw-input tfw-mono"
+                  value={proposalTx}
+                  onChange={e => setProposalTx(e.target.value)}
+                  placeholder="0x..."
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </FormField>
+              <FormField label="Output index">
+                <input
+                  className="tfw-input tfw-mono"
+                  value={proposalIndex}
+                  onChange={e => setProposalIndex(e.target.value)}
+                  placeholder="0"
+                  inputMode="numeric"
+                />
+              </FormField>
+            </div>
+            <button
+              type="button"
+              className="tfw-btn tfw-btn--accent"
+              style={{ alignSelf: "flex-start" }}
+              onClick={recordAnchor}
+              disabled={submitting || step === 1 && !command}
+            >
+              {submitting ? "Verifying…" : "Verify & record anchor"}
+            </button>
+          </>
+        )}
+      </div>
+
+      {error && <div className="tfw-field__err" style={{ marginTop: 12 }}>{error}</div>}
 
       <div className="tfw-form-actions">
-        <button type="button" className="tfw-btn tfw-btn--ghost" onClick={onClose}>Cancel</button>
-        <button
-          type="button"
-          className="tfw-btn tfw-btn--accent"
-          onClick={submit}
-          disabled={submitting}
-        >
-          {submitting ? "Signing…" : "Sign proposal"}
-        </button>
+        <button type="button" className="tfw-btn tfw-btn--ghost" onClick={onClose}>Close</button>
       </div>
     </div>
   );
 }
 
 // ─── Execute form ────────────────────────────────────────────────────────────
-function ExecuteForm({ proposal, onSubmit, onClose }) {
+function ExecuteForm({ proposal, meta, onSubmit, onClose }) {
+  const [proposalTx, setProposalTx] = React.useState(proposal.proposalCellTxHash || "");
+  const [proposalIndex, setProposalIndex] = React.useState(String(proposal.proposalCellIndex ?? 0));
   const [submitting, setSubmitting] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
   const [error, setError] = React.useState("");
 
   const submit = () => {
     setError("");
+    if (!/^0x[0-9a-fA-F]{64}$/.test(proposalTx.trim())) {
+      setError("Proposal tx must be 0x + 64 hex chars. Anchor the proposal cell first.");
+      return;
+    }
+    if (!/^\d+$/.test(proposalIndex.trim())) {
+      setError("Proposal index must be a non-negative integer.");
+      return;
+    }
     setSubmitting(true);
     fetch('/api/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proposalId: proposal.id }) })
+      body: JSON.stringify({ proposalId: proposal.id, proposalTx: proposalTx.trim(), proposalIndex: proposalIndex.trim() }) })
       .then(r => r.json())
       .then(d => {
         setSubmitting(false);
@@ -771,7 +836,7 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
         a.href = url; a.download = d.filename || ('gov_execute_tx_' + proposal.id + '.json');
         document.body.appendChild(a); a.click();
         document.body.removeChild(a); URL.revokeObjectURL(url);
-        onSubmit(proposal.id);
+        onSubmit(d);
         setSuccess(true);
         setTimeout(onClose, 1500);
       })
@@ -783,10 +848,10 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
       <div className="tfw-form-success">
         <div className="tfw-form-success__glyph">↓</div>
         <div className="tfw-form-success__title">Transaction downloaded</div>
-        <div className="tfw-form-success__sub">
-          Broadcast <code className="tfw-mono">gov_execute_tx_{proposal.id}.json</code> via ckb-cli
-          or your wallet to submit it to the network.
+        <div className="tfw-form-success__sub" style={{ marginBottom: 16 }}>
+          Broadcast <code className="tfw-mono">gov_execute_tx_{proposal.id}.json</code> to submit it to the CKB network:
         </div>
+        <TFW_CodeBlock label="Submit via ckb-cli">{`ckb-cli tx send --tx-file gov_execute_tx_${proposal.id}.json`}</TFW_CodeBlock>
       </div>
     );
   }
@@ -794,9 +859,30 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
   return (
     <div className="tfw-form">
       <SecurityNote kind="tip">
-        This verifies all 3 signatures, builds the on-chain transaction JSON, and downloads it.
+        This verifies the anchored proposal cell and validator votes, builds the on-chain transaction JSON, and downloads it.
         Submit it via <code className="tfw-mono">ckb-cli</code> or a CKB wallet.
       </SecurityNote>
+
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 120px", gap: 12 }}>
+        <FormField label="Proposal tx hash">
+          <input
+            className="tfw-input tfw-mono"
+            value={proposalTx}
+            onChange={e => setProposalTx(e.target.value)}
+            placeholder="0x..."
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </FormField>
+        <FormField label="Output index">
+          <input
+            className="tfw-input tfw-mono"
+            value={proposalIndex}
+            onChange={e => setProposalIndex(e.target.value)}
+            inputMode="numeric"
+          />
+        </FormField>
+      </div>
 
       <div className="tfw-exec-preview">
         <div className="tfw-exec-preview__row">
@@ -808,8 +894,8 @@ function ExecuteForm({ proposal, onSubmit, onClose }) {
           <code className="tfw-mono" style={{ fontSize: "11px" }}>{TFW_trunc(proposal.lockArgs, 28)}</code>
         </div>
         <div className="tfw-exec-preview__row">
-          <span>Signatures verified</span>
-          <span className="tfw-mono">{TFW_sigCount(proposal)} / 3</span>
+          <span>Yes votes</span>
+          <span className="tfw-mono">{TFW_countYes(proposal)} / {meta?.threshold || 3}</span>
         </div>
         <div className="tfw-exec-preview__row">
           <span>Output file</span>
@@ -873,7 +959,7 @@ function ImportForm({ onSubmit, onClose }) {
       <div className="tfw-form-success">
         <div className="tfw-form-success__glyph">↥</div>
         <div className="tfw-form-success__title">Proposal imported</div>
-        <div className="tfw-form-success__sub">Merged any new votes or signatures.</div>
+        <div className="tfw-form-success__sub">Merged any new votes.</div>
       </div>
     );
   }
@@ -882,7 +968,7 @@ function ImportForm({ onSubmit, onClose }) {
     <div className="tfw-form">
       <SecurityNote kind="info">
         Paste or upload a proposal JSON exported by another governance participant.
-        Votes and signatures will be merged.
+        Votes will be merged.
       </SecurityNote>
 
       <FormField label="Upload JSON file">
@@ -926,7 +1012,7 @@ Object.assign(window, {
   TFW_AddressDetailContent: AddressDetailContent,
   TFW_CreateForm: CreateForm,
   TFW_VoteForm: VoteForm,
-  TFW_SignForm: SignForm,
+  TFW_AnchorForm: AnchorForm,
   TFW_ExecuteForm: ExecuteForm,
   TFW_ImportForm: ImportForm,
 });

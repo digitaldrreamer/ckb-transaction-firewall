@@ -119,6 +119,43 @@ export async function getLiveCell(
   };
 }
 
+export async function getLiveCellsByLock(
+  rpcUrl: string,
+  lock: { code_hash: string; hash_type: string; args: string },
+  limit = 20,
+): Promise<LiveCell[]> {
+  const result = await call<{
+    objects: Array<{
+      out_point: { tx_hash: string; index: string };
+      output_data: string;
+      output: {
+        capacity: string;
+        lock: { code_hash: string; hash_type: string; args: string };
+        type?: { code_hash: string; hash_type: string; args: string } | null;
+      };
+    }>;
+  }>(rpcUrl, "get_cells", [
+    {
+      script: lock,
+      script_type: "lock",
+      filter: {
+        output_data_len_range: ["0x0", "0x1"],
+      },
+    },
+    "desc",
+    `0x${limit.toString(16)}`,
+  ]);
+
+  return result.objects.map((obj) => ({
+    txHash: obj.out_point.tx_hash,
+    index: Number.parseInt(obj.out_point.index, 16),
+    capacity: obj.output.capacity,
+    data: obj.output_data,
+    lock: obj.output.lock,
+    type: obj.output.type ?? null,
+  }));
+}
+
 // Finds the live registry cell by querying the indexer (requires CKB node with indexer enabled).
 //
 // Queries by codeHash + version prefix "0x02" so the result survives governance-lock

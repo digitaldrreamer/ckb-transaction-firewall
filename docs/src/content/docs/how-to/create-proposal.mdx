@@ -1,0 +1,65 @@
+---
+title: How to Create a Blacklist Proposal
+description: Use ckb-firewall propose to create an add, remove, or set-treasury governance proposal.
+---
+
+## Blacklist addition
+
+```bash
+ckb-firewall propose \
+  --action add \
+  --lock-args 0xdeadbeef... \
+  --evidence "https://explorer.nervos.org/transaction/0x..." \
+  --classification theft \
+  --severity high \
+  --rationale "Address received proceeds from the Drainer exploit on 2026-05-15." \
+  --proposer alice
+```
+
+All flags are interactive if omitted. The CLI validates that `--lock-args` is valid even-length hex. For a full list of options, see the [CLI reference — propose](/reference/cli/).
+
+To set an expiry (temporary [blacklist entry](/reference/glossary/#registry-cell)):
+
+```bash
+ckb-firewall propose \
+  --action add \
+  --lock-args 0x... \
+  --expires-at 1800000000 \
+  ... 
+```
+
+`--expires-at` is a Unix timestamp in seconds. `0` or omitted = permanent. The CLI warns if the expiry falls within the governance timeline (less than ~96 hours from now). For how the on-chain firewall evaluates expiry, see [How to handle time-based entries](/how-to/time-based-entries/).
+
+## Blacklist removal
+
+```bash
+ckb-firewall propose \
+  --action remove \
+  --lock-args 0xdeadbeef... \
+  --evidence "..." \
+  --classification other \
+  --severity low \
+  --rationale "Entry was added in error." \
+  --proposer alice
+```
+
+## Treasury rotation (set-treasury)
+
+```bash
+ckb-firewall propose \
+  --action set-treasury \
+  --treasury-lock-code-hash 0x... \
+  --treasury-lock-hash-type type \
+  --treasury-lock-args 0x... \
+  --evidence "..." \
+  --classification other \
+  --severity high \
+  --rationale "Rotate treasury lock to updated contract." \
+  --proposer alice
+```
+
+## After creation
+
+The CLI prints the proposal ID and an export command. The proposal is stored at `~/.ckb-firewall/proposals/<id>.json`. The [`proposalIdHash`](/reference/glossary/#proposalidHash) is computed from all canonical fields — once created, no field can be changed without invalidating it.
+
+Next step: anchor the proposal on-chain to start the [review window](/reference/glossary/#review-window) — see [How to anchor a proposal](/how-to/anchor-proposal/).

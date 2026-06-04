@@ -22,6 +22,8 @@ const ERROR_UNAUTHORIZED_GOVERNANCE_LOCK: i8 = 25;
 // Code 26 is reserved (previously UNAUTHORIZED_SIGNERS). Signer validation moved
 // to the governance-lock in v2 — the registry script no longer checks it.
 const ERROR_INVALID_TYPE_ID: i8 = 27;
+const ERROR_INVALID_PROPOSAL_CELL: i8 = 28;
+const REVIEW_DELAY_MS: u64 = 259_200_000;
 
 const REGISTRY_BINARY: &[u8] = include_bytes!(
     "../../../contracts/blacklist-registry/target/riscv64imac-unknown-none-elf/release/blacklist-registry"
@@ -48,23 +50,49 @@ fn build_minimal_gov_header() -> Vec<u8> {
     let mut h = vec![0x01u8, 0x01, 0x01];
     h.extend_from_slice(&[0x03u8; 33]); // dummy compressed pubkey
     h.extend_from_slice(&[0x00, 0x00]); // validator_count = 0
-    h.extend_from_slice(&[0u8; 32]);    // validator_merkle_root
+    h.extend_from_slice(&[0u8; 32]); // validator_merkle_root
     h
 }
 
 /// Build a BLKL v2 payload with one permanent blacklisted identifier.
 fn build_registry_payload_single_id(id: &[u8]) -> Bytes {
+    build_registry_payload(&[(id, 0)])
+}
+
+fn build_registry_payload(entries: &[(&[u8], u64)]) -> Bytes {
     let gov_header = build_minimal_gov_header();
+    build_registry_payload_with_gov_header(entries, &gov_header)
+}
+
+fn build_registry_payload_with_gov_header(entries: &[(&[u8], u64)], gov_header: &[u8]) -> Bytes {
     let mut data = vec![];
     data.extend_from_slice(b"BLKL");
     data.push(0x02u8);
     data.extend_from_slice(&(gov_header.len() as u16).to_le_bytes());
-    data.extend_from_slice(&gov_header);
-    data.extend_from_slice(&1u32.to_le_bytes()); // entry_count = 1
-    data.push(id.len() as u8);
-    data.extend_from_slice(id);
-    data.extend_from_slice(&0u64.to_le_bytes()); // expires_at = 0 (permanent)
+    data.extend_from_slice(gov_header);
+    data.extend_from_slice(&(entries.len() as u32).to_le_bytes());
+    for (id, expires_at) in entries {
+        data.push(id.len() as u8);
+        data.extend_from_slice(id);
+        data.extend_from_slice(&expires_at.to_le_bytes());
+    }
     Bytes::from(data)
+}
+
+fn build_treasury_gov_header(treasury_lock: &Script) -> Vec<u8> {
+    let mut h = build_minimal_gov_header();
+    h[0] = 0x02;
+    h.extend_from_slice(&blake2b_256(treasury_lock.as_slice()));
+    h
+}
+
+fn build_treasury_gov_header_v3(treasury_lock: &Script) -> Vec<u8> {
+    let mut h = build_minimal_gov_header();
+    h[0] = 0x03;
+    let script_bytes = treasury_lock.as_slice();
+    h.extend_from_slice(&(script_bytes.len() as u16).to_le_bytes());
+    h.extend_from_slice(script_bytes);
+    h
 }
 
 /// Build 66-byte v2 registry type args.
@@ -92,26 +120,109 @@ fn compute_type_id(first_input_outpoint: &OutPoint, registry_output_index: u64) 
     blake2b_256(&preimage)
 }
 
-/// Build a GOV1 v3 binding for WitnessArgs.input_type (141 bytes).
-/// Layout: GOV1(4) | version(0x03) | proposal_id_hash(32) | vote_digest_hash(32) |
-///         old_root(32) | new_root(32) | review_window_end_ms(8 LE u64)
+/// Build a GOV1 v4 binding for WitnessArgs.input_type (173 bytes).
+/// Layout: GOV1(4) | version(0x04) | proposal_id_hash(32) | vote_digest_hash(32) |
+///         old_root(32) | new_root(32) | proposal_data_hash(32) | review_delay_ms(8 LE u64)
 /// Both proposal_id_hash and vote_digest_hash must be non-zero (enforced on-chain).
 fn build_gov1_binding(
     proposal_id_hash: [u8; 32],
     vote_digest_hash: [u8; 32],
     old_root: [u8; 32],
     new_root: [u8; 32],
+    proposal_data_hash: [u8; 32],
 ) -> Bytes {
     let mut raw = vec![];
     raw.extend_from_slice(b"GOV1");
-    raw.push(0x03u8);
+    raw.push(0x04u8);
     raw.extend_from_slice(&proposal_id_hash);
     raw.extend_from_slice(&vote_digest_hash);
     raw.extend_from_slice(&old_root);
     raw.extend_from_slice(&new_root);
-    raw.extend_from_slice(&0u64.to_le_bytes()); // review_window_end_ms (blacklist-registry ignores this)
-    assert_eq!(raw.len(), 141);
+    raw.extend_from_slice(&proposal_data_hash);
+    raw.extend_from_slice(&REVIEW_DELAY_MS.to_le_bytes());
+    assert_eq!(raw.len(), 173);
     Bytes::from(raw)
+}
+
+fn build_proposal_cell(action: u8, identifier: &[u8], expires_at: u64) -> Bytes {
+    let mut data = vec![];
+    data.extend_from_slice(b"PBLK");
+    data.push(0x01);
+    data.extend_from_slice(&DUMMY_TYPE_ID);
+    data.push(action);
+    data.push(identifier.len() as u8);
+    data.extend_from_slice(identifier);
+    data.extend_from_slice(&expires_at.to_le_bytes());
+    data.extend_from_slice(&[0x99u8; 32]);
+    Bytes::from(data)
+}
+
+fn build_set_treasury_proposal_cell(treasury_lock: &Script) -> Bytes {
+    let mut data = vec![];
+    data.extend_from_slice(b"PBLK");
+    data.push(0x02);
+    data.extend_from_slice(&DUMMY_TYPE_ID);
+    data.push(0x03);
+    data.extend_from_slice(&blake2b_256(treasury_lock.as_slice()));
+    data.extend_from_slice(&[0x99u8; 32]);
+    Bytes::from(data)
+}
+
+fn create_set_treasury_proposal_input(
+    context: &mut Context,
+    lock: Script,
+    treasury_lock: &Script,
+) -> (CellInput, [u8; 32]) {
+    let proposal_data = build_set_treasury_proposal_cell(treasury_lock);
+    let proposal_hash = blake2b_256(proposal_data.as_ref());
+    let proposal_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(200_000_000u64.pack())
+            .lock(lock)
+            .build(),
+        proposal_data,
+    );
+    (
+        CellInput::new_builder()
+            .previous_output(proposal_out_point)
+            .build(),
+        proposal_hash,
+    )
+}
+
+fn create_proposal_input(
+    context: &mut Context,
+    lock: Script,
+    action: u8,
+    identifier: &[u8],
+    expires_at: u64,
+) -> (CellInput, [u8; 32]) {
+    create_proposal_input_with_capacity(context, lock, action, identifier, expires_at, 1000)
+}
+
+fn create_proposal_input_with_capacity(
+    context: &mut Context,
+    lock: Script,
+    action: u8,
+    identifier: &[u8],
+    expires_at: u64,
+    capacity: u64,
+) -> (CellInput, [u8; 32]) {
+    let proposal_data = build_proposal_cell(action, identifier, expires_at);
+    let proposal_hash = blake2b_256(proposal_data.as_ref());
+    let proposal_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(capacity.pack())
+            .lock(lock)
+            .build(),
+        proposal_data,
+    );
+    (
+        CellInput::new_builder()
+            .previous_output(proposal_out_point)
+            .build(),
+        proposal_hash,
+    )
 }
 
 fn assert_error_code(err: ckb_testtool::ckb_error::Error, expected_code: i8) {
@@ -153,9 +264,17 @@ fn test_pass_bootstrap_registry_creation_with_5_of_5_signers() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let new_root = blake2b_256(payload.as_ref());
-    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], [0u8; 32], new_root);
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        [0u8; 32],
+        new_root,
+        [0x33u8; 32],
+    );
 
-    let input = CellInput::new_builder().previous_output(funding_cell).build();
+    let input = CellInput::new_builder()
+        .previous_output(funding_cell)
+        .build();
     let output = CellOutput::new_builder()
         .capacity(900u64.pack())
         .lock(governance_lock)
@@ -171,8 +290,16 @@ fn test_pass_bootstrap_registry_creation_with_5_of_5_signers() {
         .input(input)
         .output(output)
         .output_data(payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .witness(witness.pack())
         .build();
 
@@ -209,9 +336,17 @@ fn test_pass_bootstrap_registry_creation_with_partial_signers() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let new_root = blake2b_256(payload.as_ref());
-    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], [0u8; 32], new_root);
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        [0u8; 32],
+        new_root,
+        [0x33u8; 32],
+    );
 
-    let input = CellInput::new_builder().previous_output(funding_cell).build();
+    let input = CellInput::new_builder()
+        .previous_output(funding_cell)
+        .build();
     let output = CellOutput::new_builder()
         .capacity(900u64.pack())
         .lock(governance_lock)
@@ -227,8 +362,16 @@ fn test_pass_bootstrap_registry_creation_with_partial_signers() {
         .input(input)
         .output(output)
         .output_data(payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .witness(witness.pack())
         .build();
 
@@ -254,10 +397,12 @@ fn test_pass_valid_registry_update_with_gov1_witness() {
         .build_script(&registry_code_out_point, registry_type_args)
         .expect("build registry type script");
 
-    let old_payload = build_registry_payload_single_id(&[0xAA]);
+    let old_payload = build_registry_payload(&[]);
     let new_payload = build_registry_payload_single_id(&[0xBB]);
     let old_root = blake2b_256(old_payload.as_ref());
     let new_root = blake2b_256(new_payload.as_ref());
+    let (proposal_input, proposal_data_hash) =
+        create_proposal_input(&mut context, governance_lock.clone(), 0x01, &[0xBB], 0);
 
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -278,7 +423,13 @@ fn test_pass_valid_registry_update_with_gov1_witness() {
         .type_(Some(registry_type).pack())
         .build();
 
-    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], old_root, new_root);
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        old_root,
+        new_root,
+        proposal_data_hash,
+    );
     let witness = WitnessArgs::new_builder()
         .input_type(Some(gov_payload).pack())
         .build()
@@ -286,17 +437,376 @@ fn test_pass_valid_registry_update_with_gov1_witness() {
 
     let tx = TransactionBuilder::default()
         .input(input)
+        .input(proposal_input)
         .output(output)
         .output_data(new_payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
+        .witness(witness.pack())
+        .build();
+
+    let tx = context.complete_tx(tx);
+    context.verify_tx(&tx, MAX_CYCLES).expect("tx should pass");
+}
+
+#[test]
+fn test_pass_registry_update_with_treasury_anchor_return() {
+    let mut context = Context::default();
+
+    let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let governance_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
+        .expect("build governance lock");
+    let treasury_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x99]))
+        .expect("build treasury lock");
+
+    let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
+    let registry_type = context
+        .build_script(&registry_code_out_point, registry_type_args)
+        .expect("build registry type script");
+
+    let gov_header = build_treasury_gov_header(&treasury_lock);
+    let old_payload = build_registry_payload_with_gov_header(&[], &gov_header);
+    let new_payload = build_registry_payload_with_gov_header(&[(&[0xBB], 0)], &gov_header);
+    let old_root = blake2b_256(old_payload.as_ref());
+    let new_root = blake2b_256(new_payload.as_ref());
+    let (proposal_input, proposal_data_hash) = create_proposal_input_with_capacity(
+        &mut context,
+        treasury_lock.clone(),
+        0x01,
+        &[0xBB],
+        0,
+        200_000_000,
+    );
+
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1_000_000_000u64.pack())
+            .lock(governance_lock.clone())
+            .type_(Some(registry_type.clone()).pack())
+            .build(),
+        old_payload.clone(),
+    );
+
+    let registry_output = CellOutput::new_builder()
+        .capacity(900_000_000u64.pack())
+        .lock(governance_lock.clone())
+        .type_(Some(registry_type).pack())
+        .build();
+    let treasury_output = CellOutput::new_builder()
+        .capacity(200_000_000u64.pack())
+        .lock(treasury_lock)
+        .build();
+
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        old_root,
+        new_root,
+        proposal_data_hash,
+    );
+    let witness = WitnessArgs::new_builder()
+        .input_type(Some(gov_payload).pack())
+        .build()
+        .as_bytes();
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .input(proposal_input)
+        .output(registry_output)
+        .output(treasury_output)
+        .output_data(new_payload.pack())
+        .output_data(Bytes::new().pack())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .witness(witness.pack())
         .build();
 
     let tx = context.complete_tx(tx);
     context
         .verify_tx(&tx, MAX_CYCLES)
-        .expect("tx should pass");
+        .expect("treasury-funded anchor should pass when capacity returns to the treasury");
+}
+
+#[test]
+fn test_reject_registry_update_with_treasury_anchor_not_returned() {
+    let mut context = Context::default();
+
+    let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let governance_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
+        .expect("build governance lock");
+    let treasury_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x99]))
+        .expect("build treasury lock");
+    let non_treasury_anchor_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x98]))
+        .expect("build non-treasury anchor lock");
+
+    let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
+    let registry_type = context
+        .build_script(&registry_code_out_point, registry_type_args)
+        .expect("build registry type script");
+
+    let gov_header = build_treasury_gov_header(&treasury_lock);
+    let old_payload = build_registry_payload_with_gov_header(&[], &gov_header);
+    let new_payload = build_registry_payload_with_gov_header(&[(&[0xBB], 0)], &gov_header);
+    let old_root = blake2b_256(old_payload.as_ref());
+    let new_root = blake2b_256(new_payload.as_ref());
+    let (proposal_input, proposal_data_hash) = create_proposal_input_with_capacity(
+        &mut context,
+        non_treasury_anchor_lock,
+        0x01,
+        &[0xBB],
+        0,
+        200_000_000,
+    );
+
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1_000_000_000u64.pack())
+            .lock(governance_lock.clone())
+            .type_(Some(registry_type.clone()).pack())
+            .build(),
+        old_payload.clone(),
+    );
+
+    let output = CellOutput::new_builder()
+        .capacity(900_000_000u64.pack())
+        .lock(governance_lock.clone())
+        .type_(Some(registry_type).pack())
+        .build();
+
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        old_root,
+        new_root,
+        proposal_data_hash,
+    );
+    let witness = WitnessArgs::new_builder()
+        .input_type(Some(gov_payload).pack())
+        .build()
+        .as_bytes();
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .input(proposal_input)
+        .output(output)
+        .output_data(new_payload.pack())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
+        .witness(witness.pack())
+        .build();
+
+    let tx = context.complete_tx(tx);
+    let err = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect_err("missing treasury return output should be rejected");
+    assert_error_code(err, ERROR_INVALID_PROPOSAL_CELL);
+}
+
+#[test]
+fn test_pass_registry_metadata_update_sets_treasury_script() {
+    let mut context = Context::default();
+
+    let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let governance_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
+        .expect("build governance lock");
+    let treasury_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x99]))
+        .expect("build treasury lock");
+
+    let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
+    let registry_type = context
+        .build_script(&registry_code_out_point, registry_type_args)
+        .expect("build registry type script");
+
+    let old_payload = build_registry_payload_with_gov_header(&[(&[0xAA], 0)], &build_minimal_gov_header());
+    let new_payload = build_registry_payload_with_gov_header(&[(&[0xAA], 0)], &build_treasury_gov_header_v3(&treasury_lock));
+    let old_root = blake2b_256(old_payload.as_ref());
+    let new_root = blake2b_256(new_payload.as_ref());
+    let (proposal_input, proposal_data_hash) =
+        create_set_treasury_proposal_input(&mut context, governance_lock.clone(), &treasury_lock);
+
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1_000_000_000u64.pack())
+            .lock(governance_lock.clone())
+            .type_(Some(registry_type.clone()).pack())
+            .build(),
+        old_payload,
+    );
+
+    let output = CellOutput::new_builder()
+        .capacity(1_000_000_000u64.pack())
+        .lock(governance_lock.clone())
+        .type_(Some(registry_type).pack())
+        .build();
+
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        old_root,
+        new_root,
+        proposal_data_hash,
+    );
+    let witness = WitnessArgs::new_builder()
+        .input_type(Some(gov_payload).pack())
+        .build()
+        .as_bytes();
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .input(proposal_input)
+        .output(output)
+        .output_data(new_payload.pack())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
+        .witness(witness.pack())
+        .build();
+
+    let tx = context.complete_tx(tx);
+    context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect("metadata update should pass when treasury hash matches the proposal");
+}
+
+#[test]
+fn test_reject_registry_metadata_update_wrong_treasury_script() {
+    let mut context = Context::default();
+
+    let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let governance_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
+        .expect("build governance lock");
+    let proposed_treasury_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x99]))
+        .expect("build proposed treasury lock");
+    let wrong_treasury_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x98]))
+        .expect("build wrong treasury lock");
+
+    let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
+    let registry_type = context
+        .build_script(&registry_code_out_point, registry_type_args)
+        .expect("build registry type script");
+
+    let old_payload = build_registry_payload_with_gov_header(&[(&[0xAA], 0)], &build_minimal_gov_header());
+    let new_payload = build_registry_payload_with_gov_header(&[(&[0xAA], 0)], &build_treasury_gov_header_v3(&wrong_treasury_lock));
+    let old_root = blake2b_256(old_payload.as_ref());
+    let new_root = blake2b_256(new_payload.as_ref());
+    let (proposal_input, proposal_data_hash) =
+        create_set_treasury_proposal_input(&mut context, governance_lock.clone(), &proposed_treasury_lock);
+
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1_000_000_000u64.pack())
+            .lock(governance_lock.clone())
+            .type_(Some(registry_type.clone()).pack())
+            .build(),
+        old_payload,
+    );
+
+    let output = CellOutput::new_builder()
+        .capacity(1_000_000_000u64.pack())
+        .lock(governance_lock.clone())
+        .type_(Some(registry_type).pack())
+        .build();
+
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        old_root,
+        new_root,
+        proposal_data_hash,
+    );
+    let witness = WitnessArgs::new_builder()
+        .input_type(Some(gov_payload).pack())
+        .build()
+        .as_bytes();
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .input(proposal_input)
+        .output(output)
+        .output_data(new_payload.pack())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
+        .witness(witness.pack())
+        .build();
+
+    let tx = context.complete_tx(tx);
+    let err = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect_err("metadata update with a different treasury script should fail");
+    assert_error_code(err, ERROR_INVALID_PROPOSAL_CELL);
 }
 
 #[test]
@@ -340,8 +850,16 @@ fn test_reject_invalid_type_args_layout() {
         .input(input)
         .output(output)
         .output_data(payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .build();
 
     let tx = context.complete_tx(tx);
@@ -393,8 +911,16 @@ fn test_reject_invalid_registry_payload() {
         .input(input)
         .output(output)
         .output_data(invalid_payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .build();
 
     let tx = context.complete_tx(tx);
@@ -443,7 +969,13 @@ fn test_reject_invalid_governance_witness_root_mismatch() {
         .build();
 
     // Deliberately wrong roots — neither matches the actual payload hashes.
-    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], [9u8; 32], [8u8; 32]);
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        [9u8; 32],
+        [8u8; 32],
+        [0x33u8; 32],
+    );
     let witness = WitnessArgs::new_builder()
         .input_type(Some(gov_payload).pack())
         .build()
@@ -453,8 +985,16 @@ fn test_reject_invalid_governance_witness_root_mismatch() {
         .input(input)
         .output(output)
         .output_data(new_payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .witness(witness.pack())
         .build();
 
@@ -487,7 +1027,7 @@ fn test_reject_unauthorized_governance_lock_identity() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let root = blake2b_256(payload.as_ref());
-    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], root, root);
+    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], root, root, [0x33u8; 32]);
     let witness = WitnessArgs::new_builder()
         .input_type(Some(gov_payload).pack())
         .build()
@@ -516,8 +1056,16 @@ fn test_reject_unauthorized_governance_lock_identity() {
         .input(input)
         .output(output)
         .output_data(payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .witness(witness.pack())
         .build();
 
@@ -566,7 +1114,7 @@ fn test_reject_topology_multiple_registry_inputs() {
 
     let root_a = blake2b_256(payload_a.as_ref());
     let root_b = blake2b_256(payload_b.as_ref());
-    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], root_a, root_b);
+    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], root_a, root_b, [0x33u8; 32]);
     let witness = WitnessArgs::new_builder()
         .input_type(Some(gov_payload).pack())
         .build()
@@ -579,12 +1127,28 @@ fn test_reject_topology_multiple_registry_inputs() {
         .build();
 
     let tx = TransactionBuilder::default()
-        .input(CellInput::new_builder().previous_output(input_out_point_a).build())
-        .input(CellInput::new_builder().previous_output(input_out_point_b).build())
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point_a)
+                .build(),
+        )
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point_b)
+                .build(),
+        )
         .output(output)
         .output_data(payload_b.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .witness(witness.pack())
         .build();
 
@@ -623,9 +1187,17 @@ fn test_reject_bootstrap_type_id_mismatch() {
 
     let payload = build_registry_payload_single_id(&[0xAA]);
     let new_root = blake2b_256(payload.as_ref());
-    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], [0u8; 32], new_root);
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        [0u8; 32],
+        new_root,
+        [0x33u8; 32],
+    );
 
-    let input = CellInput::new_builder().previous_output(funding_cell).build();
+    let input = CellInput::new_builder()
+        .previous_output(funding_cell)
+        .build();
     let output = CellOutput::new_builder()
         .capacity(900u64.pack())
         .lock(governance_lock)
@@ -641,8 +1213,16 @@ fn test_reject_bootstrap_type_id_mismatch() {
         .input(input)
         .output(output)
         .output_data(payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .witness(witness.pack())
         .build();
 
@@ -653,7 +1233,7 @@ fn test_reject_bootstrap_type_id_mismatch() {
     assert_error_code(err, ERROR_INVALID_TYPE_ID);
 }
 
-/// The GOV1 v3 binding requires non-zero proposal_id_hash and vote_digest_hash.
+/// The GOV1 v4 binding requires non-zero proposal_id_hash and vote_digest_hash.
 #[test]
 fn test_reject_zero_proposal_hash_in_gov1_witness() {
     let mut context = Context::default();
@@ -683,7 +1263,9 @@ fn test_reject_zero_proposal_hash_in_gov1_witness() {
             .build(),
         old_payload.clone(),
     );
-    let input = CellInput::new_builder().previous_output(input_out_point).build();
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
     let output = CellOutput::new_builder()
         .capacity(900u64.pack())
         .lock(governance_lock)
@@ -691,7 +1273,7 @@ fn test_reject_zero_proposal_hash_in_gov1_witness() {
         .build();
 
     // Zero proposal_id_hash — rejected by the contract.
-    let gov_payload = build_gov1_binding([0u8; 32], [0x22u8; 32], old_root, new_root);
+    let gov_payload = build_gov1_binding([0u8; 32], [0x22u8; 32], old_root, new_root, [0x33u8; 32]);
     let witness = WitnessArgs::new_builder()
         .input_type(Some(gov_payload).pack())
         .build()
@@ -701,8 +1283,16 @@ fn test_reject_zero_proposal_hash_in_gov1_witness() {
         .input(input)
         .output(output)
         .output_data(new_payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .witness(witness.pack())
         .build();
 
@@ -732,10 +1322,12 @@ fn test_pass_update_with_insufficient_signers_at_registry_level() {
         .build_script(&registry_code_out_point, registry_type_args)
         .expect("build registry type script");
 
-    let old_payload = build_registry_payload_single_id(&[0xAA]);
+    let old_payload = build_registry_payload(&[]);
     let new_payload = build_registry_payload_single_id(&[0xBB]);
     let old_root = blake2b_256(old_payload.as_ref());
     let new_root = blake2b_256(new_payload.as_ref());
+    let (proposal_input, proposal_data_hash) =
+        create_proposal_input(&mut context, governance_lock.clone(), 0x01, &[0xBB], 0);
 
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -745,14 +1337,22 @@ fn test_pass_update_with_insufficient_signers_at_registry_level() {
             .build(),
         old_payload.clone(),
     );
-    let input = CellInput::new_builder().previous_output(input_out_point).build();
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
     let output = CellOutput::new_builder()
         .capacity(900u64.pack())
         .lock(governance_lock)
         .type_(Some(registry_type).pack())
         .build();
 
-    let gov_payload = build_gov1_binding([0x11u8; 32], [0x22u8; 32], old_root, new_root);
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        old_root,
+        new_root,
+        proposal_data_hash,
+    );
     let witness = WitnessArgs::new_builder()
         .input_type(Some(gov_payload).pack())
         .build()
@@ -760,10 +1360,19 @@ fn test_pass_update_with_insufficient_signers_at_registry_level() {
 
     let tx = TransactionBuilder::default()
         .input(input)
+        .input(proposal_input)
         .output(output)
         .output_data(new_payload.pack())
-        .cell_dep(CellDep::new_builder().out_point(registry_code_out_point).build())
-        .cell_dep(CellDep::new_builder().out_point(always_success_out_point).build())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
         .witness(witness.pack())
         .build();
 

@@ -1,0 +1,68 @@
+---
+title: How-to guides
+description: Goal-oriented recipes for specific tasks — SDK pre-flight, governance lifecycle, operations, and troubleshooting.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+These guides assume you already have the basic competence to use the SDK or CLI. Each page solves one specific real-world task. If you are new, start with [Get started](/get-started/) first.
+
+## SDK — pre-flight checking
+
+Run blacklist checks before signing transactions.
+
+<CardGrid>
+  <LinkCard href="/how-to/preflight-typescript/" title="Pre-flight check in TypeScript" description="Fetch the live registry and check outputs using preflightCheck or TransactionFirewall." />
+  <LinkCard href="/how-to/preflight-rust/" title="Pre-flight check in Rust" description="In-process blacklist check with check_transaction — no network dependency at check time." />
+  <LinkCard href="/how-to/single-address-check/" title="Check a single address" description="Use isBlacklisted without building a full transaction." />
+  <LinkCard href="/how-to/recover-stale-registry/" title="Recover from a stale registry cell" description="What to do when fetchRegistryPayload throws 'is not live'." />
+  <LinkCard href="/how-to/time-based-entries/" title="Handle time-based entries" description="Include header_deps so temporary entries are evaluated correctly." />
+</CardGrid>
+
+## SDK — wallet and lock
+
+Build and spend firewall-protected cells.
+
+<CardGrid>
+  <LinkCard href="/how-to/build-firewall-lock-script/" title="Build a firewall lock script" description="Construct the v2 lock args for a wallet cell using buildFirewallLockScript." />
+  <LinkCard href="/how-to/build-spend-cell-deps/" title="Build cell deps for spending" description="Assemble the exact cell_deps required when spending a firewall-protected cell." />
+  <LinkCard href="/how-to/multi-registry-lock/" title="Configure multiple registries" description="Point one firewall lock at two or more registries simultaneously." />
+</CardGrid>
+
+## Governance — proposal lifecycle
+
+<CardGrid>
+  <LinkCard href="/how-to/create-proposal/" title="Create a proposal" description="Propose a blacklist addition, removal, or treasury rotation." />
+  <LinkCard href="/how-to/anchor-proposal/" title="Anchor a proposal on-chain" description="Create the PBLK cell that starts the review window clock." />
+  <LinkCard href="/how-to/vote-on-proposal/" title="Vote on a proposal" description="Cast a signed validator vote." />
+  <LinkCard href="/how-to/share-proposals/" title="Share proposals between participants" description="Export and import proposals to synchronize vote state." />
+  <LinkCard href="/how-to/execute-proposal/" title="Execute an approved proposal" description="Build and submit the governance transaction after the window and threshold are met." />
+  <LinkCard href="/how-to/reclaim-anchor/" title="Reclaim an abandoned anchor" description="Recover treasury capacity from a rejected or abandoned proposal cell." />
+  <LinkCard href="/how-to/rotate-validators/" title="Rotate the validator committee" description="Issue a set-treasury proposal to update the validator set and Merkle root." />
+  <LinkCard href="/how-to/join-governance/" title="Join the governance committee" description="How to apply to become a validator on the community registry." />
+</CardGrid>
+
+## Governance — inspection
+
+<CardGrid>
+  <LinkCard href="/how-to/inspect-registry/" title="Inspect the live registry" description="View current entries, treasury balance, and validator info via CLI." />
+  <LinkCard href="/how-to/check-proposal-status/" title="Check proposal status" description="Determine where a proposal is in its lifecycle and what action is needed." />
+  <LinkCard href="/how-to/use-governance-gui/" title="Use the governance dashboard" description="Launch and navigate the browser-based GUI for inspection and governance." />
+</CardGrid>
+
+## Operations
+
+<CardGrid>
+  <LinkCard href="/how-to/deploy-private-registry/" title="Deploy a private registry" description="Full deployment: contracts, bootstrap, treasury, and first governance round." />
+  <LinkCard href="/how-to/deploy-treasury/" title="Deploy and seed the treasury" description="Deploy the treasury-lock binary and fund the initial pool." />
+  <LinkCard href="/how-to/donate-treasury/" title="Donate to the treasury" description="Top up the pool when usage reaches the 70% warning threshold." />
+  <LinkCard href="/how-to/prune-expired-entries/" title="Prune expired entries" description="Remove expired entries to reclaim registry cell capacity." />
+</CardGrid>
+
+## Troubleshooting
+
+Something went wrong. Find your symptom.
+
+<CardGrid>
+  <LinkCard href="/how-to/troubleshoot/" title="Troubleshooting index" description="Route from symptom to fix — all error scenarios in one place." />
+</CardGrid>

@@ -1,0 +1,30 @@
+[package]
+name = "proposal-anchor"
+version = "0.2.0"
+authors = ["digitaldrreamer", "others"]
+edition = "2021"
+license = "MIT"
+description = "CKB type script for treasury-funded blacklist proposal anchors"
+
+[dependencies]
+# * Core CKB script development library
+ckb-std = { version = "0.16.4", default-features = false, features = ["ckb-types", "allocator", "dummy-atomic"] }
+
+# * Hashing (pure Rust; avoids C toolchain for RISC-V builds)
+blake2b-ref = { version = "0.3.1", default-features = false }
+
+[profile.release]
+overflow-checks = true
+opt-level = "z"        # * Optimize aggressively for binary size
+lto = true             # * Link-time optimization
+codegen-units = 1      # * Better optimization at cost of compile time
+panic = "abort"        # * Smaller binary size
+strip = true           # * Remove debug symbols
+
+[features]
+default = []
+# * Placeholder std feature kept for compatibility with workspace tooling
+std = []
+# * Declared to satisfy cfg checks used by ckb-std macros in some toolchains
+native-simulator = []
+dev-signer-keys = []

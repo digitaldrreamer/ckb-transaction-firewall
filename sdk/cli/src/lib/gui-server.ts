@@ -11,9 +11,9 @@ import { secp256k1 } from "@noble/curves/secp256k1.js";
 import {
   listProposals, loadProposal, saveProposal, getProposalsDir,
   computeProposalIdHash, computeVoteDigestHash,
-  voteSigningMessage, signingMessage,
+  voteSigningMessage,
   isReviewWindowPassed, isVoteApproved, isReadyToExecute,
-  countYes, VOTE_THRESHOLD, SIG_THRESHOLD, REVIEW_WINDOW_MS,
+  countYes, VOTE_THRESHOLD, REVIEW_WINDOW_MS,
   type Proposal, type ProposalAction, type ThreatClass, type Severity, type VoteChoice,
 } from "./proposals.js";
 import { getLiveCell } from "./rpc.js";
@@ -22,16 +22,27 @@ import { parseRegistryPayload } from "@ckb-firewall/sdk";
 import {
   hexToBytes, bytesToHex, strip0x,
   encodeRegistryPayload, extractGovernanceHeaderRaw, parseGovernanceHeader,
-  insertSorted, removeEntry,
+  governanceTreasuryLockHash, insertSorted, removeEntry, scriptToMoleculeBytes,
 } from "./blkl.js";
 import { computeMerkleProof, verifyMerkleProof } from "./validator-set.js";
 import {
   TESTNET_GOVERNANCE_PUBKEYS, TESTNET_CONTRACT_OUTPOINTS, SECP256K1_DEP_GROUP,
 } from "./defaults.js";
 import {
-  ckbBlake2b, buildGov1WitnessV3, buildGovernanceSigWitness,
-  buildWitnessArgs, encodeAbsoluteTimestampSince,
+  ckbBlake2b, buildGov1WitnessV4, buildValidatorVoteWitness,
+  buildWitnessArgs, encodeRelativeTimestampSince,
 } from "./witness.js";
+import {
+  assertProposalCellMatches,
+  assertProposalAnchorTypeMatches,
+  encodeProposalCellData,
+  loadRegistryStateForProposal,
+  parseRegistryTypeIdValue,
+  proposalCellDataHash,
+  proposalV4Fields,
+} from "./governance-v4.js";
+import { hexCapacity, occupiedCapacityShannons, parseCapacity } from "./capacity.js";
+import { loadTreasuryStatus } from "./treasury-status.js";
 
 export interface GuiServerOptions {
   rpcUrl: string;
@@ -45,6 +56,11 @@ export interface GuiServer {
   close: () => void;
 }
 
+const DEFAULT_FEE_SHANNONS = 100_000n;
+// Treasury-lock change outputs have 64-byte args — minimum occupied capacity is
+// 8 (capacity field) + 117 (lock script molecule) = 125 CKB = 12,500,000,000 shannons.
+const MIN_CHANGE_SHANNONS = 125n * 100_000_000n;
+
 // ── /api/data handler ─────────────────────────────────────────────────────────
 
 async function buildApiData(opts: GuiServerOptions): Promise<string> {
@@ -55,6 +71,9 @@ async function buildApiData(opts: GuiServerOptions): Promise<string> {
     txHash: string;
     index: number;
     version: number;
+    threshold: number | null;
+    validatorCount: number | null;
+    treasury: Awaited<ReturnType<typeof loadTreasuryStatus>>;
     error: string | null;
   };
 
@@ -66,10 +85,15 @@ async function buildApiData(opts: GuiServerOptions): Promise<string> {
     );
     const cell = await getLiveCell(opts.rpcUrl, txHash, index);
     const payload = parseRegistryPayload(cell.data);
+    const governanceHeaderRaw = extractGovernanceHeaderRaw(cell.data);
+    const governanceHeader = governanceHeaderRaw ? parseGovernanceHeader(governanceHeaderRaw) : null;
     registry = {
       txHash,
       index,
       version: payload.version,
+      threshold: governanceHeader?.threshold ?? null,
+      validatorCount: governanceHeader?.validatorCount ?? null,
+      treasury: await loadTreasuryStatus(opts.rpcUrl, cell, governanceHeader),
       error: null,
       entries: payload.entries.map((e) => ({
         identifier: e.identifier,
@@ -81,6 +105,9 @@ async function buildApiData(opts: GuiServerOptions): Promise<string> {
       txHash: opts.registryTx,
       index: opts.registryIndex,
       version: 0,
+      threshold: null,
+      validatorCount: null,
+      treasury: null,
       error: err instanceof Error ? err.message : String(err),
       entries: [],
     };
@@ -118,6 +145,30 @@ function apiOk(res: ServerResponse, data: unknown): void {
 function apiErr(res: ServerResponse, msg: string, status = 400): void {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok: false, error: msg }));
+}
+
+function parseOutputIndex(value: unknown, name: string): number {
+  const raw = String(value ?? "").trim();
+  if (!/^\d+$/.test(raw)) throw new Error(`${name} must be a non-negative integer.`);
+  return Number.parseInt(raw, 10);
+}
+
+function parseOptionalTxHash(value: unknown, name: string): string | undefined {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(raw)) throw new Error(`${name} must be a 0x-prefixed 32-byte transaction hash.`);
+  return raw;
+}
+
+function extractProposalOutpoint(proposal: Proposal, body: Record<string, unknown>): { txHash: string; index: number } {
+  const txHash = parseOptionalTxHash(body.proposalTx, "proposalTx") || proposal.proposalCellTxHash?.trim();
+  const indexRaw = body.proposalIndex ?? (
+    proposal.proposalCellIndex === undefined ? undefined : String(proposal.proposalCellIndex)
+  );
+  if (!txHash || indexRaw === undefined) {
+    throw new Error("Proposal cell outpoint is missing. Anchor the proposal cell first, then record its tx hash and output index.");
+  }
+  return { txHash, index: parseOutputIndex(indexRaw, "proposalIndex") };
 }
 
 // ── /api/propose ──────────────────────────────────────────────────────────────
@@ -211,18 +262,17 @@ async function handleVote(body: unknown, opts: GuiServerOptions): Promise<object
   const proposal = loadProposal(proposalId);
   if (proposal.status === "executed") throw new Error("Proposal already executed");
   if (proposal.status === "rejected") throw new Error("Proposal was rejected");
-  if (proposal.signatures.length > 0) throw new Error("Cannot vote — signing has already begun");
 
   const pubkeyBytes = secp256k1.getPublicKey(pkBytes, true);
   const pubkey = bytesToHex(new Uint8Array(pubkeyBytes));
 
   const validatorSet = TESTNET_GOVERNANCE_PUBKEYS.map((k) => bytesToHex(k));
   const merkleResult = computeMerkleProof(validatorSet, pubkey);
-  if (!merkleResult) { pkBytes.fill(0); throw new Error(`Key is not an authorized validator (pubkey: ${pubkey.slice(0, 20)}…)`); }
+  if (!merkleResult) { pkBytes.fill(0); throw new Error(`Key is not an authorized governance voter (pubkey: ${pubkey.slice(0, 20)}…)`); }
   const { proof: merkleProof, leafIndex: merkleLeafIndex } = merkleResult;
 
   if (proposal.votes.some((v) => v.pubkey.toLowerCase() === pubkey.toLowerCase())) {
-    pkBytes.fill(0); throw new Error("This validator already voted on this proposal");
+    pkBytes.fill(0); throw new Error("This governance voter already voted on this proposal");
   }
 
   const timestamp = new Date().toISOString();
@@ -244,184 +294,263 @@ async function handleVote(body: unknown, opts: GuiServerOptions): Promise<object
   return { ok: true, yesCount, approved, status: proposal.status, pubkey };
 }
 
-// ── /api/sign ─────────────────────────────────────────────────────────────────
-
-async function handleSign(body: unknown, opts: GuiServerOptions): Promise<object> {
-  if (typeof body !== "object" || body === null) throw new Error("Invalid body");
-  const b = body as Record<string, unknown>;
-
-  const proposalId = String(b.proposalId ?? "").trim();
-  if (!proposalId) throw new Error("proposalId required");
-
-  const signerIndex = Number(b.signerIndex);
-  if (!Number.isInteger(signerIndex) || signerIndex < 0 || signerIndex >= 5)
-    throw new Error("signerIndex must be 0–4");
-
-  const pkHex = String(b.privateKey ?? "").trim();
-  let pkBytes: Uint8Array;
-  try {
-    pkBytes = hexToBytes(pkHex);
-    if (pkBytes.length !== 32) throw new Error("must be 32 bytes");
-    secp256k1.getPublicKey(pkBytes);
-  } catch (e) { throw new Error("Invalid private key: " + (e instanceof Error ? e.message : String(e))); }
-
-  const proposal = loadProposal(proposalId);
-  if (proposal.status === "executed") throw new Error("Already executed");
-  if (proposal.status === "rejected") throw new Error("Proposal was rejected");
-  if (!isReviewWindowPassed(proposal)) {
-    const ms = new Date(proposal.reviewWindowEndsAt).getTime() - Date.now();
-    const h2 = Math.floor(ms / 3_600_000), m = Math.floor((ms % 3_600_000) / 60_000);
-    throw new Error(`Review window not passed yet — ${h2}h ${m}m remaining`);
-  }
-  if (!isVoteApproved(proposal)) throw new Error("Vote threshold not met");
-  if (proposal.signatures.some((s) => s.signerIndex === signerIndex))
-    throw new Error(`Signer ${signerIndex} already signed`);
-
-  const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, opts.registryIndex);
-  const cell = await getLiveCell(opts.rpcUrl, txHash, index);
-  const currentPayload = parseRegistryPayload(cell.data);
-  const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
-  const oldBlkl = hexToBytes(cell.data);
-
-  const newEntries = proposal.action === "add"
-    ? insertSorted(currentPayload.entries, { identifier: proposal.lockArgs, expiresAt: BigInt(proposal.expiresAt) })
-    : removeEntry(currentPayload.entries, proposal.lockArgs);
-  const newBlkl = encodeRegistryPayload({ version: currentPayload.version, entries: newEntries }, govHeaderRaw ?? undefined);
-  const oldRoot = ckbBlake2b(oldBlkl);
-  const newRoot = ckbBlake2b(newBlkl);
-
-  const pubKey = bytesToHex(new Uint8Array(secp256k1.getPublicKey(pkBytes, true)));
-  const reviewWindowEndMs = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
-  const msgHash = signingMessage(proposal, oldRoot, newRoot, reviewWindowEndMs);
-  const recoveredSig = secp256k1.sign(msgHash, pkBytes, { lowS: true, format: "recovered" });
-  const sigBytes = new Uint8Array(65);
-  sigBytes.set(recoveredSig.slice(1), 0);
-  sigBytes[64] = recoveredSig[0] ?? 0;
-  pkBytes.fill(0);
-
-  const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
-  const effectiveThreshold = govHeader?.threshold ?? SIG_THRESHOLD;
-  const sigHex = bytesToHex(sigBytes);
-  proposal.signatures.push({ signerIndex, signature: sigHex, timestamp: new Date().toISOString() });
-  if (proposal.signatures.length >= effectiveThreshold) proposal.status = "approved";
-  saveProposal(proposal);
-
-  return { ok: true, sigCount: proposal.signatures.length, effectiveThreshold, ready: isReadyToExecute(proposal), pubKey, signature: sigHex };
-}
-
 // ── /api/execute ──────────────────────────────────────────────────────────────
 
 async function handleExecute(body: unknown, opts: GuiServerOptions): Promise<object> {
   if (typeof body !== "object" || body === null) throw new Error("Invalid body");
   const b = body as Record<string, unknown>;
+
   const proposalId = String(b.proposalId ?? "").trim();
   if (!proposalId) throw new Error("proposalId required");
-
   const proposal = loadProposal(proposalId);
-  if (proposal.status === "executed")
-    throw new Error(`Already executed — tx: ${proposal.txHash ?? "unknown"}`);
-  if (!isReviewWindowPassed(proposal)) throw new Error("Review window not passed");
+  if (proposal.status === "executed") throw new Error("Proposal already executed");
+  if (!isReviewWindowPassed(proposal)) throw new Error("Local review window has not passed");
   if (!isVoteApproved(proposal)) throw new Error("Vote threshold not met");
-  if (proposal.signatures.length < SIG_THRESHOLD)
-    throw new Error(`Only ${proposal.signatures.length}/${SIG_THRESHOLD} signatures`);
 
-  if (proposal.expiresAt !== "0") {
-    const expiryMs = BigInt(proposal.expiresAt) * 1000n;
-    if (BigInt(Date.now()) >= expiryMs)
-      throw new Error(`Proposal has already expired (${new Date(Number(expiryMs)).toISOString()})`);
+  const outpoint = extractProposalOutpoint(proposal, b);
+  const state = await loadRegistryStateForProposal(opts.rpcUrl, opts.registryTx, opts.registryIndex, proposal);
+  const proposalCell = await getLiveCell(opts.rpcUrl, outpoint.txHash, outpoint.index);
+  const proposalDataHash = assertProposalCellMatches(proposal, proposalCell.data, state.registryTypeIdValue);
+  const fields = proposalV4Fields(proposal, state.registryTypeIdValue);
+  if (bytesToHex(fields.proposalDataHash) !== bytesToHex(proposalDataHash)) {
+    throw new Error("Internal proposal hash mismatch");
   }
+  proposal.proposalDataHash = bytesToHex(proposalDataHash);
+  proposal.reviewDelayMs = fields.reviewDelayMs.toString();
+  proposal.proposalCellTxHash = outpoint.txHash;
+  proposal.proposalCellIndex = outpoint.index;
 
-  // Verify vote signatures
   for (const v of proposal.votes) {
-    const sb = hexToBytes(v.signature);
-    if (sb.length !== 65) throw new Error(`Vote from ${v.pubkey.slice(0,14)}… has invalid sig length`);
+    const sigBytes = hexToBytes(v.signature);
+    if (sigBytes.length !== 65) throw new Error(`Vote from ${v.pubkey.slice(0, 14)}... has invalid signature length`);
     const msgHash = voteSigningMessage(proposal.proposalIdHash, v.vote, v.timestamp, v.pubkey);
-    const sig65v = new Uint8Array(65);
-    sig65v[0] = sb[64] as number;
-    sig65v.set(sb.subarray(0, 64), 1);
-    let recoveredPk: string;
-    try { recoveredPk = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65v, msgHash))); }
-    catch { throw new Error(`Vote from ${v.pubkey.slice(0,14)}… has unrecoverable signature`); }
-    if (recoveredPk !== v.pubkey) throw new Error(`Vote from ${v.pubkey.slice(0,14)}… signature mismatch`);
+    const sig65 = new Uint8Array(65);
+    sig65[0] = sigBytes[64] as number;
+    sig65.set(sigBytes.subarray(0, 64), 1);
+    const recoveredPubkey = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65, msgHash)));
+    if (recoveredPubkey !== v.pubkey) throw new Error(`Vote signature does not match pubkey ${v.pubkey.slice(0, 14)}...`);
   }
 
-  const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, opts.registryIndex);
-  const cell = await getLiveCell(opts.rpcUrl, txHash, index);
-  const currentPayload = parseRegistryPayload(cell.data);
-  const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
-  const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
-  const oldBlkl = hexToBytes(cell.data);
-  const oldRoot = ckbBlake2b(oldBlkl);
-
-  // Verify Merkle proofs against on-chain validator set
-  if (govHeader && govHeader.validatorCount > 0) {
-    const rootHex = bytesToHex(govHeader.validatorMerkleRoot);
+  if (state.governanceHeader?.validatorCount) {
+    const rootHex = bytesToHex(state.governanceHeader.validatorMerkleRoot);
     for (const v of proposal.votes) {
-      if (!Array.isArray(v.merkleProof) || typeof v.merkleLeafIndex !== "number")
-        throw new Error(`Vote from ${v.pubkey.slice(0,14)}… missing Merkle proof`);
-      if (!verifyMerkleProof(rootHex, v.pubkey, v.merkleProof, v.merkleLeafIndex))
-        throw new Error(`Vote from ${v.pubkey.slice(0,14)}… not in on-chain validator set`);
+      if (!verifyMerkleProof(rootHex, v.pubkey, v.merkleProof, v.merkleLeafIndex)) {
+        throw new Error(`Vote from ${v.pubkey.slice(0, 14)}... is not in the on-chain governance voter set`);
+      }
     }
   }
 
-  const newEntries = proposal.action === "add"
-    ? insertSorted(currentPayload.entries, { identifier: proposal.lockArgs, expiresAt: BigInt(proposal.expiresAt) })
-    : removeEntry(currentPayload.entries, proposal.lockArgs);
-  const newBlkl = encodeRegistryPayload({ version: currentPayload.version, entries: newEntries }, govHeaderRaw ?? undefined);
-  const newRoot = ckbBlake2b(newBlkl);
-
-  // Verify governance signer signatures
-  const effectiveThreshold = govHeader?.threshold ?? SIG_THRESHOLD;
-  if (govHeader && govHeader.pubkeys.length > 0) {
-    const reviewWindowEndMsV = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
-    const msgHash = signingMessage(proposal, oldRoot, newRoot, reviewWindowEndMsV);
-    for (const s of proposal.signatures) {
-      const sb = hexToBytes(s.signature);
-      if (sb.length !== 65) throw new Error(`Sig from signer ${s.signerIndex} invalid length`);
-      const sig65s = new Uint8Array(65);
-      sig65s[0] = sb[64] as number;
-      sig65s.set(sb.subarray(0, 64), 1);
-      let rk: string;
-      try { rk = bytesToHex(new Uint8Array(secp256k1.recoverPublicKey(sig65s, msgHash))); }
-      catch { throw new Error(`Sig from signer ${s.signerIndex} unrecoverable`); }
-      const expected = bytesToHex(govHeader.pubkeys[s.signerIndex]!);
-      if (rk !== expected) throw new Error(`Sig from signer ${s.signerIndex} does not match on-chain pubkey`);
+  const proposalCapacity = parseCapacity(proposalCell.capacity);
+  const proposalChangeCapacity = proposalCapacity - DEFAULT_FEE_SHANNONS;
+  const treasuryLockHash = governanceTreasuryLockHash(state.governanceHeader);
+  const minChange = treasuryLockHash
+    ? MIN_CHANGE_SHANNONS
+    : occupiedCapacityShannons({ lock: proposalCell.lock, type: null, data: "0x" });
+  if (proposalChangeCapacity < minChange) {
+    throw new Error(`Proposal cell capacity ${proposalCapacity} shannons is too small to return change after fee`);
+  }
+  let registryOutputCapacity = parseCapacity(state.cell.capacity);
+  let extraTreasuryOutputCapacity = 0n;
+  let treasuryLockScript: { code_hash: string; hash_type: string; args: string } | undefined;
+  if (treasuryLockHash) {
+    treasuryLockScript = state.governanceHeader?.treasuryLockScript;
+    if (!treasuryLockScript) {
+      throw new Error(
+        "Registry treasury lock script is missing from the governance header. " +
+        "A full treasury lock script (v3 header) is required to safely route change capacity."
+      );
     }
+    assertProposalAnchorTypeMatches({
+      proposalCellType: proposalCell.type,
+      registryTypeIdValue: state.registryTypeIdValue,
+      governanceHeader: state.governanceHeader,
+      reclaimDelayMs: fields.reviewDelayMs,
+    });
+    const proposalLockHash = ckbBlake2b(scriptToMoleculeBytes(proposalCell.lock));
+    if (bytesToHex(proposalLockHash) !== bytesToHex(treasuryLockHash)) {
+      throw new Error("This registry uses treasury-funded anchors, but the proposal cell is not locked to the registry treasury");
+    }
+    const registryInputCapacity = parseCapacity(state.cell.capacity);
+    const minRegistryCapacity = occupiedCapacityShannons({
+      lock: state.cell.lock,
+      type: state.cell.type,
+      data: state.newBlkl,
+    });
+    registryOutputCapacity = minRegistryCapacity;
+    if (registryOutputCapacity > registryInputCapacity) {
+      throw new Error(
+        `Registry update needs ${registryOutputCapacity - registryInputCapacity} shannons of treasury capacity for growth. ` +
+        "Use the CLI execute command with --treasury-cell inputs.",
+      );
+    }
+    extraTreasuryOutputCapacity = registryInputCapacity - registryOutputCapacity;
   }
 
-  // Recompute + verify vote digest
-  const recomputedVoteDigest = computeVoteDigestHash(proposal.votes);
-  if (recomputedVoteDigest !== proposal.voteDigestHash)
-    throw new Error("Vote digest hash mismatch — votes may have been tampered");
-
-  const reviewWindowEndMs = BigInt(new Date(proposal.reviewWindowEndsAt).getTime());
-  const proposalIdBytes = hexToBytes(proposal.proposalIdHash);
-  const voteDigestBytes = hexToBytes(proposal.voteDigestHash);
-  const signers = proposal.signatures.slice(0, effectiveThreshold).map((s) => ({ index: s.signerIndex, sig: hexToBytes(s.signature) }));
-
-  const gov1 = buildGov1WitnessV3({ proposalIdHash: proposalIdBytes, voteDigestHash: voteDigestBytes, oldRoot, newRoot, reviewWindowEndMs });
-  const sigWitness = buildGovernanceSigWitness(signers);
-  const witnessBytes = buildWitnessArgs({ lock: sigWitness, inputType: gov1 });
+  const yesVotes = proposal.votes
+    .filter((v) => v.vote === "yes")
+    .sort((a, b) => a.pubkey.localeCompare(b.pubkey));
+  const gov1 = buildGov1WitnessV4({
+    proposalIdHash: hexToBytes(proposal.proposalIdHash),
+    voteDigestHash: hexToBytes(proposal.voteDigestHash),
+    oldRoot: state.oldRoot,
+    newRoot: state.newRoot,
+    proposalDataHash,
+    reviewDelayMs: fields.reviewDelayMs,
+  });
+  const voteWitness = buildValidatorVoteWitness(yesVotes.map((v) => ({
+    pubkey: hexToBytes(v.pubkey),
+    vote: v.vote,
+    timestamp: v.timestamp,
+    signature: hexToBytes(v.signature),
+    merkleLeafIndex: v.merkleLeafIndex,
+    merkleProof: v.merkleProof.map(hexToBytes),
+  })));
+  const witnessBytes = buildWitnessArgs({ lock: voteWitness, inputType: gov1 });
 
   const txJson = {
     transaction: {
       version: "0x0",
       cell_deps: [
         { out_point: { tx_hash: SECP256K1_DEP_GROUP.txHash, index: "0x0" }, dep_type: "dep_group" },
-        { out_point: { tx_hash: TESTNET_CONTRACT_OUTPOINTS.blacklistRegistry.txHash, index: `0x${TESTNET_CONTRACT_OUTPOINTS.blacklistRegistry.index.toString(16)}` }, dep_type: "code" },
-        { out_point: { tx_hash: TESTNET_CONTRACT_OUTPOINTS.governanceLock.txHash, index: `0x${TESTNET_CONTRACT_OUTPOINTS.governanceLock.index.toString(16)}` }, dep_type: "code" },
+        {
+          out_point: {
+            tx_hash: TESTNET_CONTRACT_OUTPOINTS.blacklistRegistry.txHash,
+            index: `0x${TESTNET_CONTRACT_OUTPOINTS.blacklistRegistry.index.toString(16)}`,
+          },
+          dep_type: "code",
+        },
+        {
+          out_point: {
+            tx_hash: TESTNET_CONTRACT_OUTPOINTS.governanceLock.txHash,
+            index: `0x${TESTNET_CONTRACT_OUTPOINTS.governanceLock.index.toString(16)}`,
+          },
+          dep_type: "code",
+        },
+        ...(treasuryLockHash ? [{
+          out_point: {
+            tx_hash: TESTNET_CONTRACT_OUTPOINTS.proposalAnchor.txHash,
+            index: `0x${TESTNET_CONTRACT_OUTPOINTS.proposalAnchor.index.toString(16)}`,
+          },
+          dep_type: "code" as const,
+        }] : []),
       ],
       header_deps: [],
-      inputs: [{ since: encodeAbsoluteTimestampSince(reviewWindowEndMs), previous_output: { tx_hash: cell.txHash, index: `0x${cell.index.toString(16)}` } }],
-      outputs: [{ capacity: cell.capacity, lock: cell.lock, type: cell.type }],
-      outputs_data: [bytesToHex(newBlkl)],
-      witnesses: [bytesToHex(witnessBytes)],
+      inputs: [
+        {
+          since: "0x0",
+          previous_output: { tx_hash: state.cell.txHash, index: `0x${state.cell.index.toString(16)}` },
+        },
+        {
+          since: encodeRelativeTimestampSince(fields.reviewDelayMs),
+          previous_output: { tx_hash: outpoint.txHash, index: `0x${outpoint.index.toString(16)}` },
+        },
+      ],
+      outputs: [
+        { capacity: hexCapacity(registryOutputCapacity), lock: state.cell.lock, type: state.cell.type },
+        // Merge proposal change + extra treasury capacity into one output to avoid
+        // creating a cell below the minimum 125 CKB for treasury-lock's 64-byte args.
+        { capacity: hexCapacity(proposalChangeCapacity + extraTreasuryOutputCapacity), lock: treasuryLockScript ?? proposalCell.lock, type: null },
+      ],
+      outputs_data: [
+        bytesToHex(state.newBlkl),
+        "0x",
+      ],
+      witnesses: [bytesToHex(witnessBytes), bytesToHex(buildWitnessArgs({}))],
     },
     multisig_configs: {},
     signatures: {},
   };
 
-  return { ok: true, proposalId: proposal.id, txJson, filename: `gov_execute_tx_${proposal.id}.json` };
+  saveProposal(proposal);
+  return {
+    ok: true,
+    proposal,
+    txJson,
+    filename: `gov_execute_tx_${proposal.id}.json`,
+    proposalCell: outpoint,
+    proposalDataHash: bytesToHex(proposalDataHash),
+    since: encodeRelativeTimestampSince(fields.reviewDelayMs),
+  };
+}
+
+// ── /api/anchor ───────────────────────────────────────────────────────────────
+
+async function handleAnchor(body: unknown, opts: GuiServerOptions): Promise<object> {
+  if (typeof body !== "object" || body === null) throw new Error("Invalid body");
+  const b = body as Record<string, unknown>;
+  const proposalId = String(b.proposalId ?? "").trim();
+  if (!proposalId) throw new Error("proposalId required");
+
+  const proposal = loadProposal(proposalId);
+  const { txHash, index } = await resolveRegistryOutpoint(opts.rpcUrl, opts.registryTx, opts.registryIndex);
+  const registryCell = await getLiveCell(opts.rpcUrl, txHash, index);
+  if (!registryCell.type) throw new Error("Registry cell has no type script");
+  const registryTypeIdValue = parseRegistryTypeIdValue(registryCell.type.args);
+  const governanceHeaderRaw = extractGovernanceHeaderRaw(registryCell.data);
+  const governanceHeader = governanceHeaderRaw ? parseGovernanceHeader(governanceHeaderRaw) : null;
+  const proposalData = encodeProposalCellData(proposal, registryTypeIdValue);
+  const proposalDataHashHex = bytesToHex(proposalCellDataHash(proposal, registryTypeIdValue));
+  proposal.proposalDataHash = proposalDataHashHex;
+  proposal.reviewDelayMs = proposal.reviewDelayMs ?? String(REVIEW_WINDOW_MS);
+
+  const proposalTx = parseOptionalTxHash(b.proposalTx, "proposalTx");
+  let anchorVerified = false;
+  if (proposalTx) {
+    const proposalIndex = parseOutputIndex(b.proposalIndex, "proposalIndex");
+    const proposalCell = await getLiveCell(opts.rpcUrl, proposalTx, proposalIndex);
+    const liveHash = assertProposalCellMatches(proposal, proposalCell.data, registryTypeIdValue);
+    if (bytesToHex(liveHash) !== proposalDataHashHex) {
+      throw new Error("Live proposal-cell hash does not match the expected PBLK data");
+    }
+    assertProposalAnchorTypeMatches({
+      proposalCellType: proposalCell.type,
+      registryTypeIdValue,
+      governanceHeader,
+      reclaimDelayMs: BigInt(proposal.reviewDelayMs),
+    });
+    const treasuryLockHash = governanceTreasuryLockHash(governanceHeader);
+    if (treasuryLockHash) {
+      const proposalLockHash = ckbBlake2b(scriptToMoleculeBytes(proposalCell.lock));
+      if (bytesToHex(proposalLockHash) !== bytesToHex(treasuryLockHash)) {
+        throw new Error("This registry uses treasury-funded anchors, but the proposal cell is not locked to the registry treasury");
+      }
+    }
+    proposal.proposalCellTxHash = proposalTx;
+    proposal.proposalCellIndex = proposalIndex;
+    anchorVerified = true;
+  } else if (b.proposalIndex !== undefined && String(b.proposalIndex).trim()) {
+    throw new Error("proposalTx is required when proposalIndex is provided");
+  }
+  saveProposal(proposal);
+
+  const treasuryLockHash = governanceTreasuryLockHash(governanceHeader);
+  const toAddress = String(b.toAddress ?? "").trim();
+  const command = treasuryLockHash ? [
+    "ckb-firewall",
+    "anchor",
+    "--proposal", proposal.id,
+    "--tx-out", `gov_anchor_tx_${proposal.id}.json`,
+  ].join(" ") : toAddress ? [
+    "ckb-cli",
+    "--url", opts.rpcUrl,
+    "wallet", "transfer",
+    "--to-address", toAddress,
+    "--capacity", "62",
+    "--to-data", bytesToHex(proposalData),
+    "--fee-rate", "1000",
+    "--output-format", "json",
+  ].map((p) => (/\s/.test(p) ? JSON.stringify(p) : p)).join(" ") : null;
+
+  return {
+    ok: true,
+    proposal,
+    proposalData: bytesToHex(proposalData),
+    proposalDataHash: proposalDataHashHex,
+    reviewDelayMs: proposal.reviewDelayMs,
+    anchorVerified,
+    treasuryBacked: Boolean(treasuryLockHash),
+    command,
+  };
 }
 
 // ── /api/import ───────────────────────────────────────────────────────────────
@@ -433,8 +562,8 @@ function handleImport(body: unknown): object {
   const requiredStrings = ["id","proposalIdHash","action","lockArgs","expiresAt","evidence","classification","severity","rationale","proposer","submittedAt","reviewWindowEndsAt","status","voteDigestHash"];
   for (const k of requiredStrings)
     if (typeof p[k] !== "string") throw new Error(`Missing field: ${k}`);
-  if (!Array.isArray(p.votes) || !Array.isArray(p.signatures))
-    throw new Error("votes and signatures must be arrays");
+  if (!Array.isArray(p.votes))
+    throw new Error("votes must be an array");
 
   const computed = computeProposalIdHash({
     action: p.action as ProposalAction, lockArgs: p.lockArgs as string,
@@ -462,28 +591,33 @@ function handleImport(body: unknown): object {
     try { existing = loadProposal(incoming.id); } catch { existing = incoming; }
 
     if (existing.proposalIdHash === incoming.proposalIdHash) {
-      const signingStarted = existing.signatures.length > 0 || incoming.signatures.length > 0;
-      let mergedVotes: Proposal["votes"];
-      let mergedVoteDigest: string;
-      if (signingStarted) {
-        mergedVotes = existing.signatures.length > 0 ? existing.votes : incoming.votes;
-        mergedVoteDigest = existing.signatures.length > 0 ? existing.voteDigestHash : incoming.voteDigestHash;
-      } else {
-        const votesByPk = new Map(existing.votes.map((v) => [v.pubkey.toLowerCase(), v]));
-        for (const v of incoming.votes) {
-          const prev = votesByPk.get(v.pubkey.toLowerCase());
-          if (!prev || v.timestamp > prev.timestamp) votesByPk.set(v.pubkey.toLowerCase(), v);
+      const votesByPk = new Map(existing.votes.map((v) => [v.pubkey.toLowerCase(), v]));
+      for (const v of incoming.votes) {
+        const prev = votesByPk.get(v.pubkey.toLowerCase());
+        if (!prev || v.timestamp > prev.timestamp) {
+          votesByPk.set(v.pubkey.toLowerCase(), v);
         }
-        mergedVotes = [...votesByPk.values()];
-        mergedVoteDigest = computeVoteDigestHash(mergedVotes);
       }
-      const sigBySigner = new Map(existing.signatures.map((s) => [s.signerIndex, s]));
-      for (const s of incoming.signatures) sigBySigner.set(s.signerIndex, s);
-      const mergedSigs = [...sigBySigner.values()];
+      const mergedVotes = [...votesByPk.values()];
+      const mergedVoteDigest = computeVoteDigestHash(mergedVotes);
       const rankStatus = (st: Proposal["status"]) => ["pending-review","voting","approved","rejected","executed"].indexOf(st);
-      const merged: Proposal = { ...incoming, votes: mergedVotes, voteDigestHash: mergedVoteDigest, signatures: mergedSigs, status: rankStatus(existing.status) >= rankStatus(incoming.status) ? existing.status : incoming.status };
+      const merged: Proposal = {
+        ...incoming,
+        votes: mergedVotes,
+        voteDigestHash: mergedVoteDigest,
+        signatures: [],
+        status: rankStatus(existing.status) >= rankStatus(incoming.status) ? existing.status : incoming.status,
+      };
+      const proposalDataHash = existing.proposalDataHash ?? incoming.proposalDataHash;
+      const reviewDelayMs = existing.reviewDelayMs ?? incoming.reviewDelayMs;
+      const proposalCellTxHash = existing.proposalCellTxHash ?? incoming.proposalCellTxHash;
+      const proposalCellIndex = existing.proposalCellIndex ?? incoming.proposalCellIndex;
+      if (proposalDataHash !== undefined) merged.proposalDataHash = proposalDataHash;
+      if (reviewDelayMs !== undefined) merged.reviewDelayMs = reviewDelayMs;
+      if (proposalCellTxHash !== undefined) merged.proposalCellTxHash = proposalCellTxHash;
+      if (proposalCellIndex !== undefined) merged.proposalCellIndex = proposalCellIndex;
       saveProposal(merged);
-      return { ok: true, merged: true, id: incoming.id, votes: mergedVotes.length, signatures: mergedSigs.length };
+      return { ok: true, merged: true, id: incoming.id, votes: mergedVotes.length };
     }
     throw new Error(`A different proposal with ID ${incoming.id} already exists locally`);
   }
@@ -519,7 +653,7 @@ function _buildGuiHtml(apiDataJson: string): string {
 
   const d = JSON.parse(apiDataJson) as {
     proposals: unknown[];
-    registry: { entries?: unknown[]; txHash?: string; error?: string | null };
+    registry: { entries?: unknown[]; txHash?: string; error?: string | null; treasury?: unknown; threshold?: number | null; validatorCount?: number | null };
     meta: Record<string, unknown>;
   };
 
@@ -528,13 +662,13 @@ function _buildGuiHtml(apiDataJson: string): string {
 window.TFW_PROPOSALS = ${safeJson(d.proposals ?? [])};
 window.TFW_REGISTRY_ENTRIES = ${safeJson(d.registry?.entries ?? [])};
 window.TFW_META = ${safeJson({
-    threshold: 3,
-    governanceSetSize: 5,
+    threshold: d.registry?.threshold ?? 3,
+    governanceSetSize: d.registry?.validatorCount ?? 5,
     reviewWindowHours: 72,
     registryTxHash: d.registry?.txHash ?? null,
     registryError: d.registry?.error ?? null,
+    treasury: d.registry?.treasury ?? null,
     yourPubkey: null,
-    yourSignerIndex: 0,
     ...d.meta,
   })};
 </script>`;
@@ -867,9 +1001,8 @@ function countdown(iso){
   return '<span style="color:var(--yellow)">'+h2+'h '+m+'m remaining</span>';
 }
 function countYes(votes){ return (votes||[]).filter(function(v){return v.vote==='yes';}).length; }
-function sigCount(p){ return (p.signatures||[]).length; }
 function reviewPassed(p){ return Date.now()>=new Date(p.reviewWindowEndsAt).getTime(); }
-function isReady(p){ return reviewPassed(p)&&countYes(p.votes)>=3&&sigCount(p)>=3; }
+function isReady(p){ return reviewPassed(p)&&countYes(p.votes)>=3; }
 function prog(v,max){
   var pct=Math.min(100,Math.round(v/max*100));
   var cls=v>=max?'prog-g':'prog-y';
@@ -975,12 +1108,6 @@ function renderOverview(){
     action.forEach(function(p){ out+=propCard(p,true); });
     out+='</div>';
   }
-  // awaiting signatures
-  if(approved.length){
-    out+='<div class="section"><div class="sec-hdr">&#9998; Awaiting Signatures</div>';
-    approved.forEach(function(p){ out+=propCard(p,true); });
-    out+='</div>';
-  }
   // recent
   var recent=ps.slice().sort(function(a,b){return b.submittedAt.localeCompare(a.submittedAt);}).slice(0,6);
   if(recent.length){
@@ -1077,14 +1204,11 @@ function propCard(p,compact){
   out+='</div>';
   out+='<div class="card-foot">';
   out+=prog(countYes(p.votes),3);
-  out+=prog(sigCount(p),3);
   out+='<span style="flex:1"></span>';
   out+=regHint;
   // quick action buttons
-  if((p.status==='pending-review'||p.status==='voting')&&!p.signatures.length){
+  if(p.status==='pending-review'||p.status==='voting'){
     out+='<button class="btn btn-p" style="padding:3px 10px;font-size:11px" onclick="event.stopPropagation();openVoteForm(\''+h(p.id)+'\')">Vote &rarr;</button>';
-  } else if(reviewPassed(p)&&countYes(p.votes)>=3&&p.status!=='executed'&&p.status!=='rejected'){
-    out+='<button class="btn btn-g" style="padding:3px 10px;font-size:11px" onclick="event.stopPropagation();openSignForm(\''+h(p.id)+'\')">Sign &rarr;</button>';
   } else if(isReady(p)){
     out+='<button class="btn btn-p" style="padding:3px 10px;font-size:11px" onclick="event.stopPropagation();openExecuteForm(\''+h(p.id)+'\')">Execute &rarr;</button>';
   }
@@ -1164,24 +1288,10 @@ function openProposal(id){
   });}
   out+='</div>';
 
-  // signatures
-  var sigs=p.signatures||[];
-  out+='<div class="msec"><div class="msec-ttl">Signatures &nbsp;'+prog(sigs.length,3)+'</div>';
-  if(!sigs.length){out+='<div style="color:var(--subtle);font-size:12px">No signatures yet.</div>';}
-  else{sigs.forEach(function(s){
-    out+='<div class="vrow"><span class="vch" style="color:var(--dim);width:64px">Signer #'+h(String(s.signerIndex))+'</span>'
-        +'<code class="vpk">'+h(s.signature.slice(0,22))+'&hellip;</code>'
-        +'<span class="vts">'+fmtDate(s.timestamp)+'</span></div>';
-  });}
-  out+='</div>';
-
   // Actions
   out+='<div class="msec"><div class="msec-ttl">Actions</div><div class="act-btns">';
-  if((p.status==='pending-review'||p.status==='voting')&&!p.signatures.length){
+  if(p.status==='pending-review'||p.status==='voting'){
     out+='<button class="btn btn-p" onclick="closeModal();openVoteForm(\''+h(p.id)+'\')">Cast Vote</button>';
-  }
-  if(reviewPassed(p)&&countYes(p.votes)>=3&&p.status!=='executed'&&p.status!=='rejected'){
-    out+='<button class="btn btn-g" onclick="closeModal();openSignForm(\''+h(p.id)+'\')">Sign</button>';
   }
   if(isReady(p)){
     out+='<button class="btn btn-p" onclick="closeModal();openExecuteForm(\''+h(p.id)+'\')">Build Execute TX</button>';
@@ -1193,9 +1303,6 @@ function openProposal(id){
   out+='<div class="msec"><div class="msec-ttl">CLI Commands</div>';
   if(p.status==='pending-review'||p.status==='voting'){
     out+=cmdRow('Vote on this proposal','ckb-firewall vote --proposal '+p.id,'cmd-v');
-  }
-  if(p.status==='approved'||(reviewPassed(p)&&countYes(p.votes)>=3)){
-    out+=cmdRow('Sign this proposal (3-of-5 required)','ckb-firewall sign --proposal '+p.id,'cmd-s');
   }
   if(isReady(p)){
     out+=cmdRow('Execute on-chain','ckb-firewall execute --proposal '+p.id,'cmd-e');
@@ -1241,7 +1348,7 @@ function openAddr(identifier){
       out+='<div class="card" data-pid="'+h(p.id)+'" style="margin-bottom:8px">';
       out+='<div class="card-top">'+actionBadge(p)+'<span class="card-id">#'+h(p.id)+'</span><span style="flex:1"></span>'+statusBadge(p)+'</div>';
       out+='<div class="card-meta">'+h(p.classification)+' / '+h(p.severity)+' &middot; '+fmtDate(p.submittedAt)+'</div>';
-      out+='<div class="card-foot">'+prog(countYes(p.votes),3)+prog(sigCount(p),3)+'</div>';
+      out+='<div class="card-foot">'+prog(countYes(p.votes),3)+'</div>';
       out+='</div>';
     });
     out+='</div>';
@@ -1362,41 +1469,10 @@ function submitVote(id){
     .catch(function(e){ setDisabled('v-submit',false); showErr('v-err',e.message); });
 }
 
-// ── sign form ─────────────────────────────────────────────────────────────────
-function openSignForm(id){
-  var p=D.proposals.find(function(x){return x.id===id;});
-  if(!p)return;
-  var html='';
-  html+='<div class="sec-note sec-note-warn">&#128274; Private key zeroed immediately after signing. Never stored or transmitted.</div>';
-  html+='<div class="form-row"><label class="form-lbl" for="s-idx">Signer Index <small>(0–4, your position in governance set)</small></label>';
-  html+='<input id="s-idx" class="fi" type="number" min="0" max="4" placeholder="0–4"></div>';
-  html+='<div class="form-row"><label class="form-lbl" for="s-pk">Private Key <small>(32 bytes, hex)</small></label>';
-  html+='<input id="s-pk" class="fi fi-mono" type="password" placeholder="64 hex chars" autocomplete="off" autocorrect="off" spellcheck="false"></div>';
-  html+='<div id="s-err" class="form-err"></div>';
-  html+='<div id="s-ok" class="form-ok"></div>';
-  html+='<div class="btn-row"><button class="btn btn-g" id="s-submit" onclick="submitSign(\''+h(id)+'\')">Sign</button><button class="btn btn-d" onclick="closeAct()">Cancel</button></div>';
-  openAct('Sign — Proposal #'+h(id),html);
-}
-
-function submitSign(id){
-  hideMsg('s-err'); hideMsg('s-ok'); setDisabled('s-submit',true);
-  var body={proposalId:id,signerIndex:Number(fval('s-idx')),privateKey:fval('s-pk').trim()};
-  fetch('/api/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-    .then(function(r){return r.json();})
-    .then(function(d){
-      setDisabled('s-submit',false);
-      document.getElementById('s-pk').value='';
-      if(!d.ok){showErr('s-err',d.error||'Unknown error');return;}
-      showOk('s-ok','Signed! Sigs: '+d.sigCount+'/'+d.effectiveThreshold+(d.ready?' — Ready to execute!':''));
-      load().then(function(){ setTimeout(closeAct,1500); });
-    })
-    .catch(function(e){ setDisabled('s-submit',false); showErr('s-err',e.message); });
-}
-
 // ── execute form ──────────────────────────────────────────────────────────────
 function openExecuteForm(id){
   var html='';
-  html+='<div class="sec-note sec-note-tip">&#9888; This verifies all signatures and builds the transaction JSON for download. Submit it via ckb-cli or a CKB wallet.</div>';
+  html+='<div class="sec-note sec-note-tip">&#9888; This verifies validator votes and builds the transaction JSON for download. Submit it via ckb-cli or a CKB wallet.</div>';
   html+='<div id="e-err" class="form-err"></div>';
   html+='<div id="e-ok" class="form-ok"></div>';
   html+='<div class="btn-row"><button class="btn btn-p" id="e-submit" onclick="submitExecute(\''+h(id)+'\')">Build &amp; Download TX</button><button class="btn btn-d" onclick="closeAct()">Cancel</button></div>';
@@ -1453,7 +1529,7 @@ function submitImport(){
     .then(function(d){
       setDisabled('i-submit',false);
       if(!d.ok){showErr('i-err',d.error||'Unknown error');return;}
-      showOk('i-ok',d.merged?'Merged proposal #'+d.id+' ('+d.votes+' votes, '+d.signatures+' sigs)':'Imported proposal #'+d.id);
+      showOk('i-ok',d.merged?'Merged proposal #'+d.id+' ('+d.votes+' votes)':'Imported proposal #'+d.id);
       load().then(function(){ setTimeout(closeAct,1500); });
     })
     .catch(function(e){ setDisabled('i-submit',false); showErr('i-err',e.message); });
@@ -1559,8 +1635,8 @@ async function handleRequest(
     return;
   }
 
-  if (url === "/api/sign" && method === "POST") {
-    try { apiOk(res, await handleSign(await readJsonBody(req), opts)); }
+  if (url === "/api/anchor" && method === "POST") {
+    try { apiOk(res, await handleAnchor(await readJsonBody(req), opts)); }
     catch (e) { apiErr(res, e instanceof Error ? e.message : String(e)); }
     return;
   }

@@ -1,0 +1,65 @@
+---
+title: "Step 1: Install the SDK"
+description: Install @ckb-firewall/sdk and verify it is available.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Create a new directory for the tutorial and initialise a project:
+
+```bash
+mkdir firewall-tutorial && cd firewall-tutorial
+npm init -y
+```
+
+Install the SDK:
+
+<Tabs>
+<TabItem label="npm">
+```bash
+npm install @ckb-firewall/sdk
+```
+</TabItem>
+<TabItem label="pnpm">
+```bash
+pnpm add @ckb-firewall/sdk
+```
+</TabItem>
+<TabItem label="yarn">
+```bash
+yarn add @ckb-firewall/sdk
+```
+</TabItem>
+</Tabs>
+
+Set up TypeScript and ESM. Add the following to `package.json`:
+
+```json
+{
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-vm-modules check.ts"
+  }
+}
+```
+
+Create a file called `check.ts` and add this line:
+
+```ts
+import { fetchRegistryPayload } from "@ckb-firewall/sdk";
+console.log("SDK loaded:", typeof fetchRegistryPayload);
+```
+
+Run it:
+
+```bash
+npx tsx check.ts
+```
+
+You should see:
+
+```
+SDK loaded: function
+```
+
+If you see that output, the SDK is installed and the import works. Continue to [Step 2](/get-started/integration/2-fetch-registry/).

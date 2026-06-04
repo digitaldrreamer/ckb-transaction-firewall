@@ -1,0 +1,63 @@
+---
+title: Examples
+description: Runnable code examples showing the SDK and CLI working against the live testnet registry.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+These are complete, runnable programs that demonstrate the SDK and CLI in realistic contexts. All TypeScript examples fetch from the **live testnet registry** at `https://testnet.ckb.dev` — nothing is mocked.
+
+## Prerequisites
+
+- Node.js 20+ for TypeScript examples
+- Rust 1.70+ (MSRV) for the Rust example
+- An internet connection to reach `https://testnet.ckb.dev`
+- No CKB account or on-chain funds required — all examples are read-only
+
+## TypeScript examples
+
+Clone the repository and install:
+
+```bash
+git clone https://github.com/digitaldrreamer/ckb-transaction-firewall
+cd ckb-transaction-firewall/examples/typescript
+npm install
+```
+
+<CardGrid>
+  <LinkCard
+    href="/examples/wallet-feedback/"
+    title="wallet-feedback"
+    description="A wallet send flow: clean recipient approved, blacklisted recipient blocked, missing dep rejected. The most fundamental SDK pattern."
+  />
+  <LinkCard
+    href="/examples/wallet-ui/"
+    title="wallet-ui"
+    description="A browser UI served by a local HTTP server. Enter any lock args and see a live firewall decision via /api/check."
+  />
+  <LinkCard
+    href="/examples/blacklisted-transfer-safety/"
+    title="blacklisted-transfer-safety"
+    description="A credentialless safety test: proves the firewall blocks a transfer to an actually-active blacklisted destination from the live registry."
+  />
+  <LinkCard
+    href="/examples/agent-preflight/"
+    title="agent-preflight"
+    description="An AI agent (Mistral) given a proposePayment tool. The firewall check runs inside the tool — the agent cannot bypass it."
+  />
+</CardGrid>
+
+## Rust example
+
+```bash
+cd ckb-transaction-firewall/examples/rust
+cargo run --bin preflight_service
+```
+
+<CardGrid>
+  <LinkCard
+    href="/examples/preflight-service/"
+    title="preflight-service"
+    description="A Rust backend service that checks incoming transaction candidates and forwards only clean ones to the signing queue."
+  />
+</CardGrid>

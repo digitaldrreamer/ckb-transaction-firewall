@@ -11,6 +11,12 @@ import {
 } from "../lib/defaults.js";
 import { printHints, printVotingCallout } from "../lib/hints.js";
 import { listProposals } from "../lib/proposals.js";
+import { extractGovernanceHeaderRaw, parseGovernanceHeader } from "../lib/blkl.js";
+import {
+  formatCkb,
+  loadTreasuryStatus,
+  TREASURY_DONATION_THRESHOLD_PERCENT,
+} from "../lib/treasury-status.js";
 
 interface InspectOptions {
   rpcUrl: string;
@@ -58,6 +64,38 @@ export async function inspectCommand(opts: InspectOptions): Promise<void> {
     chalk.dim(`  Cell:  ${txHash}:${index}`),
   );
   console.log(chalk.dim(`  BLKL version: ${payload.version}`));
+  const govHeaderRaw = extractGovernanceHeaderRaw(cell.data);
+  const govHeader = govHeaderRaw ? parseGovernanceHeader(govHeaderRaw) : null;
+  const treasuryStatus = await loadTreasuryStatus(rpcUrl, cell, govHeader);
+  if (treasuryStatus) {
+    const registryCapacity = BigInt(treasuryStatus.registryCapacityShannons);
+    const registryOccupied = BigInt(treasuryStatus.registryOccupiedShannons);
+    console.log(chalk.dim(`  Treasury lock hash: ${treasuryStatus.lockHash}`));
+    if (treasuryStatus.lockScript) {
+      console.log(chalk.dim(`  Treasury lock: ${JSON.stringify(treasuryStatus.lockScript)}`));
+    }
+    if (treasuryStatus.donationAddress) {
+      console.log(chalk.dim(`  Treasury donation address: ${treasuryStatus.donationAddress}`));
+    }
+    console.log(chalk.dim(`  Registry capacity use: ${formatCkb(registryOccupied)} / ${formatCkb(registryCapacity)}`));
+    if (treasuryStatus.error) {
+      console.log(chalk.dim(`  Treasury balance: unavailable (${treasuryStatus.error})`));
+    } else {
+      const balance = BigInt(treasuryStatus.balanceShannons ?? "0");
+      const poolCapacity = BigInt(treasuryStatus.poolCapacityShannons ?? treasuryStatus.registryCapacityShannons);
+      console.log(chalk.dim(`  Treasury live cells: ${treasuryStatus.liveCellCount ?? 0}`));
+      console.log(chalk.dim(`  Treasury balance: ${formatCkb(balance)} (${balance} shannons)`));
+      console.log(chalk.dim(`  Blacklist pool use: ${treasuryStatus.poolUsedPercent?.toFixed(2) ?? "n/a"}% of ${formatCkb(poolCapacity)}`));
+      if (treasuryStatus.donateRecommended) {
+        console.log();
+        console.log(
+          logSymbols.warning,
+          chalk.yellow(`Blacklist pool use is at least ${TREASURY_DONATION_THRESHOLD_PERCENT}%. Donate CKB to keep registry growth funded:`),
+        );
+        console.log(chalk.bold(`  ${treasuryStatus.donationAddress ?? treasuryStatus.lockHash}`));
+      }
+    }
+  }
   console.log();
 
   if (payload.entries.length === 0) {

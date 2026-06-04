@@ -1,0 +1,41 @@
+---
+title: "Fix: Pre-flight Passes but Transaction Fails On-chain"
+description: Diagnose why the SDK pre-flight check passes but the on-chain firewall lock rejects the transaction.
+---
+
+## Symptom
+
+`preflightCheck` or `TransactionFirewall.checkTransaction` returns `{ ok: true }`, but the transaction is rejected by the network when broadcast.
+
+## Causes
+
+### 1. Registry was updated between pre-flight and broadcast
+
+The pre-flight check ran against a snapshot of the registry. Between pre-flight and broadcast, a governance update confirmed and the registry changed. An address that was clean during pre-flight may now be blacklisted.
+
+**Fix:** Always fetch a fresh registry snapshot immediately before signing and broadcasting. Minimize the time between pre-flight and broadcast.
+
+### 2. The transaction uses a different registry dep than what was pre-flighted
+
+If `preflightCheck` was called with one registry payload, but the transaction's `cell_deps` include a different registry cell dep (different outpoint, different payload), the SDK and the lock are checking different data.
+
+**Fix:** Use `TransactionFirewall.checkTransaction` instead of `preflightCheck`. It resolves the registry from the actual `cell_deps` in the transaction — the same dep that will be broadcast — ensuring the SDK and the lock check the same data.
+
+### 3. The transaction's outputs changed after pre-flight
+
+If outputs were added, reordered, or modified after `preflightCheck` ran, the check may have passed over a set of outputs different from what the lock validates.
+
+**Fix:** Run `preflightCheck` on the final transaction immediately before signing. Do not modify outputs after the check.
+
+### 4. The pre-flight used `preflightCheck` but `TransactionFirewall` checks `cellDeps`
+
+`TransactionFirewall.checkTransaction` resolves the registry by `typeIdValue` from the transaction's `cell_deps`. If the transaction's registry dep has a mismatched `typeIdValue`, the firewall may fail with `MissingRegistryCellDep` on-chain even if the SDK pre-flight passed (because the SDK was given the payload directly, not via `cellDeps`).
+
+**Fix:** Verify that the `typeIdValue` in your `FirewallConfig` matches bytes 34–65 of the type args on the cell dep you are including in the transaction.
+
+## Diagnostic checklist
+
+1. Is the registry outpoint in the transaction the current live cell? (Use `ckb-firewall inspect` to check.)
+2. Is the `typeIdValue` in the firewall config correct? (Bytes 34–65 of the 66-byte registry type args.)
+3. Did you modify outputs after running pre-flight?
+4. Was there a governance update between pre-flight and broadcast?

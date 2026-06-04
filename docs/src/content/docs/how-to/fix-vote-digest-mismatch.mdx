@@ -1,0 +1,66 @@
+---
+title: "Fix: execute Fails — Vote Digest Mismatch"
+description: Fix a voteDigestHash mismatch that prevents the execute command from building the governance transaction.
+---
+
+## Symptom
+
+`ckb-firewall execute` fails with:
+
+```
+Error: voteDigestHash mismatch
+  Expected: 0xabc...
+  Recomputed: 0xdef...
+```
+
+## Cause
+
+The `voteDigestHash` stored in the proposal JSON no longer matches what the CLI recomputes from the stored vote records. This happens when:
+
+1. The proposal JSON was edited after votes were recorded
+2. Votes were imported in an inconsistent state (two participants imported each other's exports out of order)
+3. The proposal file was manually modified
+
+## Fix
+
+Re-import the proposal from the participant whose vote records are authoritative:
+
+```bash
+ckb-firewall import proposal-latest-from-alice.json
+```
+
+`import` validates the `proposalIdHash` and `voteDigestHash` before merging. If the import succeeds, the local state is now consistent. Run `execute` again.
+
+If no single participant has a consistent copy, re-collect votes:
+
+1. Start from the original export before any votes were cast:
+   ```bash
+   ckb-firewall export --proposal <id> --out proposal-clean.json
+   ```
+   (If the original file is not available, look at the `createdAt` timestamp and find the earliest export.)
+
+2. Distribute `proposal-clean.json` to each validator
+3. Each validator re-imports and re-votes:
+   ```bash
+   ckb-firewall import proposal-clean.json
+   ckb-firewall vote --proposal <id> --vote yes
+   ckb-firewall export --proposal <id> --out proposal-voted.json
+   ```
+4. Collect and merge all voted exports sequentially:
+   ```bash
+   ckb-firewall import proposal-voted-alice.json
+   ckb-firewall import proposal-voted-bob.json
+   ckb-firewall import proposal-voted-carol.json
+   ```
+
+Once all votes are merged and `proposals` shows the correct count, `execute` should succeed.
+
+## Verify
+
+Before running `execute`, check that the vote count is correct:
+
+```bash
+ckb-firewall proposals --status approved
+```
+
+The proposal should show threshold-many yes-votes and status `approved`. If it shows fewer, import the missing voted exports.

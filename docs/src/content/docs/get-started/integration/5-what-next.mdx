@@ -1,0 +1,70 @@
+---
+title: "Step 5: Where to Go Next"
+description: What you built and where to go for more SDK patterns, wallet integration, and the on-chain enforcement model.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+We built a pre-flight checker that:
+
+- Discovers the live registry cell using the CKB indexer
+- Parses and validates the BLKL v2 blacklist payload
+- Checks transaction outputs synchronously before signing
+- Recovers from a stale outpoint after a governance update
+
+This is the pre-flight half of the two-layer model. The other half — the on-chain lock that enforces the same rule at consensus — runs automatically on every node when a firewall-protected cell is spent. You do not need to do anything to activate it; it activates when a cell is created with the firewall lock args.
+
+## Next steps by task
+
+<CardGrid>
+  <LinkCard
+    href="/how-to/build-firewall-lock-script/"
+    title="Wrap a wallet cell with the firewall lock"
+    description="Build the lock args for a cell that enforces blacklist checking at consensus."
+  />
+  <LinkCard
+    href="/how-to/build-spend-cell-deps/"
+    title="Assemble cell deps for spending"
+    description="The exact cell deps required when spending a firewall-protected cell."
+  />
+  <LinkCard
+    href="/how-to/preflight-typescript/"
+    title="Pre-flight patterns reference"
+    description="All pre-flight SDK patterns — preflightCheck, TransactionFirewall.checkTransaction, isBlacklisted."
+  />
+  <LinkCard
+    href="/how-to/time-based-entries/"
+    title="Handle time-based entries"
+    description="Include header_deps so temporary blacklist entries are evaluated correctly."
+  />
+</CardGrid>
+
+## Understand what you built
+
+<CardGrid>
+  <LinkCard
+    href="/concepts/two-layer-model/"
+    title="The two-layer model"
+    description="Why both layers are necessary and what each one actually guarantees."
+  />
+  <LinkCard
+    href="/concepts/registry-design/"
+    title="Registry design"
+    description="Why the registry is a single cell, why entries are sorted, and what fail-closed means operationally."
+  />
+</CardGrid>
+
+## Full API reference
+
+<CardGrid>
+  <LinkCard
+    href="/reference/typescript-sdk/"
+    title="TypeScript SDK API"
+    description="All exported types, functions, and classes — complete signatures and descriptions."
+  />
+  <LinkCard
+    href="/reference/error-codes/"
+    title="Error codes"
+    description="All codes returned by the SDK and the on-chain contracts."
+  />
+</CardGrid>

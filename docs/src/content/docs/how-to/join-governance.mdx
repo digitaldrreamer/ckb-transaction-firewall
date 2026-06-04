@@ -1,0 +1,25 @@
+---
+title: How to Join the Community Governance Committee
+description: How to apply to become a validator on the canonical CKB Transaction Firewall registry.
+---
+
+The canonical testnet registry governance committee currently has 5 members with a 3-of-5 threshold.
+
+## Current process
+
+Validator committee membership is not currently open via a self-service on-chain flow. To apply:
+
+1. **Open an issue** on the [GitHub repository](https://github.com/digitaldrreamer/ckb-transaction-firewall/issues) with the title "Governance committee application"
+2. Include your compressed secp256k1 public key (33 bytes, hex)
+3. Describe your background and why you want to participate
+4. The current committee will review and, if approved, initiate a `set-treasury` governance proposal to add your key to the validator Merkle tree
+
+## Technical requirements
+
+- A secp256k1 keypair with the private key stored securely offline
+- Ability to run `@ckb-firewall/cli` when vote requests arrive
+- Availability to cast votes within the 72-hour review window
+
+## For private registries
+
+Private registry operators control their own validator set and can add members freely via a `set-treasury` governance proposal. See [How to rotate the validator committee](/how-to/rotate-validators/).

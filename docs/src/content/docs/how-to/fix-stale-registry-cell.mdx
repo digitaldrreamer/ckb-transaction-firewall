@@ -1,0 +1,66 @@
+---
+title: "Fix: fetchRegistryPayload Throws 'is not live'"
+description: Recover when the registry cell you cached has been consumed by a governance update.
+---
+
+## Symptom
+
+`fetchRegistryPayload` throws an error containing "is not live":
+
+```
+Error: Registry cell 0xabc...:0 is not live (status: "dead"). The registry may have been updated — query the current outpoint via the indexer.
+```
+
+## Cause
+
+A governance update was confirmed since you last fetched the registry outpoint. The old cell was consumed and a new one was created. The outpoint you stored is now dead.
+
+## Fix
+
+Use `findRegistryCell` to discover the current outpoint, then re-fetch:
+
+```ts
+import { findRegistryCell, fetchRegistryPayload } from "@ckb-firewall/sdk";
+
+const REGISTRY_SPEC = {
+  codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
+  hashType:    "type" as const,
+  typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
+  required:    true,
+};
+
+let cachedTxHash = "0x..."; // your stored outpoint
+let cachedIndex  = 0;
+
+async function getRegistry() {
+  try {
+    return await fetchRegistryPayload(rpcUrl, cachedTxHash, cachedIndex);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("is not live")) {
+      const fresh = await findRegistryCell(rpcUrl, REGISTRY_SPEC);
+      cachedTxHash = fresh.txHash;
+      cachedIndex  = fresh.index;
+      // Persist the new outpoint to your cache here
+      return await fetchRegistryPayload(rpcUrl, cachedTxHash, cachedIndex);
+    }
+    throw err; // rethrow unrecognised errors
+  }
+}
+```
+
+`findRegistryCell` queries the CKB indexer's `get_cells` RPC filtered by the registry's `typeIdValue`. It finds the current live cell regardless of how many governance updates have occurred.
+
+## Prevent future occurrences
+
+Applications that hardcode the registry outpoint will hit this error after every governance update. Instead:
+
+- Always use `findRegistryCell` to discover the outpoint before building a transaction
+- Or persist the outpoint in a cache with a TTL short enough that it refreshes after governance updates
+
+The CLI and SDK examples use `findRegistryCell` by default for this reason.
+
+## If `findRegistryCell` also fails
+
+`findRegistryCell` requires the CKB node's built-in indexer. If your node does not have the indexer enabled, `findRegistryCell` throws "No live registry cell found."
+
+Enable the indexer on your CKB node, or use a public node that has it enabled (such as `https://testnet.ckb.dev` for testnet).

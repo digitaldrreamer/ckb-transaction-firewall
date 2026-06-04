@@ -1,0 +1,32 @@
+---
+title: Deploy a Private Registry
+description: A complete tutorial for registry operators — deploy contracts, bootstrap a registry, seed the treasury, and run a governance round.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+In this tutorial, we will deploy a private blacklist registry from scratch on CKB testnet. By the end, we will have:
+
+- Four deployed contract cells (governance-lock, blacklist-registry, proposal-anchor, treasury-lock)
+- A live registry cell with a bootstrapped BLKL v2 payload and governance header
+- A seeded treasury pool that funds governance operations without a private key
+- A completed test governance round: propose → anchor → vote → execute
+
+**Prerequisites:**
+- Rust with `riscv64imac-unknown-none-elf` target: `rustup target add riscv64imac-unknown-none-elf`
+- `ckb-cli` on PATH (CI pins v1.15.0 — match or document variance)
+- A testnet account with 200,000+ CKB for deployment costs
+- Node.js 20+ and `@ckb-firewall/cli` installed globally
+- The repository cloned locally: `git clone https://github.com/digitaldrreamer/ckb-transaction-firewall`
+
+<Aside type="caution" title="Testnet only">
+This tutorial deploys contracts that consume real testnet CKB. Do not use these steps on mainnet without a production security review. The deployed contracts use testnet-only governance keys with known private keys.
+</Aside>
+
+<Steps>
+1. [Deploy the contracts](/get-started/operator/1-deploy-contracts/)
+2. [Bootstrap the registry cell](/get-started/operator/2-bootstrap-registry/)
+3. [Deploy and seed the treasury](/get-started/operator/3-deploy-treasury/)
+4. [Run a governance round](/get-started/operator/4-first-governance-round/)
+5. [Configure a firewall lock](/get-started/operator/5-configure-firewall-lock/)
+</Steps>

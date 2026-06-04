@@ -1,0 +1,51 @@
+---
+title: "Step 2: Import a Proposal"
+description: Import a proposal JSON file shared by the proposer into your local governance store.
+---
+
+Governance proposals travel as JSON files shared out-of-band — email, Signal, IPFS, a shared drive. The proposer runs `ckb-firewall propose` and then `ckb-firewall export`, producing a file like `proposal-abc123.json`.
+
+For this tutorial, create a sample proposal file to import. Save the following as `proposal-tutorial.json`:
+
+```json
+{
+  "id": "tutorial-abc123",
+  "proposalIdHash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "action": "add",
+  "lockArgs": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+  "expiresAt": "0",
+  "evidence": "https://example.com/evidence",
+  "classification": "theft",
+  "severity": "high",
+  "rationale": "Tutorial sample proposal.",
+  "proposer": "tutorial",
+  "status": "voting",
+  "votes": [],
+  "voteDigestHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "createdAt": "2026-06-04T00:00:00.000Z"
+}
+```
+
+Import it:
+
+```bash
+ckb-firewall import proposal-tutorial.json
+```
+
+Expected output:
+
+```
+✔ Imported proposal tutorial-abc123
+  Action: add 0xdeadbeef...
+  Status: voting
+```
+
+The proposal is now stored at `~/.ckb-firewall/proposals/tutorial-abc123.json`. List all proposals to confirm:
+
+```bash
+ckb-firewall proposals
+```
+
+You should see the tutorial proposal listed with status `voting`.
+
+Continue to [Step 3](/get-started/validator/3-review-proposal/).

@@ -59,7 +59,6 @@ function reviewCountdown(iso) {
 function countYes(p) { return (p.votes || []).filter(v => v.vote === "yes").length; }
 function countNo(p) { return (p.votes || []).filter(v => v.vote === "no").length; }
 function countAbstain(p) { return (p.votes || []).filter(v => v.vote === "abstain").length; }
-function sigCount(p) { return (p.signatures || []).length; }
 function reviewPassed(p) {
   const t = new Date(p.reviewWindowEndsAt).getTime();
   return !isNaN(t) && Date.now() >= t;
@@ -67,7 +66,6 @@ function reviewPassed(p) {
 function isReady(p) {
   return reviewPassed(p)
     && countYes(p) >= 3
-    && sigCount(p) >= 3
     && p.status !== "executed"
     && p.status !== "rejected";
 }
@@ -81,8 +79,8 @@ function displayStatus(p) {
 const STATUS_META = {
   "pending-review":  { label: "pending review", tone: "amber" },
   "voting":          { label: "voting open",    tone: "blue"  },
-  "approved":        { label: "awaiting sigs",  tone: "amber" },
-  "ready":           { label: "ready to execute", tone: "green" },
+  "approved":        { label: "approved",       tone: "amber" },
+  "ready":           { label: "ready",          tone: "green" },
   "executed":        { label: "executed",       tone: "mute"  },
   "rejected":        { label: "rejected",       tone: "red"   },
 };
@@ -136,23 +134,6 @@ function VoteDots({ proposal, total = 3 }) {
       <span className="tfw-meter__label">VOTES</span>
       <span className="tfw-meter__dots">{dots}</span>
       <span className="tfw-meter__count">{yes}/{total}</span>
-    </span>
-  );
-}
-
-function SigDots({ proposal, total = 3 }) {
-  const c = sigCount(proposal);
-  const dots = [];
-  for (let i = 0; i < total; i++) {
-    let cls = "tfw-dot tfw-dot--empty";
-    if (i < c) cls = "tfw-dot tfw-dot--sig";
-    dots.push(<span key={i} className={cls} />);
-  }
-  return (
-    <span className="tfw-meter" title={`${c} of ${total} signatures`}>
-      <span className="tfw-meter__label">SIGS</span>
-      <span className="tfw-meter__dots">{dots}</span>
-      <span className="tfw-meter__count">{c}/{total}</span>
     </span>
   );
 }
@@ -296,7 +277,6 @@ Object.assign(window, {
   TFW_countYes: countYes,
   TFW_countNo: countNo,
   TFW_countAbstain: countAbstain,
-  TFW_sigCount: sigCount,
   TFW_reviewPassed: reviewPassed,
   TFW_isReady: isReady,
   TFW_displayStatus: displayStatus,
@@ -308,7 +288,6 @@ Object.assign(window, {
   TFW_ActionPill: ActionPill,
   TFW_SeverityChip: SeverityChip,
   TFW_VoteDots: VoteDots,
-  TFW_SigDots: SigDots,
   TFW_Address: Address,
   TFW_ClassificationTag: ClassificationTag,
   TFW_ConnectionDot: ConnectionDot,

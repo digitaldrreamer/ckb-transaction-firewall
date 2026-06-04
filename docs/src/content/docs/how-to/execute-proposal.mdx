@@ -1,0 +1,46 @@
+---
+title: How to Execute an Approved Proposal
+description: Build and submit the governance transaction after the review window and vote threshold are met.
+---
+
+## Prerequisites
+
+- The proposal has been anchored on-chain (`ckb-firewall anchor`) — see [How to anchor a proposal](/how-to/anchor-proposal/)
+- The [`PBLK`](/reference/pblk-cell/) anchor cell has aged at least 72 hours — the [review window](/reference/glossary/#review-window) is enforced at consensus, not by the CLI
+- At least threshold-many [validator](/reference/glossary/#validator) yes-votes are collected locally — see [How to vote](/how-to/vote-on-proposal/) and [How to share proposals](/how-to/share-proposals/)
+- Run `ckb-firewall proposals --status approved` to confirm
+
+## Execute (treasury-funded, keyless)
+
+For registries with a [`treasury-lock`](/reference/glossary/#treasury-lock):
+
+```bash
+ckb-firewall execute --proposal <id>
+```
+
+No private key required. The treasury-lock funds any [registry cell](/reference/glossary/#registry-cell) capacity growth. The anchor cell capacity returns to the treasury automatically.
+
+To write the tx to a file without submitting:
+
+```bash
+ckb-firewall execute --proposal <id> --tx-out gov_tx.json
+```
+
+## Execute for all ready proposals
+
+```bash
+ckb-firewall execute --ready
+```
+
+Finds and executes all proposals that have passed their review window and met the vote threshold.
+
+## After execution
+
+The [registry cell](/reference/glossary/#registry-cell) is updated with the new [BLKL v2](/reference/blkl-format/) payload. Verify:
+
+```bash
+ckb-firewall inspect
+ckb-firewall check --lock-args <the proposed address>
+```
+
+The entry should appear in the registry and `check` should confirm it is blacklisted (for an `add` proposal).

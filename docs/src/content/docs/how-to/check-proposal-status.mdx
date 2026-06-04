@@ -1,0 +1,26 @@
+---
+title: How to Check Proposal Status
+description: Determine where a proposal is in its lifecycle and what action is needed next.
+---
+
+```bash
+# List all proposals
+ckb-firewall proposals
+
+# Filter by status
+ckb-firewall proposals --status pending-review
+ckb-firewall proposals --status voting
+ckb-firewall proposals --status approved
+ckb-firewall proposals --status executed
+ckb-firewall proposals --status rejected
+```
+
+## Status meanings
+
+| Status | Meaning | What to do next |
+|---|---|---|
+| `pending-review` | Proposal created but anchor not yet confirmed on-chain | Run `anchor` |
+| `voting` | Anchor confirmed; [review window](/reference/glossary/#review-window) active; collecting votes | Run `vote`, then export and share |
+| `approved` | Review window passed and vote threshold met | Run `execute` |
+| `executed` | Governance transaction confirmed; registry updated | Done |
+| `rejected` | Manually marked rejected; anchor can be reclaimed | Run `reclaim` |

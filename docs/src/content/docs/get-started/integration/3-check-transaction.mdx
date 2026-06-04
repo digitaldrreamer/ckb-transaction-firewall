@@ -1,0 +1,61 @@
+---
+title: "Step 3: Check Transaction Outputs"
+description: Run preflightCheck against a clean output and a blacklisted one, and see both results.
+---
+
+Now we use the registry to check transaction outputs. Replace `check.ts` with:
+
+```ts
+import { findRegistryCell, fetchRegistryPayload, preflightCheck } from "@ckb-firewall/sdk";
+
+const RPC_URL = "https://testnet.ckb.dev";
+
+const REGISTRY_SPEC = {
+  codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
+  hashType:    "type" as const,
+  typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
+  required:    true,
+};
+
+const { txHash, index } = await findRegistryCell(RPC_URL, REGISTRY_SPEC);
+const registry = await fetchRegistryPayload(RPC_URL, txHash, index);
+console.log(`Registry loaded: ${registry.entries.length} active entries`);
+
+// A clean recipient — not on the blacklist
+const cleanOutput = { lockArgs: "0x331cdd72ff9f7f22c53f9710d6639ca46de3ac06" };
+
+// A blacklisted recipient — on the testnet blacklist
+const blockedOutput = { lockArgs: "0xababababababababababababababababababababab" };
+
+function check(label: string, lockArgs: string) {
+  const result = preflightCheck([{ lockArgs }], [registry]);
+  if (result.ok) {
+    console.log(`✓ ${label} → clean`);
+  } else {
+    console.log(`✗ ${label} → ${result.reason} (code ${result.code})`);
+  }
+}
+
+check(cleanOutput.lockArgs, cleanOutput.lockArgs);
+check(blockedOutput.lockArgs, blockedOutput.lockArgs);
+```
+
+Run it:
+
+```bash
+npx tsx check.ts
+```
+
+Expected output:
+
+```
+Registry loaded: 2 active entries
+✓ 0x331cdd72... → clean
+✗ 0xababababab... → BlacklistedLockArgs (code 11)
+```
+
+`preflightCheck` is synchronous and makes no network calls — it checks the output against the already-fetched registry. You call it once per transaction, passing all outputs at once. It returns on the first blocked output it finds.
+
+Notice the structure of the blocked result: `{ ok: false, code: 11, reason: "BlacklistedLockArgs" }`. The `code` and `reason` fields are narrowed by the discriminated union, so you can switch on `result.code` with full type safety — no casting required.
+
+Continue to [Step 4](/get-started/integration/4-handle-errors/).

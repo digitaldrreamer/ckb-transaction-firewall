@@ -1,0 +1,53 @@
+---
+title: "Step 4: Cast Your Vote"
+description: Sign a validator vote with your private key and see it recorded locally.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Cast a yes vote on the proposal:
+
+```bash
+ckb-firewall vote --proposal tutorial-abc123 --vote yes
+```
+
+The CLI will prompt for your private key with masked input:
+
+```
+? Validator private key (32-byte hex): ****...
+```
+
+Enter your 32-byte secp256k1 private key. The CLI:
+
+1. Derives the compressed public key from the private key
+2. Checks that the pubkey is in the authorized validator set by verifying a Merkle membership proof against the `validatorMerkleRoot` in the BLKL governance header
+3. Rejects the key if it is not an authorized validator
+4. Signs the vote: `blake2b({ domain: "ckb-firewall:vote", proposalIdHash, vote, timestamp, pubkey })`
+5. Stores the vote locally with the signature and Merkle proof
+6. Updates the `voteDigestHash`
+
+Expected output:
+
+```
+✔ Vote recorded
+  Proposal: tutorial-abc123
+  Vote: YES
+  Signed at: 2026-06-04T12:00:00.000Z
+  Votes so far: 1/3 required
+```
+
+<Aside type="caution" title="Your key never leaves your machine">
+The CLI prompts for your private key with masked input. It does not write the key to disk, does not send it over the network, and does not log it anywhere. The output of the vote command is the signed vote record — not the key.
+
+Store your private key offline. Never share it, and never pass it in plaintext via shell variables or config files in shared environments. Use `--private-key` only in fully controlled environments where the key is injected securely.
+</Aside>
+
+Verify the vote was recorded:
+
+```bash
+ckb-firewall proposals
+```
+
+The proposal should now show `1/3 yes votes`.
+
+Continue to [Step 5](/get-started/validator/5-share-and-execute/).

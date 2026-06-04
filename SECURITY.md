@@ -24,17 +24,17 @@ The testnet governance committee uses secp256k1 keys derived from trivial privat
 
 ---
 
-### H3 — Review Window Enforced On-Chain via GOV1 v3 + CKB `since` ✓ Fixed
+### H3 — Review Window Enforced On-Chain via GOV1 v4 + CKB `since` ✓ Fixed
 
-The mandatory 72-hour governance review window is now enforced at consensus level. `execute.ts` sets the `since` field on the governance cell input to an absolute median-time-past timestamp equal to `reviewWindowEndsAt`, and `governance-lock` verifies this constraint on-chain.
+The mandatory 72-hour governance review window is now enforced at consensus level. `anchor.ts` creates a `PBLK` proposal cell, `execute.ts` spends that proposal cell with a relative median-time-past `since` delay, and `governance-lock` verifies this constraint on-chain.
 
 **How it works:**
-- `execute.ts` builds a **GOV1 v3 witness** (141 bytes = v2 + 8-byte LE u64 `review_window_end_ms`)
-- The governance input's `since` field is set to `0x4000_0000_0000_0000 | review_window_end_ms` (absolute MTP timestamp)
-- `governance-lock` parses the v3 witness, extracts `review_window_end_ms`, loads the input's `since`, and returns `ERR_REVIEW_WINDOW_NOT_MET (6)` if the since value encodes an earlier timestamp or uses a non-timestamp metric
-- `review_window_end_ms` is included in the signing preimage (v3 = 136 bytes), so it cannot be tampered with after signing
+- `execute.ts` builds a **GOV1 v4 witness** (173 bytes)
+- The proposal input's `since` field is set to `0x8000_0000_0000_0000 | 0x4000_0000_0000_0000 | review_delay_ms` (relative MTP delay)
+- `governance-lock` parses the v4 witness, finds the proposal input by `proposal_data_hash`, loads that input's `since`, and returns `ERR_REVIEW_WINDOW_NOT_MET (6)` if the delay is too short or uses the wrong metric
+- `proposal_data_hash` and `review_delay_ms` are included in the signing preimage (v4 = 168 bytes), so neither can be tampered with after signing
 
-**Format:** GOV1 v3 witnesses (141 bytes, version=0x03) are required. Both contracts reject any other version.
+**Format:** GOV1 v4 witnesses (173 bytes, version=0x04) are required. The old v3 local-file timing flow is no longer accepted by the contracts.
 
 ---
 
@@ -51,15 +51,16 @@ The TypeScript SDK pre-flight check (`TransactionFirewall.checkTransaction()`) m
 
 ### Signature Binding (Replay Prevention)
 
-Governance signer signatures are bound to the exact 136-byte preimage:
+Governance signer signatures are bound to the exact 168-byte preimage:
 
 ```text
-blake2b(proposal_id_hash(32) || vote_digest_hash(32) || old_root(32) || new_root(32) || review_window_end_ms(8))
+blake2b(proposal_id_hash(32) || vote_digest_hash(32) || old_root(32) || new_root(32) || proposal_data_hash(32) || review_delay_ms(8))
 ```
 
 This prevents:
 - Reuse of signatures across different proposals
 - Reuse of signatures if the registry state changes between signing and execution
+- Reuse of signatures against a different anchored proposal cell
 - Replay of a prior execution with new registry state
 
 ### Registry Identity (Type ID Survival)
@@ -79,7 +80,7 @@ All remote RPC calls require HTTPS. The CLI enforces this at the call site and w
 | C1 | Critical | Mitigated (warning) | Trivial testnet governance keys |
 | H1 | High | Fixed | governance-lock module comment vs. implementation mismatch |
 | H2 | High | Fixed | HTTPS not enforced (now throws) |
-| H3 | High | Fixed | Review window now enforced on-chain via GOV1 v3 + CKB `since` |
+| H3 | High | Fixed | Review window now enforced on-chain via GOV1 v4 + CKB `since` |
 | M1 | Medium | Fixed | SIG_THRESHOLD hardcoded, not from on-chain governance header |
 | M2 | Medium | Fixed | `placeholderSigners` misleading comment |
 | M3 | Medium | Fixed | `proposalPath` lacked hex format validation |
@@ -101,7 +102,7 @@ Before any mainnet or high-value deployment:
 - [ ] Generate fresh governance private keys (never expose them)
 - [ ] Update `TESTNET_GOVERNANCE_PUBKEYS` and constants in `defaults.ts`
 - [ ] Redeploy contracts with new governance committee pubkeys in BLKL registry
-- [x] Implement on-chain review window enforcement via CKB `since` field (GOV1 v3)
+- [x] Implement on-chain review window enforcement via CKB `since` field (GOV1 v4)
 - [ ] Establish key custody policy (HSM, multi-party signing, offline storage)
 - [ ] Add governance proposal deposit / rate limiting to prevent spam
 - [ ] Audit duplicate vote pubkey handling in `computeVoteDigestHash`

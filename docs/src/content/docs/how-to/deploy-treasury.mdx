@@ -1,0 +1,52 @@
+---
+title: How to Deploy and Seed the Treasury
+description: Deploy the treasury-lock binary, derive the treasury address, and send seed CKB.
+---
+
+## Deploy the treasury-lock binary
+
+```bash
+ckb-cli --url https://testnet.ckb.dev wallet transfer \
+  --to-address <YOUR_CKT1_ADDRESS> \
+  --capacity 17000 \
+  --to-data <treasury-lock-binary-hex> \
+  --fee-rate 1000
+```
+
+Record the `tx_hash:index` of the resulting cell — this is your `TREASURY_LOCK_DEP`.
+
+The [`treasury-lock`](/reference/glossary/#treasury-lock) binary is compiled separately. Its args encode two [Type IDs](/reference/glossary/#type-id):
+
+```
+args = governance_lock_type_id(32) | proposal_anchor_type_id(32)
+```
+
+## Derive the treasury address
+
+```bash
+./scripts/treasury-address.sh \
+  --treasury-lock-dep <tx_hash:index> \
+  --governance-lock-type-id <from deploy/info.json> \
+  --proposal-anchor-type-id <from deploy/info.json>
+```
+
+The address uses `hash_type = data1` and the 64-byte args above.
+
+## Seed the treasury
+
+```bash
+ckb-cli --url https://testnet.ckb.dev wallet transfer \
+  --to-address <treasury-address> \
+  --capacity 10000 \
+  --fee-rate 1000
+```
+
+10,000 CKB covers roughly 33 proposal anchors (each costs ~300 CKB, returned after execute or reclaim). A higher seed is recommended for active registries.
+
+## Verify
+
+```bash
+ckb-firewall inspect --registry-tx <bootstrap tx hash> --registry-index 0
+```
+
+The treasury pool balance should appear in the output.

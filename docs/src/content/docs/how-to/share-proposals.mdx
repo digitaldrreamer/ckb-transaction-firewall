@@ -1,0 +1,34 @@
+---
+title: How to Share Proposals Between Participants
+description: Export and import proposals to synchronize vote state across governance participants.
+---
+
+Proposals and votes are local files. Participants share them out-of-band (email, Signal, IPFS, shared drive). Import merges rather than overwrites — you can import the same file multiple times safely.
+
+## Export
+
+```bash
+# Write to a file
+ckb-firewall export --proposal <id> --out proposal-abc123.json
+
+# Print to stdout (for piping or copying)
+ckb-firewall export --proposal <id>
+```
+
+## Import
+
+```bash
+ckb-firewall import proposal-abc123.json
+```
+
+The CLI validates the [`proposalIdHash`](/reference/glossary/#proposalidHash) and [`voteDigestHash`](/reference/glossary/#votedigesHash) before saving. A tampered file is rejected. If the proposal already exists locally, votes are merged.
+
+## Typical flow for collecting votes
+
+1. Proposer exports and sends to all validators
+2. Each validator imports, votes, and exports again
+3. Each updated export is sent back to the proposer (or broadcast to the group)
+4. Each participant imports all updated exports to accumulate all votes
+5. Once threshold votes are present locally, any participant can run `execute`
+
+There is no shared server. Consistency is maintained by the `proposalIdHash` (immutable fields) and `voteDigestHash` (commitment to the vote set).

@@ -1,0 +1,83 @@
+---
+title: "Step 4: Run a Governance Round"
+description: Propose, anchor, vote (3-of-5), and execute a test entry end-to-end on your private registry.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+We will add a test address to your new registry, going through the complete governance lifecycle.
+
+## Create a proposal
+
+```bash
+ckb-firewall propose \
+  --action add \
+  --lock-args 0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef \
+  --evidence "https://example.com/test-evidence" \
+  --classification other \
+  --severity low \
+  --rationale "Tutorial test entry — for governance round verification only." \
+  --proposer operator-tutorial \
+  --registry-tx <bootstrap tx hash> \
+  --registry-index 0
+```
+
+Note the proposal ID printed by the CLI (e.g. `tutorial-xyz`).
+
+## Anchor the proposal
+
+```bash
+ckb-firewall anchor \
+  --proposal tutorial-xyz \
+  --registry-tx <bootstrap tx hash> \
+  --registry-index 0
+```
+
+This builds and submits a [treasury-funded](/reference/glossary/#treasury-lock) [`PBLK`](/reference/pblk-cell/) proposal cell. No private key required. The [review window](/reference/glossary/#review-window) clock starts when this transaction is mined.
+
+<Aside type="caution" title="72-hour wait on production">
+On the canonical community registry, the 72-hour window is enforced at consensus via the [`since`](/reference/glossary/#since) field and cannot be shortened. For this tutorial on your private registry, pass `--review-delay-ms 60000` (1 minute) to `ckb-firewall propose` when creating the proposal to shorten the window enough to complete the tutorial in one session.
+</Aside>
+
+## Vote (3 of 5)
+
+Have at least three of your five validators run:
+
+```bash
+ckb-firewall vote --proposal tutorial-xyz --vote yes
+```
+
+Each validator signs with their private key, then exports the updated proposal and shares it with the next validator:
+
+```bash
+ckb-firewall export --proposal tutorial-xyz --out proposal-voted.json
+# share proposal-voted.json with next validator
+ckb-firewall import proposal-voted.json
+```
+
+## Execute
+
+After the review window has elapsed and threshold yes-votes are collected:
+
+```bash
+ckb-firewall execute \
+  --proposal tutorial-xyz \
+  --registry-tx <bootstrap tx hash> \
+  --registry-index 0
+```
+
+Verify the entry is now in the registry:
+
+```bash
+ckb-firewall inspect \
+  --registry-tx <new registry tx from execute output> \
+  --registry-index 0
+
+ckb-firewall check \
+  --lock-args 0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef \
+  --registry-tx <new registry tx>
+```
+
+Expected: the entry is listed as active and `check` confirms it is blacklisted.
+
+Continue to [Step 5](/get-started/operator/5-configure-firewall-lock/).

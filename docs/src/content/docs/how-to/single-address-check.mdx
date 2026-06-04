@@ -1,0 +1,28 @@
+---
+title: How to Check Whether One Address Is Blacklisted
+description: Use isBlacklisted to check a single lock args without building a full transaction.
+---
+
+Use `isBlacklisted` when you want to check one address and do not need the full transaction context:
+
+```ts
+import { findRegistryCell, fetchRegistryPayload, isBlacklisted } from "@ckb-firewall/sdk";
+
+const { txHash, index } = await findRegistryCell(rpcUrl, registrySpec);
+const registry = await fetchRegistryPayload(rpcUrl, txHash, index);
+
+const blocked = isBlacklisted("0xababababababababababababababababababababab", [registry]);
+console.log(blocked ? "Blacklisted" : "Clean");
+```
+
+`isBlacklisted` compares entries with `expiresAt` in the past against the current wall-clock time and treats them as inactive. It accepts multiple registry payloads and checks the union of all entries.
+
+For type args, use `isTypeArgsBlacklisted`:
+
+```ts
+import { isTypeArgsBlacklisted } from "@ckb-firewall/sdk";
+
+const blocked = isTypeArgsBlacklisted("0x...", [registry]);
+```
+
+For a full transaction check with structured error codes, use `preflightCheck` instead — see [How to run a pre-flight check in TypeScript](/how-to/preflight-typescript/).

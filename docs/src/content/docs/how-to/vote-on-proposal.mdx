@@ -1,0 +1,33 @@
+---
+title: How to Vote on a Proposal
+description: Cast a signed validator vote on a governance proposal using ckb-firewall vote.
+---
+
+```bash
+ckb-firewall vote --proposal <id> --vote yes
+```
+
+The CLI prompts for your secp256k1 private key with masked input. It:
+
+1. Derives the compressed public key from the key
+2. Verifies the pubkey is in the authorized [validator](/reference/glossary/#validator) set (Merkle proof against the on-chain [`validatorMerkleRoot`](/reference/glossary/#validator-merkle-root))
+3. Rejects the key if it is not authorized
+4. Signs: `blake2b({ domain: "ckb-firewall:vote", proposalIdHash, vote, timestamp, pubkey })`
+5. Stores the vote locally with signature and Merkle proof
+6. Updates the [`voteDigestHash`](/reference/glossary/#votedigesHash)
+
+Vote options: `yes`, `no`, `abstain`. Only `yes` votes count toward the threshold for execution. See the [CLI reference — vote](/reference/cli/) for all options.
+
+For scripted use (fully controlled environments only):
+
+```bash
+ckb-firewall vote --proposal <id> --vote yes --private-key <hex>
+```
+
+After voting, export the updated proposal and share it with other participants:
+
+```bash
+ckb-firewall export --proposal <id> --out proposal-voted.json
+```
+
+See [How to share proposals](/how-to/share-proposals/).

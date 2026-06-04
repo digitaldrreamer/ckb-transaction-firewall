@@ -1,0 +1,63 @@
+---
+title: "Step 3: Verify the Deployment"
+description: Inspect the live registry to confirm the bootstrap transaction produced the correct registry cell and treasury pool.
+---
+
+Once the bootstrap transaction is confirmed, verify that both the registry cell and the treasury pool are live and correctly configured.
+
+## Inspect the registry
+
+```bash
+ckb-firewall inspect \
+  --rpc-url https://testnet.ckb.dev \
+  --registry-tx <bootstrap tx hash from step 2> \
+  --registry-index 0
+```
+
+Expected output:
+
+```
+Registry: <bootstrap tx hash>:0
+Entries:  0 (empty)
+Validators: 5 | Threshold: 3-of-5
+Treasury pool: 100,000.0 CKB (available)
+```
+
+The treasury pool balance shows as available immediately — the bootstrap seeded 100,000 CKB at output index 1. No separate seeding step is required.
+
+## Record the type_id_value
+
+The `type_id_value` is printed in the inspect output under "Registry identity". It is also in `deploy/bootstrap-tx.json` under `registryCell.typeIdValue`.
+
+This 32-byte hex value is the stable identity of your registry. It never changes across governance updates and must be embedded in every [firewall lock args](/reference/firewall-lock-args/) configuration that consults this registry.
+
+## Check treasury health
+
+```bash
+ckb-firewall inspect \
+  --rpc-url https://testnet.ckb.dev \
+  --registry-tx <bootstrap tx hash> \
+  --registry-index 0 \
+  --show-treasury
+```
+
+When pool usage reaches 70%, `inspect` and the GUI warn and display the [donation address](/how-to/donate-treasury/). The 100,000 CKB seed covers roughly 330 proposal anchor operations before reaching that threshold.
+
+## Top up if needed
+
+To donate more CKB to the treasury pool:
+
+```bash
+ckb-cli --url https://testnet.ckb.dev wallet transfer \
+  --to-address <treasury address shown in inspect> \
+  --capacity <amount> \
+  --fee-rate 1000
+```
+
+Continue to [Step 4](/get-started/operator/4-first-governance-round/).
+
+## Background reading
+
+- [The autonomous treasury model](/concepts/treasury-design/) — how the treasury pool works and what it authorizes
+- [How to donate to the treasury](/how-to/donate-treasury/) — top up when the pool runs low
+- [Proposal anchor contract](/reference/proposal-anchor/) — what treasury funds are used for

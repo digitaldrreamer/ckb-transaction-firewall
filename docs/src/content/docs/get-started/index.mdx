@@ -1,0 +1,28 @@
+---
+title: Get started
+description: Choose your tutorial track — integration developer, governance validator, or registry operator.
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Three paths. Each is a complete, self-contained tutorial for a specific role. Choose the one that matches what you're trying to do.
+
+<CardGrid>
+  <LinkCard
+    href="/get-started/integration/"
+    title="Integration developer"
+    description="Add blacklist pre-flight checking to a TypeScript or Rust application. You'll have working code that checks outputs against the live testnet registry before signing."
+  />
+  <LinkCard
+    href="/get-started/validator/"
+    title="Governance validator"
+    description="Import a proposal, review it, and cast a signed validator vote using the CLI. No development experience required."
+  />
+  <LinkCard
+    href="/get-started/operator/"
+    title="Registry operator"
+    description="Deploy your own private blacklist registry with treasury-lock and run a complete governance round end-to-end."
+  />
+</CardGrid>
+
+Not sure which you are? Read [What the firewall does](/index/) for a two-minute overview, then pick your path.

@@ -55,10 +55,27 @@ ckb-firewall propose \
   --proposer alice
 ```
 
-Options: `--action`, `--lock-args`, `--expires-at`, `--evidence`, `--classification`, `--severity`, `--rationale`, `--proposer`
+To activate or rotate the registry treasury metadata, create a metadata proposal:
+
+```bash
+ckb-firewall propose \
+  --action set-treasury \
+  --treasury-lock-code-hash 0x... \
+  --treasury-lock-hash-type type \
+  --treasury-lock-args 0x... \
+  --evidence https://evidence.example/treasury \
+  --classification other \
+  --severity high \
+  --rationale "Activate the public registry treasury for proposal anchors and growth." \
+  --proposer alice
+```
+
+Options: `--action`, `--lock-args`, `--expires-at`, `--evidence`, `--classification`, `--severity`, `--rationale`, `--proposer`, `--treasury-lock-code-hash`, `--treasury-lock-hash-type`, `--treasury-lock-args`, `--review-delay-ms` (override the on-chain review delay in ms; testnet/drill use only)
 
 Classifications: `theft`, `scam`, `hack`, `sanctions`, `other`  
 Severities: `critical`, `high`, `medium`, `low`
+
+Proposal actions: `add`, `remove`, `set-treasury`. `set-treasury` creates a `PBLK` v2 proposal cell that binds the target treasury lock hash. It keeps the blacklist entries unchanged and updates only the governance header treasury metadata.
 
 After creation the CLI prints an export command. Share the exported JSON with other governance participants via `export` / `import`.
 
@@ -88,7 +105,7 @@ ckb-firewall vote --proposal abc123 --vote yes
 
 Options: `--proposal`, `--vote` (`yes`, `no`, `abstain`), `--rpc-url`, `--registry-tx`, `--registry-index`
 
-The CLI prompts for the validator private key with masked input.
+The CLI prompts for the validator private key with masked input. Pass `--private-key <hex>` to provide it non-interactively (scripted use only — do not use in shared environments).
 
 **What this command does:**
 1. Derives the compressed public key from the provided private key
@@ -102,30 +119,103 @@ Votes are local until `execute`. Export and share the updated proposal so other 
 
 ---
 
-### `sign`
+### `anchor`
 
-Add a governance signer signature after the vote threshold is met and the 72-hour review window has passed.
+Build or submit the on-chain `PBLK` proposal cell used by GOV1 v4 execution.
 
 ```bash
-ckb-firewall sign --proposal abc123 --signer-index 0
-# prompts for private key
+ckb-firewall anchor --proposal abc123 --to-address ckt1...
+
+ckb-firewall anchor \
+  --proposal abc123 \
+  --to-address ckt1... \
+  --from-account ckt1... \
+  --submit
+
+ckb-firewall anchor \
+  --proposal abc123 \
+  --proposal-tx 0x... \
+  --proposal-index 0
 ```
 
-Options: `--proposal`, `--signer-index`, `--rpc-url`, `--registry-tx`, `--registry-index`
+Options: `--proposal` (required), `--rpc-url`, `--registry-tx`, `--registry-index`, `--to-address`, `--from-account`, `--capacity`, `--fee-rate`, `--privkey-path`, `--output-index`, `--proposal-tx`, `--proposal-index`, `--proposal-anchor-code-tx`, `--proposal-anchor-code-index`, `--treasury-cell`, `--treasury-lock-dep`, `--tx-out`, `--submit`
 
-The CLI prompts for the signer private key with masked input.
+For non-treasury registries, without `--submit`, the command prints the exact `ckb-cli wallet transfer --to-data ...` command. With `--submit`, it runs `ckb-cli`, submits the proposal cell transfer, and stores the resulting proposal-cell outpoint on the proposal JSON.
+
+For treasury-backed registries, `anchor` builds a keyless `proposal-anchor` transaction funded by the autonomous treasury pool — **no private key required**:
+
+```bash
+# Build the TX (keyless — treasury-lock validates without a signature)
+ckb-firewall anchor \
+  --proposal abc123 \
+  --tx-out gov_anchor_tx.json
+
+# Build and submit in one step (still keyless)
+ckb-firewall anchor \
+  --proposal abc123 \
+  --submit
+```
+
+The CLI auto-discovers treasury cells from the registry's governance header. To select specific treasury cells manually, add `--treasury-cell <tx-hash>:<index>` one or more times. For private deployments, override the proposal-anchor code outpoint with `--proposal-anchor-code-tx` and `--proposal-anchor-code-index`, and add `--treasury-lock-dep <tx-hash>:<index>[:code|dep_group]` for any extra cell deps required by a custom treasury lock.
+
+If you create the cell separately, run `anchor` again with `--proposal-tx` and `--proposal-index` to record the outpoint.
+
+After the outpoint is stored, execute can infer it:
+
+```bash
+ckb-firewall execute --proposal abc123
+```
 
 ---
 
 ### `execute`
 
-Build the registry update transaction from an approved, fully-signed proposal. Verifies all vote signatures and Merkle proofs against the on-chain validator set before building the witness.
+Build the registry update transaction from an approved validator-voted proposal. Verifies vote signatures and Merkle proofs before building a witness that the on-chain governance lock verifies again.
 
 ```bash
-ckb-firewall execute --proposal abc123 --tx-out ./gov_tx.json
+ckb-firewall execute \
+  --proposal abc123 \
+  --tx-out ./gov_tx.json
 ```
 
-Options: `--proposal`, `--rpc-url`, `--registry-tx`, `--registry-index`, `--tx-out`, `--sign`, `--from-account`
+Options: `--proposal`, `--rpc-url`, `--registry-tx`, `--registry-index`, `--proposal-tx`, `--proposal-index`, `--proposal-anchor-code-tx`, `--proposal-anchor-code-index`, `--treasury-cell`, `--treasury-lock-dep`, `--tx-out`, `--sign`, `--from-account`, `--privkey-path` (non-interactive key file for signing), `--ready` (find and execute all proposals whose review window has passed and vote threshold is met)
+
+`--proposal-tx` and `--proposal-index` override the stored live `PBLK` proposal-cell outpoint when needed. The generated transaction spends that proposal cell with a relative timestamp `since` delay and returns its remaining capacity as change.
+
+For treasury-backed registries, `execute` is also **fully keyless** — the autonomous treasury-lock funds any registry capacity growth:
+
+```bash
+# Default: keyless — treasury cells auto-discovered, no private key required
+ckb-firewall execute --proposal abc123
+
+# Override: specify treasury cells manually (still keyless)
+ckb-firewall execute \
+  --proposal abc123 \
+  --treasury-cell 0x...:0 \
+  --treasury-cell 0x...:1
+```
+
+The treasury-lock contract validates the TX by detecting the proposal-anchor input being consumed, so no signature is needed. Proposal cell capacity is returned to the treasury pool automatically.
+
+For private deployments, override the proposal-anchor code outpoint with `--proposal-anchor-code-tx`/`--proposal-anchor-code-index`, and add `--treasury-lock-dep <tx-hash>:<index>[:code|dep_group]` for extra treasury cell deps.
+
+---
+
+### `reclaim`
+
+Build a transaction that reclaims a rejected or abandoned treasury-funded proposal anchor without changing the registry.
+
+```bash
+ckb-firewall reclaim \
+  --proposal abc123 \
+  --tx-out ./gov_reclaim_tx.json
+```
+
+Options: `--proposal`, `--rpc-url`, `--registry-tx`, `--registry-index`, `--proposal-tx`, `--proposal-index`, `--proposal-anchor-code-tx`, `--proposal-anchor-code-index`, `--treasury-lock-dep`, `--tx-out`, `--sign`, `--from-account`, `--force`
+
+`reclaim` verifies the live `PBLK` cell data against the local proposal and current registry type ID, checks that the anchor is locked to the registry treasury, checks that the anchor carries the `proposal-anchor` type args, sets the same relative timestamp `since` delay used by execution, and returns the remaining capacity to the treasury lock. On canonical testnet, the deployed `proposal-anchor` code outpoint is used by default. Use `--treasury-lock-dep` for any extra cell deps required by a custom treasury lock.
+
+By default, reclaim refuses proposals that are still in their review window or that appear executable. Use `--force` only after governance has decided not to execute the proposal.
 
 ---
 
@@ -161,7 +251,7 @@ ckb-firewall gui
 
 Press `Ctrl+C` to stop the server. The server uses the same `--rpc-url` and registry defaults as `inspect`.
 
-For a walkthrough of the GUI interface see [GUI mode](/guides/cli-gui/).
+For a walkthrough of the GUI interface see [GUI mode](/how-to/use-governance-gui/).
 
 ---
 
@@ -180,7 +270,7 @@ Options: `--proposal`, `--out`
 
 ### `import`
 
-Import a proposal shared by another governance participant. Validates `proposalIdHash` and `voteDigestHash` integrity before saving. If the proposal already exists locally, votes and signatures are merged rather than overwritten.
+Import a proposal shared by another governance participant. Validates `proposalIdHash` and `voteDigestHash` integrity before saving. If the proposal already exists locally, votes are merged rather than overwritten.
 
 ```bash
 ckb-firewall import proposal-abc123.json
@@ -194,17 +284,28 @@ Options: `--force` (skip overwrite confirmation)
 
 ## Full governance flow
 
-All registry changes go through governance. The proposal is a local JSON file until `execute` submits it on-chain.
+All registry changes go through governance. The proposal is a local JSON file until `execute` submits it on-chain. No private key is required for `anchor` or `execute` — the autonomous treasury-lock funds both operations.
 
+```text
+propose → anchor → export → [share] → import → vote → export → [share] → import → execute
 ```
-propose → export → [share] → import → vote → export → [share] → import → sign → execute
-```
 
-1. One participant runs `propose` and `export`
-2. The JSON is shared out-of-band (email, Signal, IPFS, etc.)
-3. Each participant runs `import` to receive it
-4. Each validator runs `vote` with their private key
-5. Each signer runs `sign` after the 72h review window and vote threshold are met
-6. Any participant runs `execute` to build and submit the transaction
+1. Any participant runs `propose` to create the proposal file, then `anchor` to lock it on-chain (funded by the treasury pool — no key needed). Anchoring first starts the review window clock.
+2. The JSON is exported and shared out-of-band (email, Signal, IPFS, etc.)
+3. Each validator runs `import` to receive it, then `vote` with their validator key, then `export` again to share their vote
+4. After the review window and vote threshold are met, any participant runs `execute` — also funded by the treasury pool, no key needed
 
-The minimum timeline is approximately 120 hours (72h review + voting + signing). The CLI warns if a temporary entry's `expiresAt` falls within this window.
+There is no `sign` command. Validator vote signatures are collected during `vote` and embedded in the execute witness by `execute` itself.
+
+The minimum timeline is approximately 96 hours (72h review window + time for validators to vote). The CLI warns if a temporary entry's `expiresAt` falls within this window.
+
+## See also
+
+- [Governance validator tutorial](/get-started/validator/) — hands-on walk-through of the full CLI governance flow
+- [How to inspect the registry](/how-to/inspect-registry/) — `ckb-firewall inspect` and `check`
+- [How to create a proposal](/how-to/create-proposal/) — `ckb-firewall propose`
+- [How to anchor a proposal](/how-to/anchor-proposal/) — `ckb-firewall anchor`
+- [How to vote on a proposal](/how-to/vote-on-proposal/) — `ckb-firewall vote`
+- [How to share proposals](/how-to/share-proposals/) — `ckb-firewall export` and `import`
+- [How to execute an approved proposal](/how-to/execute-proposal/) — `ckb-firewall execute`
+- [Fix: vote digest mismatch](/how-to/fix-vote-digest-mismatch/) — when `execute` fails with a hash error

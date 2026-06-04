@@ -1,0 +1,32 @@
+---
+title: "Step 1: Install the CLI"
+description: Install @ckb-firewall/cli and verify it can reach the live testnet registry.
+---
+
+Install the CLI globally:
+
+```bash
+npm install -g @ckb-firewall/cli
+```
+
+Verify the installation and connect to testnet:
+
+```bash
+ckb-firewall inspect
+```
+
+You should see a table of current blacklist entries with their status. Something like:
+
+```
+┌─────────────────────────────────────────────┬──────────┬──────────────┐
+│ Lock args                                   │ Status   │ Expires      │
+├─────────────────────────────────────────────┼──────────┼──────────────┤
+│ 0xababababababababababababababababababababab  │ active   │ permanent    │
+│ 0x3f54dea35bcc7a0efef541d361799f77bd1b858  │ active   │ permanent    │
+└─────────────────────────────────────────────┴──────────┴──────────────┘
+Registry: 0xa3dcb46f... | Validators: 5 | Threshold: 3-of-5
+```
+
+The exact entries shown depend on the current state of the testnet registry.
+
+If you see this output, the CLI is installed and can reach the live registry. Continue to [Step 2](/get-started/validator/2-import-proposal/).

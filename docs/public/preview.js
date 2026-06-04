@@ -5,11 +5,11 @@
   /* ── glossary terms (shown on hover of dotted-underlined text) ─────── */
   var TERMS = {
     'BLKL': 'Binary payload format stored in the live registry cell. The 4-byte ASCII magic is "BLKL" (0x42 0x4c 0x4b 0x4c). Current version is v2.',
-    'GOV1': 'Governance witness payload binding a registry update to a specific proposal, vote digest, and BLKL state transition. Current version is v3.',
+    'GOV1': 'Governance witness payload binding a registry update to a specific proposal, vote digest, BLKL state transition, and on-chain proposal cell. Current version is v4.',
     'FirewallLockArgs': 'Binary encoding of a firewall lock\'s configuration stored in the lock script args field. Current version is v2.',
-    'blacklist-registry': 'CKB type script that validates every registry cell update. Enforces correct BLKL v2 payload structure, strict entry sort order, governance-lock identity, and valid GOV1 v3 witness binding.',
+    'blacklist-registry': 'CKB type script that validates every registry cell update. Enforces correct BLKL v2 payload structure, strict entry sort order, governance-lock identity, and valid GOV1 v4 witness binding.',
     'firewall-lock': 'CKB lock script that enforces blacklist checks at consensus. Scans cell deps for registry cells, parses BLKL v2, checks outputs against the blacklist, and spawns the inner lock if all checks pass. Fail-closed.',
-    'governance-lock': 'CKB lock script securing the registry cell. Validates governance signer signatures and that the review window has elapsed before allowing a registry update.',
+    'governance-lock': 'CKB lock script securing the registry cell. Validates threshold validator yes-votes, validator Merkle proofs, and the on-chain review window before allowing a registry update.',
     'spawn-aware-secp256k1': 'Canonical inner lock for secp256k1-blake160 wallets. Receives arguments via argv rather than lock script args, because the firewall lock occupies the args field.',
     'cell dep': 'A reference to a live cell included in a transaction. The firewall lock reads the registry cell via a cell dep to fetch the live BLKL payload.',
     'fail-closed': 'Security posture of the firewall: when in doubt, reject. Missing deps, malformed payloads, or blacklisted identifiers all result in transaction rejection with no fallback.',
@@ -21,16 +21,24 @@
     'registry cell': 'Single live CKB cell whose data is a BLKL v2 binary payload. Contains the governance header and sorted blacklist entries. Identified by stable type_id_value; its outpoint changes after each governance update.',
     'spawn': 'The spawn_cell CKB syscall used by the firewall lock to execute the inner lock as a child process, passing inner lock args and the user\'s signature via argv.',
     'type_id_value': '32-byte Type ID at bytes 34–66 of the 66-byte registry cell type args. Computed once at bootstrap, never changes. Survives governance-lock upgrades and registry cell outpoint changes.',
-    'governance header': 'Metadata embedded inside the BLKL v2 payload. Contains signer count, threshold, compressed secp256k1 pubkeys for each signer (33 bytes each), validator count, and validator Merkle root.',
-    'oldRoot': 'Blake2b hash of the input registry cell data. Stored in the GOV1 v3 witness and included in the signer signing preimage.',
-    'newRoot': 'Blake2b hash of the output registry cell data. Stored in the GOV1 v3 witness and included in the signer signing preimage.',
-    'proposalIdHash': 'Blake2b hash of all canonical proposal fields. Immutable: any field change produces a different hash and invalidates all existing signatures.',
+    'governance header': 'Metadata embedded inside the BLKL v2 payload. Contains a validator threshold, validator count, validator Merkle root, and treasury metadata. Legacy signer fields may exist but do not authorize runtime updates.',
+    'oldRoot': 'Blake2b hash of the input registry cell data. Stored in the GOV1 v4 witness and recomputed by the registry type script.',
+    'newRoot': 'Blake2b hash of the output registry cell data. Stored in the GOV1 v4 witness and recomputed by the registry type script.',
+    'proposalIdHash': 'Blake2b hash of all canonical proposal fields. Immutable: any field change produces a different hash and invalidates votes for that proposal.',
     'review window': 'Mandatory 72-hour waiting period before a governance update can be applied on-chain. Enforced via the governance cell input\'s since field. Cannot be bypassed.',
-    'reviewWindowEndMs': 'Unix timestamp in milliseconds when the review window ends. Encoded in the GOV1 v3 witness and in the governance cell input\'s since field.',
-    'validator Merkle root': '32-byte Merkle root committing to the authorized off-chain validator set. Leaves are blake2b(compressed_pubkey); each vote record includes a Merkle proof verified by the CLI.',
+    'reviewWindowEndMs': 'Unix timestamp in milliseconds when the review window ends. The v4 flow enforces this by spending the anchored proposal input with a relative median-time-past since value.',
+    'validator Merkle root': '32-byte Merkle root committing to the authorized validator set. Leaves are blake2b(compressed_pubkey); each vote record includes a Merkle proof verified on-chain during execution.',
     'voteDigestHash': 'Blake2b hash of the full sorted set of vote records ({ pubkey, vote, timestamp, signature } sorted by pubkey). Recomputed by the execute CLI command before building the governance transaction.',
-    'signer': 'On-chain governance committee member whose secp256k1 signature is submitted in the governance transaction witness and verified on-chain by the governance-lock script.',
-    'validator': 'Off-chain committee member who votes on proposals. Votes are cryptographic signatures verified off-chain by the execute CLI command before the governance transaction is built.',
+    'signer': 'Legacy governance role from earlier drafts. Current runtime execution is authorized by validator votes, not signer signatures.',
+    'validator': 'Committee member who votes on proposals. Yes-vote signatures and Merkle proofs are submitted in the transaction witness and verified on-chain by the governance-lock script.',
+    'PBLK': 'Binary payload stored in a proposal cell created by ckb-firewall anchor. v1 encodes an add/remove blacklist action; v2 encodes a set-treasury action. The magic bytes are PBLK (0x50 0x42 0x4c 0x4b).',
+    'treasury-lock': 'Autonomous CKB lock script holding the governance treasury pool. Anyone can donate. Funds may only be spent to create proposal-anchor cells or cover registry capacity growth — no private key required.',
+    'proposal-anchor': 'CKB type script governing the lifecycle of PBLK proposal cells. Enforces: valid PBLK payload on creation, treasury lock on the input, capacity return to the treasury on reclaim or execute. Error codes 31–36.',
+    'Type ID': 'CKB mechanism giving a cell a stable identity that survives being consumed and re-created. The type_id_value is computed once at bootstrap and never changes across governance updates.',
+    'blake160': '20-byte hash of a 33-byte compressed secp256k1 public key, computed as blake2b256(pubkey)[0..20]. Used as the inner_args value in a firewall lock configured with spawn-aware-secp256k1.',
+    'since': 'CKB transaction input field encoding a minimum age condition. The governance execute transaction uses a relative median-time-past since value to enforce the 72-hour review window at consensus.',
+    'median block time': 'Median-time-past of the last 11 blocks. Used by the firewall lock to evaluate time-based blacklist entries and by CKB consensus to enforce the governance review window.',
+    'GovernanceHeader': 'Parsed governance header embedded in a RegistryPayload. Fields: ghVersion (1–3), threshold, validatorCount, validatorMerkleRoot (32-byte hex). The governance-lock reads threshold and validatorMerkleRoot on every execute transaction.',
   };
 
   /* ── code snippets (shown when hovering inline <code> elements) ────── */
@@ -77,6 +85,18 @@
       code: 'export interface FirewallLockConfig {\n  firewallCodeHash: string;\n  firewallHashType: HashType;\n  flags: number;\n  registries: RegistrySpecLike[];\n  innerCodeHash: string;\n  innerHashType: HashType;\n  innerArgs: string;\n}'
     },
     /* TypeScript SDK functions */
+    'findRegistryCell': {
+      file: 'sdk/typescript/src/fetch.ts', lines: [1, 14], lang: 'typescript',
+      code: 'export async function findRegistryCell(\n  rpcUrl: string,\n  spec: RegistrySpecLike,\n  timeoutMs = DEFAULT_TIMEOUT_MS,\n): Promise<{ txHash: string; index: number }>\n// Queries the CKB indexer (get_cells) filtered by typeIdValue (bytes 34–65\n// of the 66-byte v2 type args). Returns the current live outpoint.'
+    },
+    'isBlacklisted': {
+      file: 'sdk/typescript/src/blacklist.ts', lines: [1, 8], lang: 'typescript',
+      code: 'export function isBlacklisted(\n  lockArgs: string,\n  payloads: RegistryPayload[],\n): boolean\n// Binary-searches each sorted RegistryPayload.entries for lockArgs.\n// Skips entries whose expiresAt < Date.now() / 1000.'
+    },
+    'isTypeArgsBlacklisted': {
+      file: 'sdk/typescript/src/blacklist.ts', lines: [10, 16], lang: 'typescript',
+      code: 'export function isTypeArgsBlacklisted(\n  typeArgs: string,\n  payloads: RegistryPayload[],\n): boolean\n// Same as isBlacklisted but checks type args (not lock args).'
+    },
     'checkTransaction': {
       file: 'sdk/typescript/src/firewall.ts', lines: [33, 49], lang: 'typescript',
       code: 'checkTransaction(tx: UnsignedTxLike): FirewallDecision {\n  let payloads: RegistryPayload[];\n  try {\n    const deps = resolveRegistryDeps(tx.cellDeps, this.config.registries);\n    payloads = deps.map((dep) => parseRegistryPayload(dep.data));\n  } catch (err: unknown) {\n    return mapUnknownToDecision(err);\n  }\n  for (const out of tx.outputs) {\n    if (isBlacklisted(out.lockArgs, payloads))\n      return { ok: false, code: 11, reason: "BlacklistedLockArgs" };\n    if (out.typeArgs && isTypeArgsBlacklisted(out.typeArgs, payloads))\n      return { ok: false, code: 12, reason: "BlacklistedTypeArgs" };\n  }\n  return { ok: true };\n}'
@@ -129,8 +149,8 @@
     },
     /* GOV1 witness parsing — shown for "GOV1" in contract context */
     'GovernanceWitness': {
-      file: 'contracts/blacklist-registry/src/main.rs', lines: [210, 230], lang: 'rust',
-      code: 'pub fn parse(raw: &[u8]) -> Result<Self, SysError> {\n    if raw.len() != 141 {\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    if &raw[0..4] != b"GOV1" {\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    if raw[4] != 0x03 {  // v3 only — v2 no longer accepted\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    // proposal_id_hash[5..37], vote_digest_hash[37..69],\n    // old_root[69..101], new_root[101..133], review_window_end_ms[133..141]\n}'
+      file: 'contracts/blacklist-registry/src/main.rs', lines: [210, 232], lang: 'rust',
+      code: 'pub fn parse(raw: &[u8]) -> Result<Self, SysError> {\n    if raw.len() != 173 {\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    if &raw[0..4] != b"GOV1" {\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    if raw[4] != 0x04 {  // v4 only\n        return Err(error::to_sys_error(error::INVALID_GOVERNANCE_WITNESS));\n    }\n    // proposal_id_hash[5..37], vote_digest_hash[37..69],\n    // old_root[69..101], new_root[101..133],\n    // proposal_data_hash[133..165], review_delay_ms[165..173]\n}'
     },
     /* Signing preimage */
     'signing_message': {
