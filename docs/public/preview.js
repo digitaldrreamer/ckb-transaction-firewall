@@ -39,6 +39,10 @@
     'since': 'CKB transaction input field encoding a minimum age condition. The governance execute transaction uses a relative median-time-past since value to enforce the 72-hour review window at consensus.',
     'median block time': 'Median-time-past of the last 11 blocks. Used by the firewall lock to evaluate time-based blacklist entries and by CKB consensus to enforce the governance review window.',
     'GovernanceHeader': 'Parsed governance header embedded in a RegistryPayload. Fields: ghVersion (1–3), threshold, validatorCount, validatorMerkleRoot (32-byte hex). The governance-lock reads threshold and validatorMerkleRoot on every execute transaction.',
+    'treasury': 'CKB cell holding the governance capacity pool. Locked by the treasury-lock contract. Funds are donated by anyone and may only be spent to create proposal-anchor cells or cover registry capacity growth. Identified by the treasury-lock Type ID.',
+    'live cell': 'A CKB cell that has been created but not yet consumed. The registry cell, treasury cell, and proposal-anchor cells are all live cells at various points in the governance lifecycle.',
+    'Merkle proof': 'A path of sibling hashes from a leaf to the Merkle root. Used to prove validator set membership: each vote record includes the proof of the voter\'s public key against the validatorMerkleRoot in the governance header.',
+    'RegistryEntry': 'A single blacklist record: an identifier (lock args or type args bytes) and an expiry timestamp. Zero expiry means permanent. Entries are stored in strict ascending lexicographic order inside the BLKL payload.',
   };
 
   /* ── code snippets (shown when hovering inline <code> elements) ────── */
@@ -83,6 +87,70 @@
     'FirewallLockConfig': {
       file: 'sdk/typescript/src/types.ts', lines: [112, 125], lang: 'typescript',
       code: 'export interface FirewallLockConfig {\n  firewallCodeHash: string;\n  firewallHashType: HashType;\n  flags: number;\n  registries: RegistrySpecLike[];\n  innerCodeHash: string;\n  innerHashType: HashType;\n  innerArgs: string;\n}'
+    },
+    /* TypeScript SDK — additional types */
+    'HashType': {
+      file: 'sdk/typescript/src/types.ts', lines: [1, 1], lang: 'typescript',
+      code: 'export type HashType = "data" | "type" | "data1";'
+    },
+    'ScriptLike': {
+      file: 'sdk/typescript/src/types.ts', lines: [3, 7], lang: 'typescript',
+      code: 'export interface ScriptLike {\n  codeHash: string;\n  hashType: HashType;\n  args: string;\n}'
+    },
+    'OutPointLike': {
+      file: 'sdk/typescript/src/types.ts', lines: [85, 88], lang: 'typescript',
+      code: 'export interface OutPointLike {\n  txHash: string;\n  index: number;\n}'
+    },
+    'TransactionCellDep': {
+      file: 'sdk/typescript/src/types.ts', lines: [91, 94], lang: 'typescript',
+      code: 'export interface TransactionCellDep {\n  outPoint: OutPointLike;\n  depType: "code" | "dep_group";\n}'
+    },
+    'RegistryEntry': {
+      file: 'sdk/typescript/src/types.ts', lines: [50, 53], lang: 'typescript',
+      code: 'export interface RegistryEntry {\n  identifier: string;\n  expiresAt: bigint;\n}'
+    },
+    'FIREWALL_ERROR_CODES': {
+      file: 'sdk/typescript/src/types.ts', lines: [32, 39], lang: 'typescript',
+      code: 'export const FIREWALL_ERROR_CODES = {\n  MissingRegistryCellDep: 8,\n  InvalidRegistryData: 9,\n  RegistryNotSorted: 10,\n  BlacklistedLockArgs: 11,\n  BlacklistedTypeArgs: 12,\n  AmbiguousRegistryCellDep: 17,\n} as const;'
+    },
+    /* TypeScript SDK — error classes */
+    'FirewallSdkError': {
+      file: 'sdk/typescript/src/errors.ts', lines: [4, 6], lang: 'typescript',
+      code: 'export abstract class FirewallSdkError extends Error {\n  abstract readonly code: FirewallReasonCode;\n}'
+    },
+    'MissingRegistryCellDepError': {
+      file: 'sdk/typescript/src/errors.ts', lines: [8, 15], lang: 'typescript',
+      code: 'export class MissingRegistryCellDepError extends FirewallSdkError {\n  readonly code = 8 as const;\n  constructor() {\n    super("MissingRegistryCellDep");\n    this.name = "MissingRegistryCellDepError";\n  }\n}'
+    },
+    'InvalidRegistryDataError': {
+      file: 'sdk/typescript/src/errors.ts', lines: [17, 24], lang: 'typescript',
+      code: 'export class InvalidRegistryDataError extends FirewallSdkError {\n  readonly code = 9 as const;\n  constructor() {\n    super("InvalidRegistryData");\n    this.name = "InvalidRegistryDataError";\n  }\n}'
+    },
+    'RegistryNotSortedError': {
+      file: 'sdk/typescript/src/errors.ts', lines: [26, 33], lang: 'typescript',
+      code: 'export class RegistryNotSortedError extends FirewallSdkError {\n  readonly code = 10 as const;\n  constructor() {\n    super("RegistryNotSorted");\n    this.name = "RegistryNotSortedError";\n  }\n}'
+    },
+    'AmbiguousRegistryCellDepError': {
+      file: 'sdk/typescript/src/errors.ts', lines: [35, 42], lang: 'typescript',
+      code: 'export class AmbiguousRegistryCellDepError extends FirewallSdkError {\n  readonly code = 17 as const;\n  constructor() {\n    super("AmbiguousRegistryCellDep");\n    this.name = "AmbiguousRegistryCellDepError";\n  }\n}'
+    },
+    'isFirewallSdkError': {
+      file: 'sdk/typescript/src/errors.ts', lines: [44, 46], lang: 'typescript',
+      code: 'export function isFirewallSdkError(err: unknown): err is FirewallSdkError {\n  return err instanceof FirewallSdkError;\n}'
+    },
+    /* TypeScript SDK — TransactionFirewall class */
+    'TransactionFirewall': {
+      file: 'sdk/typescript/src/firewall.ts', lines: [27, 53], lang: 'typescript',
+      code: 'export class TransactionFirewall {\n  constructor(private readonly config: FirewallConfig) {}\n\n  // Checks all outputs against the registry cell deps in the transaction.\n  // Uses expiry-aware binary search — expired entries do not block transactions.\n  checkTransaction(tx: UnsignedTxLike): FirewallDecision {\n    let payloads: RegistryPayload[];\n    try {\n      const deps = resolveRegistryDeps(tx.cellDeps, this.config.registries);\n      payloads = deps.map((dep) => parseRegistryPayload(dep.data));\n    } catch (err: unknown) {\n      return mapUnknownToDecision(err);\n    }\n    for (const out of tx.outputs) {\n      if (isBlacklisted(out.lockArgs, payloads))\n        return { ok: false, code: 11, reason: "BlacklistedLockArgs" };\n      if (out.typeArgs && isTypeArgsBlacklisted(out.typeArgs, payloads))\n        return { ok: false, code: 12, reason: "BlacklistedTypeArgs" };\n    }\n    return { ok: true };\n  }\n}'
+    },
+    'resolveRegistryDeps': {
+      file: 'sdk/typescript/src/blacklist.ts', lines: [72, 82], lang: 'typescript',
+      code: 'export function resolveRegistryDeps(\n  cellDeps: CellDepLike[],\n  specs: RegistrySpecLike[],\n): CellDepLike[]\n// Matches cell deps against registry specs by typeIdValue (bytes 34-65\n// of the 66-byte v2 type args). Throws MissingRegistryCellDepError if\n// a required spec has no matching dep, AmbiguousRegistryCellDepError if\n// more than one dep matches the same spec.'
+    },
+    /* Example helpers */
+    'firstActiveEntry': {
+      file: 'examples/typescript/src/live-registry.ts', lines: [89, 95], lang: 'typescript',
+      code: 'export function firstActiveEntry(payload: RegistryPayload): string | null {\n  const nowSecs = BigInt(Math.floor(Date.now() / 1000));\n  const entry = payload.entries.find(\n    (e) => e.expiresAt === 0n || e.expiresAt > nowSecs,\n  );\n  return entry ? entry.identifier : null;\n}'
     },
     /* TypeScript SDK functions */
     'findRegistryCell': {
@@ -142,6 +210,32 @@
       file: 'sdk/rust/src/registry.rs', lines: [1, 10], lang: 'rust',
       code: '// Encodes a RegistryPayload into a BLKL v2 binary buffer.\n// Writes magic, version 0x02, governance header, entry count,\n// and entries in strict ascending lexicographic sort order.'
     },
+    /* Rust SDK — additional types */
+    /* Rust SDK — functions */
+    'is_blacklisted': {
+      file: 'sdk/rust/src/firewall.rs', lines: [68, 72], lang: 'rust',
+      code: 'pub fn is_blacklisted(\n    target: &[u8],\n    registries: &[RegistryPayload],\n    now_secs: u64,\n) -> bool\n// Binary-searches each sorted RegistryPayload.entries for target.\n// Returns true if found and not expired at now_secs.'
+    },
+    'preflight_check': {
+      file: 'sdk/rust/src/firewall.rs', lines: [80, 96], lang: 'rust',
+      code: 'pub fn preflight_check(\n    outputs: &[TxOutputLike],\n    registries: &[RegistryPayload],\n    now_secs: u64,\n) -> Result<(), FirewallError>\n// Checks each output\'s lock_args and type_args against already-parsed\n// registry payloads. Returns the first error found, or Ok(()).'
+    },
+    'build_firewall_lock_args': {
+      file: 'sdk/rust/src/builder.rs', lines: [17, 47], lang: 'rust',
+      code: 'pub fn build_firewall_lock_args(\n    config: &FirewallLockConfig,\n) -> Result<Vec<u8>, FirewallError>\n// Encodes the v2 FirewallLockArgs byte layout:\n// version(1)=0x02 | flags(1) | registry_count(1) |\n// [code_hash(32)|hash_type(1)|type_id_value(32)|required(1)]×N |\n// inner_code_hash(32) | inner_hash_type(1) | inner_args_len(2 LE) | inner_args(M)'
+    },
+    'build_firewall_lock_script': {
+      file: 'sdk/rust/src/builder.rs', lines: [53, 61], lang: 'rust',
+      code: 'pub fn build_firewall_lock_script(\n    config: &FirewallLockConfig,\n) -> Result<ScriptLike, FirewallError> {\n    Ok(ScriptLike {\n        code_hash: config.firewall_code_hash,\n        hash_type: config.firewall_hash_type.clone(),\n        args: build_firewall_lock_args(config)?,\n    })\n}'
+    },
+    'build_firewall_spend_cell_deps': {
+      file: 'sdk/rust/src/builder.rs', lines: [72, 89], lang: 'rust',
+      code: 'pub fn build_firewall_spend_cell_deps(\n    config: &FirewallSpendDepsConfig,\n) -> Vec<TransactionCellDep>\n// Returns: [firewall-lock code dep, inner-lock code dep,\n//           one registry data dep per registry_out_points entry].\n// Registry outpoints move after each governance update —\n// always fetch fresh values before calling this function.'
+    },
+    'encode_governance_header': {
+      file: 'sdk/rust/src/registry.rs', lines: [141, 152], lang: 'rust',
+      code: 'pub fn encode_governance_header(gh: &GovernanceHeader) -> Vec<u8>\n// Serialises a GovernanceHeader to the BLKL v2 gov_header bytes:\n// signer_count(1) | threshold(1) | [pubkey(33)]×signer_count |\n// validator_count(2 LE) | validator_merkle_root(32)'
+    },
     /* Contract entry points */
     'program_entry': {
       file: 'contracts/firewall-lock/src/main.rs', lines: [1, 10], lang: 'rust',
@@ -160,8 +254,8 @@
   };
 
   /* ── file-path patterns (inline <code> with a repo path) ───────────── */
-  // Matches sdk/*, contracts/*, notes/* paths optionally followed by :N or :N-M
-  var FILE_PATH_RE = /^((?:sdk|contracts|notes)\/[a-zA-Z0-9_/.-]+\.[a-z]+)(?::(\d+)(?:-(\d+))?)?$/;
+  // Matches sdk/*, contracts/*, examples/*, notes/* paths optionally followed by :N or :N-M
+  var FILE_PATH_RE = /^((?:sdk|contracts|examples|notes)\/[a-zA-Z0-9_/.-]+\.[a-z]+)(?::(\d+)(?:-(\d+))?)?$/;
 
   /* ── glossary auto-linker (text nodes → <span class="pv-trigger">) ─── */
   var SKIP_TAGS = /^(CODE|PRE|A|H1|H2|H3|H4|H5|H6|SCRIPT|STYLE|BUTTON|LABEL)$/;

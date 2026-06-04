@@ -358,14 +358,14 @@ function SecurityNote({ kind = "info", children }) {
 }
 
 // ─── Create proposal form ───────────────────────────────────────────────────
-function CreateForm({ onSubmit, onClose }) {
+function CreateForm({ meta, onSubmit, onClose }) {
   const [action, setAction] = React.useState("add");
   const [lockArgs, setLockArgs] = React.useState("");
   const [classification, setClassification] = React.useState("theft");
   const [severity, setSeverity] = React.useState("critical");
   const [evidence, setEvidence] = React.useState("");
   const [rationale, setRationale] = React.useState("");
-  const [proposer, setProposer] = React.useState("");
+  const [proposer, setProposer] = React.useState(meta?.proposerName || "");
   const [expires, setExpires] = React.useState("0");
   const [errors, setErrors] = React.useState({});
   const [submitting, setSubmitting] = React.useState(false);

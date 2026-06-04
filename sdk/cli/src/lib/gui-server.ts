@@ -1,3 +1,4 @@
+import { loadConfig } from "./config.js";
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -669,6 +670,7 @@ window.TFW_META = ${safeJson({
     registryError: d.registry?.error ?? null,
     treasury: d.registry?.treasury ?? null,
     yourPubkey: null,
+    proposerName: loadConfig().proposerName ?? null,
     ...d.meta,
   })};
 </script>`;

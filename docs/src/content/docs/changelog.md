@@ -7,6 +7,43 @@ This page describes changes that affect adopters, integrators, and operators. Fo
 
 ---
 
+## 2026-06-04 — `@ckb-firewall/cli` v0.5.0 and Rust SDK v0.3.1
+
+**What changed:**
+
+- **`ckb-firewall config`** is a new command that saves your default proposer name to `~/.ckb-firewall/config.json`. Set it once with `ckb-firewall config --proposer yourname`; the `propose` command and the GUI New Proposal form will prefill from it automatically.
+- The CLI's displayed version and `--version` output now read directly from `package.json` — no more stale hardcoded strings.
+- Rust SDK bumped to v0.3.1 with a minor registry parsing fix.
+
+**What you need to do:**
+
+- **CLI users:** No breaking changes. Run `ckb-firewall config --proposer <yourname>` once if you want to stop being prompted every time you create a proposal.
+- **SDK users (Rust):** Update `ckb-transaction-firewall-sdk` to `"0.3"` — the semver range already covers v0.3.1.
+
+---
+
+## 2026-06-03 — `@ckb-firewall/cli` v0.4.x, GOV1 v4, and keyless anchoring
+
+**What changed:** The governance workflow is now fully keyless end-to-end. Two new on-chain contracts (`treasury-lock` and `proposal-anchor`) and a protocol upgrade to GOV1 v4 remove all private key requirements from the anchor and execute paths.
+
+**What you need to do:**
+
+- **CLI users:** Update to the latest CLI. The workflow changes from `propose → anchor → vote → sign → execute` to `propose → anchor → vote → execute`. The `sign` command no longer exists.
+- **New commands:** `ckb-firewall anchor`, `ckb-firewall reclaim`, `ckb-firewall treasury-status`.
+- **SDK users:** No action required. The registry spec is unchanged.
+
+---
+
+## 2026-05-28 — `@ckb-firewall/cli` v0.4.0 and `ckb-firewall gui`
+
+**What changed:** The CLI ships a browser-based governance dashboard. `ckb-firewall gui` serves it locally at `http://ckb-firewall.localhost` (portless, port 80) or `http://localhost:7979` (fallback). The dashboard shows the live registry, treasury pool, proposal list, and inline forms for all governance operations.
+
+**What you need to do:**
+
+- **CLI users:** `npm install -g @ckb-firewall/cli` to update. Run `ckb-firewall gui` to open the dashboard.
+
+---
+
 ## 2026-05-31 — Treasury-enabled registry deployment
 
 **What changed:** The canonical testnet registry was re-bootstrapped with a v3 governance header embedding the full treasury lock script. Governance operations (anchoring and executing proposals) are now keyless — the autonomous treasury-lock funds both operations.

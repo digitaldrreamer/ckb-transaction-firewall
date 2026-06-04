@@ -136,9 +136,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }],
     };
 
+    let n = payload.entries.len();
     println!(
-        "Loaded registry {tx_hash}:{index} ({} entries)",
-        payload.entries.len()
+        "Loaded registry {tx_hash}:{index} ({} {})",
+        n,
+        if n == 1 { "entry" } else { "entries" }
     );
 
     let clean_args = hex_to_vec(TESTNET_ACCOUNT_2_LOCK_ARGS)?;
