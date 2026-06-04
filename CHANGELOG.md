@@ -1,5 +1,116 @@
 # Changelog
 
+## 2026-06-04
+
+### `@ckb-firewall/cli` v0.5.0
+
+- **`ckb-firewall config`** — new command that reads and writes `~/.ckb-firewall/config.json`. `--proposer <name>` sets the default proposer name non-interactively; running without flags shows current config and opens an interactive menu.
+- `propose` uses the saved proposer name as the prompt default and offers to save a new name on first use. A failed config write is a non-fatal warning — proposal creation continues.
+- GUI `TFW_META` now includes `proposerName` from config; the New Proposal form prefills the Proposer field accordingly.
+- `program.version` and the GUI version label now read from `package.json` at runtime instead of hardcoded literals.
+- `loadConfig` guards against array-shaped JSON with `Array.isArray` check.
+- `saveConfig` wraps FS operations in try-catch and throws a descriptive error including the file path.
+
+### `ckb-transaction-firewall-sdk` (Rust) v0.3.1
+
+- Minor `registry.rs` fix (trailing-data consistency guard).
+
+### Docs site
+
+- `preview.js` expanded: 20 new CODE_INDEX entries (`TransactionFirewall`, `HashType`, `ScriptLike`, `OutPointLike`, `RegistryEntry`, `TransactionCellDep`, `FIREWALL_ERROR_CODES`, all four `FirewallSdkError` subclasses, `isFirewallSdkError`, `resolveRegistryDeps`, `firstActiveEntry`, Rust SDK `is_blacklisted`, `preflight_check`, `build_firewall_lock_args/script/spend_cell_deps`, `encode_governance_header`).
+- Four new TERMS: `treasury`, `live cell`, `Merkle proof`, `RegistryEntry`.
+- FILE_PATH_RE extended to include `examples/*` so Location lines in example docs trigger GitHub link panels.
+- `examples/rust/src/bin/preflight_service.rs`: "1 entries" → "1 entry / N entries" pluralisation fix.
+
+---
+
+## 2026-06-03
+
+### `@ckb-firewall/cli` v0.4.x (PR #31 — feat/keyless-governance-lifecycle)
+
+- **Fully keyless governance**: `anchor` and `execute` no longer require any private key; the treasury-lock contract authorises spends autonomously.
+- **`ckb-firewall anchor`** — builds and submits a treasury-funded PBLK proposal anchor cell.
+- **`ckb-firewall reclaim`** — reclaims a rejected or abandoned proposal anchor after the review window.
+- **`ckb-firewall treasury-status`** — reports treasury pool usage and donation address.
+- `sign` command removed; signing is no longer a workflow step.
+- `inspect` shows treasury pool balance and donation address.
+- GUI: treasury banner, sign step removed from proposal flow.
+- TypeScript and Rust SDK examples scaffolded under `examples/` with root README, lockfile, and helper scripts.
+
+### New contracts
+
+- **`contracts/treasury-lock`** — autonomous CKB type script holding governance capacity. Args: `governance_lock_type_id(32) | proposal_anchor_type_id(32)`. Capacity may only leave via a transaction that includes a valid `proposal-anchor` input.
+- **`contracts/proposal-anchor`** — type script protecting PBLK anchor cells. Enforces PBLK payload validity on creation, treasury lock on the anchor cell, minimum relative `since` delay (MTP metric) on consumption, and capacity return to treasury.
+
+### GOV1 v4 protocol
+
+- Witness expanded to 173 bytes (up from 141). Extra 32 bytes carry the proposal anchor type hash used by `governance-lock` to verify an anchor input is present in the execute transaction.
+- Workflow: `propose → anchor → export/import → vote → execute`.
+
+### Security / correctness fixes (Gemini review rounds)
+
+- All bare `+` on `usize` values from on-chain bytes replaced with `checked_add`.
+- `treasury-lock` molecule Script offset validation in `is_anchor_type_for_treasury`.
+- Registry growth always drawn from treasury, not proposal cell surplus.
+- Anchor cell locked to treasury-lock (not governance-lock).
+- `since` MTP metric validation: bit 63 (relative flag) checked separately; bits 62:61 must be exactly `0b10` via `(since & 0x6000_0000_0000_0000) == 0x4000_0000_0000_0000`.
+- Dust treasury change absorbed into fee rather than creating sub-threshold output.
+- Treasury-lock script always discovered from cell deps, not from hardcoded testnet constants.
+- `proposal-anchor` `args_off + 4` overflow fixed with `checked_add` (PR #31 review comment `#discussion_r3354905455`).
+
+---
+
+## 2026-06-02
+
+### Security (pre-PR #31 groundwork)
+
+- Proposal cells moved to governance-lock as their lock script; treasury key no longer required at execute time.
+- `prehash: false` signing fix — CLI was wrapping governance payload in SHA-256 before secp256k1; governance-lock signs the raw blake2b digest directly.
+- `since` field encoding corrected in `proposal-anchor` unit tests (block-number metric → MTP).
+
+---
+
+## 2026-06-01
+
+### Security
+
+- GOV-004 closed: vote authorisation hardened.
+- NEW-004 closed: execute authorisation hardened.
+- Signer layer artifacts removed; VM blocker eliminated. Proposal cells now correctly lock to governance-lock rather than the treasury key.
+
+---
+
+## 2026-05-28
+
+### `@ckb-firewall/cli` v0.4.0
+
+- **`ckb-firewall gui`** — browser-based governance dashboard served over loopback. Tries port 80 (portless URL `http://ckb-firewall.localhost`), falls back to `:7979`. Security hardening: loopback enforcement at handler level, `safeJson()` XSS guard, `spawn()` for browser launch (no shell), path traversal guard on proposal import, body-size abort, SHA-256 integrity checks on CDN vendor scripts.
+- Install script shows version diff on upgrade.
+
+### Docs site (Diátaxis restructure — PRs #29, #30)
+
+- Site restructured around the Diátaxis framework: tutorials, how-to guides, reference, explanations.
+- Getting-started slimmed to a tutorial entry and choose-your-path router.
+- Guides section added (task-oriented how-to articles).
+- Rust SDK API reference added as a formal reference entry.
+- Sidebar and all internal cross-links rebuilt.
+- GUI mode page added with real screenshot.
+- Main README quick-start rewritten; doc table expanded.
+
+---
+
+## 2026-05-26
+
+### `@ckb-firewall/cli` v0.3.1
+
+- Bumped for GOV1 v3 compatibility.
+
+### `ckb-transaction-firewall-sdk` (Rust)
+
+- `serde` feature flag fixed (broken since v0.3.0 modularisation).
+
+---
+
 ## 2026-05-14
 
 ### Published `@ckb-firewall/cli@0.1.0` to npm
