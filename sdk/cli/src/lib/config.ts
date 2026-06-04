@@ -16,7 +16,11 @@ export function loadConfig(): CliConfig {
   try {
     const raw = JSON.parse(readFileSync(path, "utf8"));
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
-    return raw as CliConfig;
+    const config: CliConfig = {};
+    if (typeof (raw as Record<string, unknown>).proposerName === "string") {
+      config.proposerName = (raw as Record<string, unknown>).proposerName as string;
+    }
+    return config;
   } catch {
     return {};
   }
