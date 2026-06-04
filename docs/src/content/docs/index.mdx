@@ -1,22 +1,67 @@
 ---
 title: CKB Transaction Firewall
-description: Documentation for the firewall lock, registry contract, SDKs, CLI, and governance process.
+description: A consensus-layer blacklist enforcer for CKB transactions — lock script, registry, SDKs, CLI, and governed update process.
 template: splash
 banner:
-  content: |
-    Currently deployed on Testnet, not mainnet.
+  content: Deployed on CKB testnet. Mainnet deployment pending audit completion.
 hero:
-  tagline: A CKB lock script and governed blacklist registry, with SDKs and a CLI to check transactions before signing and to manage registry updates on-chain.
+  tagline: Block transactions to blacklisted addresses at consensus — regardless of what your application code does.
+  actions:
+    - text: I'm building an app
+      link: /get-started/integration/
+      icon: right-arrow
+      variant: primary
+    - text: I'm a validator
+      link: /get-started/validator/
+      icon: right-arrow
+    - text: I'm deploying a registry
+      link: /get-started/operator/
+      icon: right-arrow
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard, Aside } from '@astrojs/starlight/components';
+
+## What it does
+
+The firewall is an **outgoing payment filter**. It prevents a CKB wallet cell from being spent in a transaction that creates outputs pointing to blacklisted lock or type args. It does not block incoming payments, does not screen counterparties, and does not affect cells that don't use the firewall lock.
+
+When application code is compromised — a hijacked agent runtime, a prompt injection, a forked payout path that skips the check — the on-chain lock still runs. CKB nodes enforce the blacklist rule at consensus for every transaction that tries to spend a firewall-protected cell.
+
+<Aside type="note" title="New here?">
+Read [Why this exists](/concepts/why-this-exists/) and [The two-layer model](/concepts/two-layer-model/) first — 10 minutes total. They explain the threat this solves and why both the SDK and the on-chain lock are necessary.
+</Aside>
+
+## Components
+
+| Component | What it does |
+|---|---|
+| `firewall-lock` | CKB lock script that runs at consensus on every node when a protected cell is spent. Enforces the blacklist regardless of what application code does. |
+| Registry cell | Live CKB cell whose data is a BLKL v2 binary payload — a sorted, versioned blacklist maintained by governance. |
+| `@ckb-firewall/sdk` / `ckb-transaction-firewall-sdk` | Off-chain pre-flight check in TypeScript or Rust. Runs the same logic as the lock before signing — fast feedback, structured errors. |
+| `@ckb-firewall/cli` | CLI for inspecting the live registry, testing addresses, and running the full governance lifecycle. |
+| Governance | Signed, time-locked, multi-party process for adding and removing blacklist entries. Enforced at consensus via on-chain proposal cells. |
+
+## Choose your path
 
 <CardGrid>
-	<LinkCard href="/getting-started/tutorial/" title="Tutorial" description="Inspect the live registry and pre-flight your first transaction." />
-	<LinkCard href="/getting-started/choose-your-path/" title="Choose your path" description="TypeScript SDK, Rust SDK, CLI, or GUI — pick what applies to you." />
-	<LinkCard href="/concepts/overview/" title="Overview" description="What the firewall does and how the lock, registry, SDKs, and CLI fit together." />
-	<LinkCard href="/concepts/why-this-exists/" title="Why this exists" description="Why blacklist enforcement belongs in the lock script, not only in app code." />
-	<LinkCard href="/guides/cli-walkthrough/" title="CLI quickstart" description="Inspect the registry and prepare governance transactions from the terminal." />
-	<LinkCard href="/operations/testnet-deployment/" title="Testnet deployment" description="Canonical script IDs, registry cell data, and how tools consume them." />
-	<LinkCard href="/reference/error-codes/" title="Error codes" description="Stable codes returned by the contracts and SDKs." />
+  <LinkCard
+    href="/get-started/integration/"
+    title="Integration developer"
+    description="Add blacklist pre-flight checking to a TypeScript or Rust application."
+  />
+  <LinkCard
+    href="/get-started/validator/"
+    title="Governance validator"
+    description="Review and vote on blacklist proposals using the CLI."
+  />
+  <LinkCard
+    href="/get-started/operator/"
+    title="Registry operator"
+    description="Deploy a private blacklist registry with treasury-lock and governance."
+  />
+  <LinkCard
+    href="/concepts/trust-model-and-guarantees/"
+    title="Auditor / evaluator"
+    description="Trust assumptions, guarantees, and what governance key compromise means."
+  />
 </CardGrid>
