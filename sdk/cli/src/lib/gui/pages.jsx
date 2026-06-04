@@ -304,11 +304,13 @@ function RegistryPage({ state, actions }) {
             const isExp = exp && exp <= now;
             const rel = propsByAddr[e.identifier.toLowerCase()] || [];
             return (
-              <button
+              <div
                 key={i}
-                type="button"
+                role="button"
+                tabIndex={0}
                 className={`tfw-table__row${isExp ? " tfw-table__row--expired" : ""}`}
                 onClick={() => actions.openAddr(e.identifier)}
+                onKeyDown={ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); actions.openAddr(e.identifier); } }}
               >
                 <div className="tfw-table__cell tfw-table__cell--addr">
                   <code className="tfw-mono">{TFW_trunc(e.identifier, 32)}</code>
@@ -343,7 +345,7 @@ function RegistryPage({ state, actions }) {
                     ))
                   )}
                 </div>
-              </button>
+              </div>
             );
           })}
           <div className="tfw-table__foot">

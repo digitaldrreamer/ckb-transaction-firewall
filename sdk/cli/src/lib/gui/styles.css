@@ -958,9 +958,6 @@ select.tfw-input {
 }
 .tfw-table__row {
   width: 100%;
-  text-align: left;
-  appearance: none;
-  border: none;
   border-bottom: 1px solid var(--c-hairline);
   cursor: pointer;
   transition: background 0.1s;
