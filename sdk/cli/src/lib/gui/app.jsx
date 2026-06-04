@@ -82,8 +82,7 @@ function reducer(state, action) {
         ...state,
         proposals: action.proposals,
         registry: action.registry,
-        meta: { ...action.meta,
-          yourPubkey: state.meta.yourPubkey },
+        meta: { ...state.meta, ...action.meta },
       };
     default:
       return state;
@@ -175,7 +174,7 @@ function App() {
   const openCount = state.proposals.filter(p =>
     p.status === "pending-review" || p.status === "voting"
   ).length;
-  const activeRegistryCount = state.registry.filter(
+  const activeRegistryCount = (state.registry || []).filter(
     e => !e.expiresAt || Number(e.expiresAt) > nowSec
   ).length;
   const yourTodos = yourPk ? state.proposals.filter(p =>
