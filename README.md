@@ -13,7 +13,7 @@
 > The firewall checks your **outputs, not your counterparties.**  
 > It prevents a protected cell from sending to blacklisted destinations — at consensus, inside the lock script — regardless of what your application code does.
 
-**Deployed to CKB testnet.** Registry cell [`0xd841c6c1`](https://testnet.explorer.nervos.org/transaction/0xd841c6c1e0841ea58274a7a114cce505bc19503cca4ab2da07c060d10a436672) · All outpoints in [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
+**Deployed to CKB testnet.** Registry cell [`0xa3dcb46f`](https://testnet.explorer.nervos.org/transaction/0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8) · All outpoints in [`notes/deployments/testnet.registry.json`](./notes/deployments/testnet.registry.json).
 
 ---
 
@@ -65,29 +65,18 @@ npm install @ckb-firewall/sdk
 ```
 
 ```typescript
-import { TransactionFirewall, fetchRegistryPayload } from "@ckb-firewall/sdk";
+import { fetchRegistryPayload, preflightCheck } from "@ckb-firewall/sdk";
 
-const firewall = new TransactionFirewall({
-  registries: [{
-    codeHash:    "0x493f1700508125b0e281b8fb1d168b03bd5ef71480399dd59221224901a9cd09",
-    hashType:    "type",
-    typeIdValue: "0x9be0ad6e4e5039a64d9725ff037057c16ef59f126e3bdd9841b802f0e0a112fe",
-    required:    true,
-  }],
-});
-
-// Fetch the live registry cell from your CKB node
-const { type: registryType, data: registryData } = await fetchRegistryPayload(
+// Fetch the live registry payload from your CKB node
+// Use findRegistryCell() if you want to auto-discover the current outpoint
+const registry = await fetchRegistryPayload(
   "https://testnet.ckb.dev",
-  "0xd841c6c1e0841ea58274a7a114cce505bc19503cca4ab2da07c060d10a436672",
+  "0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8",
   0
 );
 
 // Check outputs before signing — synchronous, no RPC calls
-const result = firewall.checkTransaction({
-  cellDeps: [{ type: registryType, data: registryData }],
-  outputs:  [{ lockArgs: "0x..." }],
-});
+const result = preflightCheck([{ lockArgs: "0x..." }], [registry]);
 
 if (!result.ok) {
   throw new Error(`Blocked: ${result.reason}`); // e.g. "BlacklistedLockArgs"
@@ -143,17 +132,16 @@ Full governance flow:
 # 1. Create a proposal
 ckb-firewall propose
 
-# 2. Export and share with other participants
+# 2. Anchor the proposal on-chain — starts the 72h review window clock
+#    (treasury-funded, keyless; or with --to-address for non-treasury deployments)
+ckb-firewall anchor --proposal <id>
+
+# 3. Export and share with governance participants
 ckb-firewall export --proposal <id> --out proposal.json
 
-# 3. Each participant imports and votes with their private key
+# 4. Each participant imports and votes with their private key
 ckb-firewall import proposal.json
 ckb-firewall vote --proposal <id> --vote yes
-
-# 4. Anchor the proposal on-chain as a PBLK cell
-ckb-firewall anchor --proposal <id> --to-address <proposal-cell-owner-address>
-# after the transfer is accepted, record it once if you did not use --submit
-ckb-firewall anchor --proposal <id> --proposal-tx <anchor-tx> --proposal-index <data-output-index>
 
 # 5. Execute on-chain after review window (72h) and vote threshold (3/5)
 ckb-firewall execute --proposal <id>
@@ -180,7 +168,7 @@ For multi-registry deployments or self-managed registries, see [Private registry
 | `governance-lock` | [`0x5033e680...`](https://testnet.explorer.nervos.org/transaction/0x5033e680435bc7ef2255767cfd46b355ab1bc6dcda5ec01e38ef0d29119ad711) | 0 |
 | `firewall-lock` | [`0x128193cc...`](https://testnet.explorer.nervos.org/transaction/0x128193cc2d547b224ccf10a6e299cb0749c633c5f9354ff5a9a5fd3e894318d2) | 0 |
 | `blacklist-registry` | [`0xa165e5af...`](https://testnet.explorer.nervos.org/transaction/0xa165e5af82538c072caaee87ae5b919ad89ca2448d66daf9a29092b5ad87294d) | 0 |
-| `proposal-anchor` | [`0x9d8cc6d2...`](https://testnet.explorer.nervos.org/transaction/0x9d8cc6d26fce08eba8104dba8b5e5b5acb097b9c71f96b6bd6d68d12531413ee) | 0 |
+| `proposal-anchor` | [`0x0daff588...`](https://testnet.explorer.nervos.org/transaction/0x0daff588f0053bdf34d4c2eebaf2c092f70192cdd4a2d1dd95aee07ce100dea9) | 0 |
 | `spawn-aware-secp256k1` | [`0x0fe5d476...`](https://testnet.explorer.nervos.org/transaction/0x0fe5d47662724a3620c002683d8c3f38103359c7e1ca697196b39442317c709e) | 0 |
 | Registry cell | [`0xa3dcb46f...`](https://testnet.explorer.nervos.org/transaction/0xa3dcb46fdeb92735e7f9f0393811a8541b71e275e8f713e62ea35f59746c78a8) | 0 |
 

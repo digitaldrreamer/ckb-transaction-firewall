@@ -70,7 +70,7 @@ ckb-firewall propose \
   --proposer alice
 ```
 
-Options: `--action`, `--lock-args`, `--expires-at`, `--evidence`, `--classification`, `--severity`, `--rationale`, `--proposer`, `--treasury-lock-code-hash`, `--treasury-lock-hash-type`, `--treasury-lock-args`
+Options: `--action`, `--lock-args`, `--expires-at`, `--evidence`, `--classification`, `--severity`, `--rationale`, `--proposer`, `--treasury-lock-code-hash`, `--treasury-lock-hash-type`, `--treasury-lock-args`, `--review-delay-ms` (override the on-chain review delay in ms; testnet/drill use only)
 
 Classifications: `theft`, `scam`, `hack`, `sanctions`, `other`  
 Severities: `critical`, `high`, `medium`, `low`
@@ -105,7 +105,7 @@ ckb-firewall vote --proposal abc123 --vote yes
 
 Options: `--proposal`, `--vote` (`yes`, `no`, `abstain`), `--rpc-url`, `--registry-tx`, `--registry-index`
 
-The CLI prompts for the validator private key with masked input.
+The CLI prompts for the validator private key with masked input. Pass `--private-key <hex>` to provide it non-interactively (scripted use only — do not use in shared environments).
 
 **What this command does:**
 1. Derives the compressed public key from the provided private key
@@ -178,7 +178,7 @@ ckb-firewall execute \
   --tx-out ./gov_tx.json
 ```
 
-Options: `--proposal`, `--rpc-url`, `--registry-tx`, `--registry-index`, `--proposal-tx`, `--proposal-index`, `--proposal-anchor-code-tx`, `--proposal-anchor-code-index`, `--treasury-cell`, `--treasury-lock-dep`, `--tx-out`, `--sign`, `--from-account`
+Options: `--proposal`, `--rpc-url`, `--registry-tx`, `--registry-index`, `--proposal-tx`, `--proposal-index`, `--proposal-anchor-code-tx`, `--proposal-anchor-code-index`, `--treasury-cell`, `--treasury-lock-dep`, `--tx-out`, `--sign`, `--from-account`, `--privkey-path` (non-interactive key file for signing), `--ready` (find and execute all proposals whose review window has passed and vote threshold is met)
 
 `--proposal-tx` and `--proposal-index` override the stored live `PBLK` proposal-cell outpoint when needed. The generated transaction spends that proposal cell with a relative timestamp `since` delay and returns its remaining capacity as change.
 
@@ -290,11 +290,22 @@ All registry changes go through governance. The proposal is a local JSON file un
 propose → anchor → export → [share] → import → vote → export → [share] → import → execute
 ```
 
-1. Any participant runs `propose` to create the proposal file, then `anchor` to lock it on-chain (funded by the treasury pool — no key needed)
+1. Any participant runs `propose` to create the proposal file, then `anchor` to lock it on-chain (funded by the treasury pool — no key needed). Anchoring first starts the review window clock.
 2. The JSON is exported and shared out-of-band (email, Signal, IPFS, etc.)
-3. Each validator runs `import` to receive it, then `vote` with their validator key
+3. Each validator runs `import` to receive it, then `vote` with their validator key, then `export` again to share their vote
 4. After the review window and vote threshold are met, any participant runs `execute` — also funded by the treasury pool, no key needed
 
 There is no `sign` command. Validator vote signatures are collected during `vote` and embedded in the execute witness by `execute` itself.
 
 The minimum timeline is approximately 96 hours (72h review window + time for validators to vote). The CLI warns if a temporary entry's `expiresAt` falls within this window.
+
+## See also
+
+- [Governance validator tutorial](/get-started/validator/) — hands-on walk-through of the full CLI governance flow
+- [How to inspect the registry](/how-to/inspect-registry/) — `ckb-firewall inspect` and `check`
+- [How to create a proposal](/how-to/create-proposal/) — `ckb-firewall propose`
+- [How to anchor a proposal](/how-to/anchor-proposal/) — `ckb-firewall anchor`
+- [How to vote on a proposal](/how-to/vote-on-proposal/) — `ckb-firewall vote`
+- [How to share proposals](/how-to/share-proposals/) — `ckb-firewall export` and `import`
+- [How to execute an approved proposal](/how-to/execute-proposal/) — `ckb-firewall execute`
+- [Fix: vote digest mismatch](/how-to/fix-vote-digest-mismatch/) — when `execute` fails with a hash error

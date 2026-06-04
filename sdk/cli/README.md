@@ -65,11 +65,7 @@ ckb-firewall anchor --proposal <id> --to-address <proposal-cell-owner-address>
 # after the transfer is accepted, record it once if you did not use --submit
 ckb-firewall anchor --proposal <id> --proposal-tx <anchor-tx> --proposal-index <data-output-index>
 
-# 7. Sign after 72h review window and vote threshold
-ckb-firewall sign --proposal <id> --signer-index 0
-#   (prompts for 32-byte private key)
-
-# 8. Execute on-chain with the anchored proposal cell
+# 7. Execute on-chain after review window and vote threshold
 ckb-firewall execute \
   --proposal <id> \
   --tx-out gov_tx.json

@@ -17,7 +17,7 @@ const payload = parseRegistryPayload(liveCell.data);
 const payload = await fetchRegistryPayload(rpcUrl, txHash, outputIndex);
 
 console.log(payload.version);          // 2
-console.log(payload.governanceHeader); // signer pubkeys, validator Merkle root
+console.log(payload.governanceHeader); // threshold, validatorMerkleRoot
 console.log(payload.entries);          // [{ identifier, expiresAt }, ...]
 ```
 
@@ -52,12 +52,12 @@ The governance header is embedded immediately after `gov_header_len`. It carries
 | `treasury_lock_script_len` | 2 bytes `u16`, v3 only | byte length of the serialized treasury lock script |
 | `treasury_lock_script` | variable, v3 only | Molecule `Script` bytes for the treasury lock |
 
-**Example sizes:**
+**Example sizes** (current encoder always writes `signer_count = 0`; legacy cells may have non-zero signer counts):
 
-- 1 signer: `1 + 1 + 1 + 33 + 2 + 32` = **70 bytes**
-- 5 signers: `1 + 1 + 1 + 165 + 2 + 32` = **202 bytes**
-- 5 signers with treasury hash metadata: `202 + 32` = **234 bytes**
-- 5 signers with a full treasury lock script: `202 + 2 + treasury_lock_script_len`
+- v1, 0 signers: `1 + 1 + 1 + 0 + 2 + 32` = **37 bytes**
+- v2, 0 signers (adds treasury hash): `37 + 32` = **69 bytes**
+- v3, 0 signers (adds treasury script): `37 + 2 + treasury_lock_script_len` bytes
+- Legacy v1, 5 signers: `1 + 1 + 1 + 165 + 2 + 32` = **202 bytes**
 
 The governance-lock script reads `threshold`, `validator_count`, and `validator_merkle_root` from this header on every registry update. It verifies that the transaction witness contains at least `threshold` valid yes-votes from unique validators committed by the Merkle root.
 
@@ -106,7 +106,7 @@ A 5-validator set produces a tree of depth 3 (padded to 8 leaves). Each vote sto
 
 - The payload **must** begin with the four bytes `BLKL` (`0x42 0x4c 0x4b 0x4c`).
 - `version` must be `0x02`. Version `0x01` is rejected by all current deployments.
-- `gh_version` inside the governance header must be `0x01`.
+- `gh_version` inside the governance header must be `0x01`, `0x02`, or `0x03`. v1 has no treasury fields; v2 adds a 32-byte `treasury_lock_hash`; v3 replaces it with a length-prefixed Molecule `Script` encoding of the full treasury lock script.
 - `threshold` must be ≥ 1 and ≤ `validator_count`.
 - Entries must be sorted in **strict ascending byte order**. Equal or descending adjacent identifiers are invalid.
 - Entries are compared as raw byte slices, **not** as hex strings. Identifiers of different lengths follow C-style byte ordering (shorter string wins if it is a prefix of the longer one).
@@ -119,3 +119,10 @@ A 5-validator set produces a tree of depth 3 (padded to 8 leaves). Each vote sto
 - Parser (Rust): `contracts/blacklist-registry/src/main.rs` — `RegistryPayload::parse`
 - Governance header parser (Rust): `contracts/governance-lock/src/main.rs` — `parse_governance_header`
 - Testnet fixture: [`notes/deployments/testnet.registry.json`](https://github.com/digitaldrreamer/ckb-transaction-firewall/blob/main/notes/deployments/testnet.registry.json)
+
+## See also
+
+- [Registry and cell design](/concepts/registry-design/) — why the format is designed the way it is
+- [Registry operator tutorial, step 2](/get-started/operator/2-bootstrap-registry/) — bootstrap the first registry cell
+- [How to inspect the live registry](/how-to/inspect-registry/) — read the current payload via CLI or SDK
+- [TypeScript SDK API](/reference/typescript-sdk/) — `fetchRegistryPayload`, `parseRegistryPayload`, `RegistryPayload`
