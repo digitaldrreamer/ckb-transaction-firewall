@@ -83,8 +83,6 @@ ckb-firewall check    ... --registry-tx <tx> --registry-index 0
 The CLI config file (`~/.ckb-firewall/config.json`) does not currently support a default registry override. You must pass `--registry-tx` and `--registry-index` on every command when using a private registry. The `--registry-tx` only needs to be the initial bootstrap tx hash — the CLI auto-discovers the current outpoint via the indexer as governance updates move the cell.
 </Aside>
 
-After a governance update, the registry cell moves to a new outpoint. Pass the **new tx hash from the execute output** for subsequent commands — or rely on the indexer auto-discovery to handle it.
-
 ## Connect the GUI to your registry
 
 The GUI is started with:
