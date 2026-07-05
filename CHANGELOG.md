@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-05
+
+### `ckb-transaction-firewall-sdk` (Rust) — tests
+
+- **Property/fuzz tests for the BLKL v2 registry decoder** (`tests/registry_fuzz.rs`). Addresses the mainnet-readiness feedback on the CKBuilder review (issue #19: "fuzz/property tests for registry parsing, dep resolution, sorting, malformed data, and expiry"). Coverage: parser never panics on arbitrary bytes (2048 cases), encode→parse round-trip is byte-exact, expiry timestamps (incl. `0` and `u64::MAX`) round-trip, unsorted/duplicate identifiers rejected as `RegistryNotSorted`, trailing bytes and every strict prefix rejected, and an absurd entry count cannot trigger an unbounded allocation. Wires the already-declared `proptest` dependency into the SDK crate.
+- `RegistryEntry`, `GovernanceHeader`, and `RegistryPayload` now derive `PartialEq`/`Eq` so decoded payloads can be compared directly (used by the round-trip property).
+
 ## 2026-06-04
 
 ### `@ckb-firewall/cli` v0.5.2
