@@ -97,59 +97,7 @@ impl RegistryPayload {
         }
         let gov_header_len = u16::from_le_bytes([data[5], data[6]]) as usize;
         let entries_start = 7 + gov_header_len;
-        if entries_start + 4 > data.len() {
-            return Err(RegistryParseError::InvalidPayload);
-        }
-        let entry_count = u32::from_le_bytes([
-            data[entries_start],
-            data[entries_start + 1],
-            data[entries_start + 2],
-            data[entries_start + 3],
-        ]) as usize;
-        let mut offset = entries_start + 4;
-        let remaining = data.len().saturating_sub(offset);
-        let max_possible_entries = remaining / 9;
-        if entry_count > max_possible_entries {
-            return Err(RegistryParseError::InvalidPayload);
-        }
-        let mut entries = Vec::with_capacity(entry_count);
-        for _ in 0..entry_count {
-            if offset >= data.len() {
-                return Err(RegistryParseError::InvalidPayload);
-            }
-            let id_len = data[offset] as usize;
-            offset += 1;
-            if offset + id_len + 8 > data.len() {
-                return Err(RegistryParseError::InvalidPayload);
-            }
-            let identifier = data[offset..offset + id_len].to_vec();
-            offset += id_len;
-            let expires_at = u64::from_le_bytes([
-                data[offset],
-                data[offset + 1],
-                data[offset + 2],
-                data[offset + 3],
-                data[offset + 4],
-                data[offset + 5],
-                data[offset + 6],
-                data[offset + 7],
-            ]);
-            offset += 8;
-            entries.push(RegistryEntry {
-                identifier,
-                expires_at,
-            });
-        }
-        for i in 1..entries.len() {
-            if entries[i].identifier.as_slice() <= entries[i - 1].identifier.as_slice() {
-                return Err(RegistryParseError::NotSorted);
-            }
-        }
-        // Sortedness is checked before trailing bytes so an unsorted payload
-        // still reports `NotSorted` regardless of any trailing data.
-        if strict && offset != data.len() {
-            return Err(RegistryParseError::TrailingBytes);
-        }
+        let entries = parse_entries(data, entries_start, strict)?;
         Ok(Self { version, entries })
     }
 
@@ -168,4 +116,79 @@ impl RegistryPayload {
             })
             .unwrap_or(false)
     }
+}
+
+/// Decode the entry list of a BLKL v2 payload.
+///
+/// `count_offset` is the byte offset of the 4-byte little-endian entry count
+/// (i.e. `7 + gov_header_len`). Reads the count and then each
+/// `id_len(1) | id | expires_at(8 LE)` entry, enforcing strictly-ascending
+/// identifier order. When `strict`, the entries must consume the input exactly
+/// — any trailing bytes yield [`RegistryParseError::TrailingBytes`].
+///
+/// This is the single entry decoder shared by the on-chain scripts (via
+/// [`RegistryPayload::parse_strict`]) and the off-chain SDK, so the
+/// bounds-checking, sorting, and trailing-byte rules cannot diverge between
+/// them.
+pub fn parse_entries(
+    data: &[u8],
+    count_offset: usize,
+    strict: bool,
+) -> Result<Vec<RegistryEntry>, RegistryParseError> {
+    if count_offset + 4 > data.len() {
+        return Err(RegistryParseError::InvalidPayload);
+    }
+    let entry_count = u32::from_le_bytes([
+        data[count_offset],
+        data[count_offset + 1],
+        data[count_offset + 2],
+        data[count_offset + 3],
+    ]) as usize;
+    let mut offset = count_offset + 4;
+    // Each entry is at least 9 bytes (id_len + expires_at); reject impossible
+    // counts before allocating to avoid OOM on malicious input.
+    let remaining = data.len().saturating_sub(offset);
+    let max_possible_entries = remaining / 9;
+    if entry_count > max_possible_entries {
+        return Err(RegistryParseError::InvalidPayload);
+    }
+    let mut entries = Vec::with_capacity(entry_count);
+    for _ in 0..entry_count {
+        if offset >= data.len() {
+            return Err(RegistryParseError::InvalidPayload);
+        }
+        let id_len = data[offset] as usize;
+        offset += 1;
+        if offset + id_len + 8 > data.len() {
+            return Err(RegistryParseError::InvalidPayload);
+        }
+        let identifier = data[offset..offset + id_len].to_vec();
+        offset += id_len;
+        let expires_at = u64::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+            data[offset + 4],
+            data[offset + 5],
+            data[offset + 6],
+            data[offset + 7],
+        ]);
+        offset += 8;
+        entries.push(RegistryEntry {
+            identifier,
+            expires_at,
+        });
+    }
+    for i in 1..entries.len() {
+        if entries[i].identifier.as_slice() <= entries[i - 1].identifier.as_slice() {
+            return Err(RegistryParseError::NotSorted);
+        }
+    }
+    // Sortedness is checked before trailing bytes so an unsorted payload still
+    // reports `NotSorted` regardless of any trailing data.
+    if strict && offset != data.len() {
+        return Err(RegistryParseError::TrailingBytes);
+    }
+    Ok(entries)
 }

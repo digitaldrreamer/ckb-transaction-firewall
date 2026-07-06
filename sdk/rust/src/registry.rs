@@ -46,52 +46,15 @@ pub(crate) fn parse_governance_header(
     })
 }
 
-pub(crate) fn parse_entries(
-    data: &[u8],
-    offset: usize,
-    count: usize,
-) -> Result<(Vec<RegistryEntry>, usize), FirewallError> {
-    let mut off = offset;
-    // Each entry is at minimum 9 bytes (1-byte id_len + 0-byte id + 8-byte expires_at).
-    // Reject impossible counts before allocating to prevent OOM on malicious input.
-    let max_possible = data.len().saturating_sub(off) / 9;
-    if count > max_possible {
-        return Err(FirewallError::InvalidRegistryData);
+/// Map a shared-crate parse error onto the SDK's error type, preserving the
+/// codes this decoder returned before it delegated to `registry-format`:
+/// out-of-order entries are `RegistryNotSorted`; everything else (malformed or
+/// trailing bytes) is `InvalidRegistryData`.
+fn map_entry_err(err: registry_format::RegistryParseError) -> FirewallError {
+    match err {
+        registry_format::RegistryParseError::NotSorted => FirewallError::RegistryNotSorted,
+        _ => FirewallError::InvalidRegistryData,
     }
-    let mut entries = Vec::with_capacity(count);
-    for _ in 0..count {
-        if off >= data.len() {
-            return Err(FirewallError::InvalidRegistryData);
-        }
-        let id_len = data[off] as usize;
-        off += 1;
-        if off + id_len + 8 > data.len() {
-            return Err(FirewallError::InvalidRegistryData);
-        }
-        let identifier = data[off..off + id_len].to_vec();
-        off += id_len;
-        let expires_at = u64::from_le_bytes([
-            data[off],
-            data[off + 1],
-            data[off + 2],
-            data[off + 3],
-            data[off + 4],
-            data[off + 5],
-            data[off + 6],
-            data[off + 7],
-        ]);
-        off += 8;
-        entries.push(RegistryEntry {
-            identifier,
-            expires_at,
-        });
-    }
-    for i in 1..entries.len() {
-        if entries[i].identifier <= entries[i - 1].identifier {
-            return Err(FirewallError::RegistryNotSorted);
-        }
-    }
-    Ok((entries, off))
 }
 
 // ── public API ────────────────────────────────────────────────────────────────
@@ -117,16 +80,16 @@ pub fn parse_registry_payload(data: &[u8]) -> Result<RegistryPayload, FirewallEr
     }
     let governance_header = parse_governance_header(data, 7, gov_len)?;
     let entries_start = 7 + gov_len;
-    let count = u32::from_le_bytes([
-        data[entries_start],
-        data[entries_start + 1],
-        data[entries_start + 2],
-        data[entries_start + 3],
-    ]) as usize;
-    let (entries, end) = parse_entries(data, entries_start + 4, count)?;
-    if end != data.len() {
-        return Err(FirewallError::InvalidRegistryData);
-    }
+    // Entry decoding, sorting, and the trailing-byte (strict) check are shared
+    // with the on-chain scripts via the registry-format crate.
+    let entries = registry_format::parse_entries(data, entries_start, true)
+        .map_err(map_entry_err)?
+        .into_iter()
+        .map(|e| RegistryEntry {
+            identifier: e.identifier,
+            expires_at: e.expires_at,
+        })
+        .collect();
     Ok(RegistryPayload {
         version: 2,
         entries,

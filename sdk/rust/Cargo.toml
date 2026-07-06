@@ -19,5 +19,11 @@ testnet = []
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
 
+# Shared BLKL v2 entry decoder — the same implementation the on-chain scripts
+# use, so the SDK's pre-flight parsing cannot drift from consensus. The path is
+# for in-repo builds; the version lets the crate publish to crates.io once
+# registry-format is released.
+registry-format = { path = "../../crates/registry-format", version = "0.1" }
+
 [dev-dependencies]
 proptest = "1"

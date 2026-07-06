@@ -2,6 +2,21 @@
 
 ## 2026-07-06
 
+### Rust SDK entry decoding unified with the on-chain scripts
+
+- **`registry-format`**: extracted the entry decoder into a standalone
+  `parse_entries(data, count_offset, strict)`; `RegistryPayload::parse`/
+  `parse_strict` now call it, so there is a single copy of the bounds-checking,
+  sorting, and trailing-byte logic.
+- **`ckb-transaction-firewall-sdk` (Rust)**: `parse_registry_payload` now
+  delegates entry decoding to `registry_format::parse_entries` (strict) instead
+  of its own hand-rolled loop, keeping only its governance-header parsing. The
+  SDK's pre-flight check can no longer drift from consensus on the entry format.
+  Behaviour and error codes are unchanged (out-of-order → `RegistryNotSorted`;
+  malformed/trailing → `InvalidRegistryData`), verified by the SDK's 33 tests.
+  Adds a `path` + `version` dependency on `registry-format` (the version lets the
+  SDK still publish to crates.io once `registry-format` is released there).
+
 ### Canonical registry encoding enforced on-chain — CONSENSUS CHANGE (requires redeploy)
 
 Both on-chain scripts now reject registry cell data that carries trailing bytes
