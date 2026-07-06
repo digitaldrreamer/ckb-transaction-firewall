@@ -2,6 +2,12 @@
 
 ## 2026-07-05
 
+### `registry-format` (new shared crate) — on-chain parser + fuzz tests
+
+- **New `crates/registry-format`**: a `no_std`, `ckb-std`-free crate holding the single canonical BLKL v2 registry payload parser. The `blacklist-registry` type script now depends on it instead of carrying its own copy, so the consensus decoder and its host fuzz tests exercise one implementation that cannot silently drift.
+- **`blacklist-registry` refactor is behaviour-preserving**: the parser was moved verbatim; `RegistryParseError` maps back to the same on-chain diagnostic exit codes (`InvalidPayload` → 22, `UnsupportedVersion` → 23). Verified by re-running the full VM unit suite (46 tests) and the contract's host tests (24 tests), plus the RISC-V VM-compatibility check.
+- **Property/fuzz tests** (`crates/registry-format/tests/fuzz.rs`): parser never panics on arbitrary bytes (2048 cases), well-formed payloads round-trip, expiry timestamps (incl. `0` and `u64::MAX`) preserved, unsorted/duplicate identifiers and wrong versions rejected with the right error, every strict prefix rejected, and an absurd entry count cannot trigger an unbounded allocation. `trailing_bytes_ignored` pins the on-chain parser's documented divergence from the SDK decoder (the contract skips the governance header and ignores trailing bytes; the SDK rejects trailing bytes).
+
 ### `ckb-transaction-firewall-sdk` (Rust) — tests
 
 - **Property/fuzz tests for the BLKL v2 registry decoder** (`tests/registry_fuzz.rs`). Addresses the mainnet-readiness feedback on the CKBuilder review (issue #19: "fuzz/property tests for registry parsing, dep resolution, sorting, malformed data, and expiry"). Coverage: parser never panics on arbitrary bytes (2048 cases), encode→parse round-trip is byte-exact, expiry timestamps (incl. `0` and `u64::MAX`) round-trip, unsorted/duplicate identifiers rejected as `RegistryNotSorted`, trailing bytes and every strict prefix rejected, and an absurd entry count cannot trigger an unbounded allocation. Wires the already-declared `proptest` dependency into the SDK crate.

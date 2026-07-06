@@ -119,83 +119,21 @@ fn parse_registry_type_args(raw: &[u8]) -> Result<RegistryTypeArgs, SysError> {
     RegistryTypeArgs::parse(raw)
 }
 
-/// Registry payload structure for BLKL v2.
-#[derive(Debug)]
-pub struct RegistryPayload {
-    pub version: u8,
-    pub entries: Vec<RegistryEntry>,
-}
+// Registry payload types and the BLKL v2 parser live in the shared
+// `registry-format` crate so the on-chain decoder and its host fuzz tests use
+// one implementation. `RegistryPayload::parse` returns `RegistryParseError`;
+// `map_registry_parse_err` maps it back to this script's diagnostic exit codes.
+pub use registry_format::{RegistryEntry, RegistryPayload};
+use registry_format::RegistryParseError;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RegistryEntry {
-    pub identifier: Vec<u8>,
-    pub expires_at: u64,
-}
-
-impl RegistryPayload {
-    pub fn parse(data: &[u8]) -> Result<Self, SysError> {
-        // Minimum: BLKL(4) + version(1) + gov_header_len(2) + entry_count(4) = 11 bytes
-        if data.len() < 11 {
-            return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
+/// Map a shared-crate parse error onto this type script's on-chain exit codes,
+/// preserving the exact diagnostics callers previously observed.
+fn map_registry_parse_err(err: RegistryParseError) -> SysError {
+    match err {
+        RegistryParseError::UnsupportedVersion => {
+            error::to_sys_error(error::UNSUPPORTED_REGISTRY_VERSION)
         }
-        if &data[0..4] != b"BLKL" {
-            return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
-        }
-        let version = data[4];
-        if version != 0x02 {
-            return Err(error::to_sys_error(error::UNSUPPORTED_REGISTRY_VERSION));
-        }
-        let gov_header_len = u16::from_le_bytes([data[5], data[6]]) as usize;
-        let entries_start = 7 + gov_header_len;
-        if entries_start + 4 > data.len() {
-            return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
-        }
-        let entry_count = u32::from_le_bytes([
-            data[entries_start],
-            data[entries_start + 1],
-            data[entries_start + 2],
-            data[entries_start + 3],
-        ]) as usize;
-        let mut offset = entries_start + 4;
-        let remaining = data.len().saturating_sub(offset);
-        let max_possible_entries = remaining / 9;
-        if entry_count > max_possible_entries {
-            return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
-        }
-        let mut entries = Vec::with_capacity(entry_count);
-        for _ in 0..entry_count {
-            if offset >= data.len() {
-                return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
-            }
-            let id_len = data[offset] as usize;
-            offset += 1;
-            if offset + id_len + 8 > data.len() {
-                return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
-            }
-            let identifier = data[offset..offset + id_len].to_vec();
-            offset += id_len;
-            let expires_at = u64::from_le_bytes([
-                data[offset],
-                data[offset + 1],
-                data[offset + 2],
-                data[offset + 3],
-                data[offset + 4],
-                data[offset + 5],
-                data[offset + 6],
-                data[offset + 7],
-            ]);
-            offset += 8;
-            entries.push(RegistryEntry {
-                identifier,
-                expires_at,
-            });
-        }
-        for i in 1..entries.len() {
-            if entries[i].identifier.as_slice() <= entries[i - 1].identifier.as_slice() {
-                return Err(error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD));
-            }
-        }
-        Ok(Self { version, entries })
+        RegistryParseError::InvalidPayload => error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD),
     }
 }
 
@@ -827,12 +765,14 @@ fn program_entry() -> Result<(), SysError> {
 
     // BLKL v2 payload validation.
     let out_data = load_cell_data_bytes(reg_out, Source::Output)?;
-    let new_registry = RegistryPayload::parse(out_data.as_slice())?;
+    let new_registry =
+        RegistryPayload::parse(out_data.as_slice()).map_err(map_registry_parse_err)?;
     let treasury_lock_hash = parse_treasury_lock_hash(out_data.as_slice())?;
 
     let (old_root, old_registry, witness_index) = if let Some(reg_in) = reg_in_opt {
         let in_data = load_cell_data_bytes(reg_in, Source::Input)?;
-        let old_registry = RegistryPayload::parse(in_data.as_slice())?;
+        let old_registry =
+            RegistryPayload::parse(in_data.as_slice()).map_err(map_registry_parse_err)?;
         (blake2b_256(in_data.as_slice()), Some(old_registry), reg_in)
     } else {
         ([0u8; 32], None, 0usize)
