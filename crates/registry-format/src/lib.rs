@@ -43,26 +43,47 @@ pub struct RegistryPayload {
 
 /// Why a registry payload failed to parse.
 ///
-/// The variants map one-to-one onto the on-chain diagnostic exit codes so the
-/// contract's observable reject reasons are preserved exactly:
-/// `UnsupportedVersion` → code 23, `InvalidPayload` → code 22.
+/// Variants are granular enough for each on-chain script to map them back to
+/// its own diagnostic exit codes without loss:
+/// * `blacklist-registry`: `UnsupportedVersion` → 23; everything else → 22.
+/// * `firewall-lock`: `UnsupportedVersion` → 6; `NotSorted` → 10; everything
+///   else → 9.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistryParseError {
-    /// Malformed layout: bad magic, truncation, over-long entry count, or
-    /// entries that are not strictly ascending.
+    /// Malformed layout: bad magic, truncation, or an over-long entry count.
     InvalidPayload,
     /// The version byte is not `0x02`.
     UnsupportedVersion,
+    /// Entries are not in strictly ascending identifier order (includes
+    /// duplicates). Kept distinct because `firewall-lock` reports it separately.
+    NotSorted,
+    /// Strict parsing only: bytes remain after the declared entries. The
+    /// canonical encoding has nothing after the last entry.
+    TrailingBytes,
 }
 
 impl RegistryPayload {
-    /// Parse a raw BLKL v2 registry payload.
+    /// Parse a raw BLKL v2 registry payload, ignoring any bytes after the
+    /// declared entries.
     ///
-    /// Only version `0x02` is accepted. The governance header is skipped by
-    /// length; any bytes after the declared entries are ignored (the on-chain
-    /// contract does not treat trailing data as an error). Entries must be
-    /// strictly ascending by identifier.
+    /// This is the historical on-chain behaviour. Prefer [`parse_strict`] for
+    /// new call sites; this lenient form is retained for reference and is
+    /// exercised by the fuzz suite alongside the strict form.
+    ///
+    /// [`parse_strict`]: RegistryPayload::parse_strict
     pub fn parse(data: &[u8]) -> Result<Self, RegistryParseError> {
+        Self::parse_inner(data, false)
+    }
+
+    /// Parse a raw BLKL v2 registry payload, rejecting any trailing bytes after
+    /// the declared entries ([`RegistryParseError::TrailingBytes`]).
+    ///
+    /// This enforces canonical encoding: the input must be consumed exactly.
+    pub fn parse_strict(data: &[u8]) -> Result<Self, RegistryParseError> {
+        Self::parse_inner(data, true)
+    }
+
+    fn parse_inner(data: &[u8], strict: bool) -> Result<Self, RegistryParseError> {
         // Minimum: BLKL(4) + version(1) + gov_header_len(2) + entry_count(4) = 11 bytes
         if data.len() < 11 {
             return Err(RegistryParseError::InvalidPayload);
@@ -121,9 +142,30 @@ impl RegistryPayload {
         }
         for i in 1..entries.len() {
             if entries[i].identifier.as_slice() <= entries[i - 1].identifier.as_slice() {
-                return Err(RegistryParseError::InvalidPayload);
+                return Err(RegistryParseError::NotSorted);
             }
         }
+        // Sortedness is checked before trailing bytes so an unsorted payload
+        // still reports `NotSorted` regardless of any trailing data.
+        if strict && offset != data.len() {
+            return Err(RegistryParseError::TrailingBytes);
+        }
         Ok(Self { version, entries })
+    }
+
+    /// Return whether `identifier` is currently blacklisted at `median_time`
+    /// (Unix seconds). Entries with `expires_at == 0` are permanent; otherwise
+    /// an entry is active only while `median_time < expires_at`.
+    ///
+    /// Relies on the strictly-ascending ordering the parser guarantees to
+    /// binary-search the entries.
+    pub fn is_blacklisted(&self, identifier: &[u8], median_time: u64) -> bool {
+        self.entries
+            .binary_search_by(|entry| entry.identifier.as_slice().cmp(identifier))
+            .map(|idx| {
+                let entry = &self.entries[idx];
+                entry.expires_at == 0 || median_time < entry.expires_at
+            })
+            .unwrap_or(false)
     }
 }

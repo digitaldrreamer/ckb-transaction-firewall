@@ -126,14 +126,20 @@ fn parse_registry_type_args(raw: &[u8]) -> Result<RegistryTypeArgs, SysError> {
 pub use registry_format::{RegistryEntry, RegistryPayload};
 use registry_format::RegistryParseError;
 
-/// Map a shared-crate parse error onto this type script's on-chain exit codes,
-/// preserving the exact diagnostics callers previously observed.
+/// Map a shared-crate parse error onto this type script's on-chain exit codes.
+/// This script has always reported a single malformed-payload code for every
+/// failure except an unsupported version, so `NotSorted` and `TrailingBytes`
+/// both fold into `INVALID_REGISTRY_PAYLOAD`.
 fn map_registry_parse_err(err: RegistryParseError) -> SysError {
     match err {
         RegistryParseError::UnsupportedVersion => {
             error::to_sys_error(error::UNSUPPORTED_REGISTRY_VERSION)
         }
-        RegistryParseError::InvalidPayload => error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD),
+        RegistryParseError::InvalidPayload
+        | RegistryParseError::NotSorted
+        | RegistryParseError::TrailingBytes => {
+            error::to_sys_error(error::INVALID_REGISTRY_PAYLOAD)
+        }
     }
 }
 
@@ -766,13 +772,13 @@ fn program_entry() -> Result<(), SysError> {
     // BLKL v2 payload validation.
     let out_data = load_cell_data_bytes(reg_out, Source::Output)?;
     let new_registry =
-        RegistryPayload::parse(out_data.as_slice()).map_err(map_registry_parse_err)?;
+        RegistryPayload::parse_strict(out_data.as_slice()).map_err(map_registry_parse_err)?;
     let treasury_lock_hash = parse_treasury_lock_hash(out_data.as_slice())?;
 
     let (old_root, old_registry, witness_index) = if let Some(reg_in) = reg_in_opt {
         let in_data = load_cell_data_bytes(reg_in, Source::Input)?;
         let old_registry =
-            RegistryPayload::parse(in_data.as_slice()).map_err(map_registry_parse_err)?;
+            RegistryPayload::parse_strict(in_data.as_slice()).map_err(map_registry_parse_err)?;
         (blake2b_256(in_data.as_slice()), Some(old_registry), reg_in)
     } else {
         ([0u8; 32], None, 0usize)

@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-07-06
+
+### Canonical registry encoding enforced on-chain — CONSENSUS CHANGE (requires redeploy)
+
+Both on-chain scripts now reject registry cell data that carries trailing bytes
+after the declared entries, enforcing a single canonical encoding. This is a
+consensus rule change: a new contract version must be deployed for it to take
+effect. It is safe for existing testnet state — the deployed registry cell is
+canonical (the SDK decoder has rejected trailing bytes since v0.3.1 and parses
+it successfully), so no live cell is stranded.
+
+- **`registry-format`**: added `RegistryPayload::parse_strict` (rejects trailing
+  bytes) alongside the existing lenient `parse`; split `RegistryParseError` into
+  `InvalidPayload` / `UnsupportedVersion` / `NotSorted` / `TrailingBytes` so each
+  script maps failures to its own exit codes without loss; moved the
+  `is_blacklisted` lookup into the crate. Fuzz suite extended to cover both
+  parsers, the strict trailing-byte rejection, error precedence, and
+  `is_blacklisted` (checked against a brute-force scan).
+- **`blacklist-registry`**: switched both registry parses to `parse_strict`.
+  Observable exit codes unchanged for previously-rejected inputs (`NotSorted` and
+  `TrailingBytes` both fold into `INVALID_REGISTRY_PAYLOAD`, as before).
+- **`firewall-lock`**: removed its private copy of the BLKL v2 parser,
+  `RegistryEntry`, and `is_blacklisted`; now uses the shared `registry-format`
+  crate via `parse_strict`. This eliminates the third independent copy of the
+  decoder — all on-chain registry parsing now flows through one fuzz-tested
+  implementation. Exit codes preserved (`REGISTRY_NOT_SORTED` = 10, version = 6,
+  malformed / trailing = 9).
+
+Verified behaviour-preserving for canonical data by the full VM unit suite (46
+tests), both contracts' host tests (24 + 19), and the RISC-V VM-compatibility
+check; the RISC-V atomic-instruction footprint of `firewall-lock` is unchanged.
+
 ## 2026-07-05
 
 ### `registry-format` (new shared crate) — on-chain parser + fuzz tests

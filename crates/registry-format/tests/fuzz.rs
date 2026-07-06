@@ -68,12 +68,12 @@ fn arb_entries() -> impl Strategy<Value = Vec<RegistryEntry>> {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(2048))]
 
-    /// The parser must return `Ok`/`Err` on any input, never panic. When it
-    /// accepts input, its promised invariants (version 0x02, strictly
-    /// ascending entries) must hold.
+    /// Neither parser may panic on any input. When they accept input, the
+    /// promised invariants (version 0x02, strictly ascending entries) hold.
     #[test]
     fn parse_never_panics(data in prop::collection::vec(any::<u8>(), 0..4096usize)) {
-        if let Ok(payload) = RegistryPayload::parse(&data) {
+        let results = [RegistryPayload::parse(&data), RegistryPayload::parse_strict(&data)];
+        for payload in results.into_iter().flatten() {
             prop_assert_eq!(payload.version, 0x02);
             for w in payload.entries.windows(2) {
                 prop_assert!(w[0].identifier < w[1].identifier);
@@ -85,13 +85,16 @@ proptest! {
 // ── property tests ────────────────────────────────────────────────────────────
 
 proptest! {
-    /// A well-formed payload decodes to exactly its version and entries. The
-    /// governance header is skipped, so it does not appear in the result.
+    /// A well-formed payload decodes to exactly its version and entries under
+    /// both parsers. The governance header is skipped, so it is not returned.
     #[test]
     fn roundtrip_wellformed(gov in arb_gov(), entries in arb_entries()) {
         let data = encode(0x02, &gov, &entries);
-        let decoded = RegistryPayload::parse(&data).expect("well-formed payload parses");
-        prop_assert_eq!(decoded, RegistryPayload { version: 0x02, entries });
+        let expected = RegistryPayload { version: 0x02, entries };
+        let lenient = RegistryPayload::parse(&data).expect("well-formed payload parses");
+        let strict = RegistryPayload::parse_strict(&data).expect("canonical payload parses strict");
+        prop_assert_eq!(&lenient, &expected);
+        prop_assert_eq!(&strict, &expected);
     }
 
     /// Expiry timestamps survive parsing exactly, including `0` (permanent) and
@@ -112,7 +115,7 @@ proptest! {
         prop_assert_eq!(got, exps);
     }
 
-    /// Out-of-order entries (adjacent swap) are rejected as InvalidPayload.
+    /// Out-of-order entries (adjacent swap) are rejected as NotSorted.
     #[test]
     fn unsorted_rejected(gov in arb_gov(), entries in arb_entries()) {
         prop_assume!(entries.len() >= 2);
@@ -121,7 +124,7 @@ proptest! {
         let data = encode(0x02, &gov, &e);
         prop_assert_eq!(
             RegistryPayload::parse(&data).unwrap_err(),
-            RegistryParseError::InvalidPayload
+            RegistryParseError::NotSorted
         );
     }
 
@@ -135,7 +138,7 @@ proptest! {
         let data = encode(0x02, &gov, &e);
         prop_assert_eq!(
             RegistryPayload::parse(&data).unwrap_err(),
-            RegistryParseError::InvalidPayload
+            RegistryParseError::NotSorted
         );
     }
 
@@ -164,18 +167,57 @@ proptest! {
         }
     }
 
-    /// The on-chain parser ignores bytes after the declared entries. This pins
-    /// that behaviour (the SDK decoder, by contrast, rejects trailing bytes).
+    /// Trailing bytes: the lenient `parse` ignores them (historical on-chain
+    /// behaviour), while `parse_strict` rejects them as TrailingBytes. This
+    /// pins both, and documents the divergence from the SDK decoder (which is
+    /// strict).
     #[test]
-    fn trailing_bytes_ignored(
+    fn trailing_bytes(
         gov in arb_gov(),
         entries in arb_entries(),
         extra in prop::collection::vec(any::<u8>(), 1..16usize),
     ) {
         let mut data = encode(0x02, &gov, &entries);
         data.extend_from_slice(&extra);
-        let decoded = RegistryPayload::parse(&data).expect("trailing bytes are ignored, not rejected");
-        prop_assert_eq!(decoded.entries, entries);
+        let lenient = RegistryPayload::parse(&data).expect("lenient ignores trailing bytes");
+        prop_assert_eq!(lenient.entries, entries);
+        prop_assert_eq!(
+            RegistryPayload::parse_strict(&data).unwrap_err(),
+            RegistryParseError::TrailingBytes
+        );
+    }
+
+    /// Wrong version and truncation outrank the trailing-bytes check: a strict
+    /// parse of a bad version still reports UnsupportedVersion, not TrailingBytes.
+    #[test]
+    fn strict_error_precedence(
+        version in any::<u8>().prop_filter("not v2", |v| *v != 0x02),
+        gov in arb_gov(),
+        entries in arb_entries(),
+        extra in prop::collection::vec(any::<u8>(), 1..8usize),
+    ) {
+        let mut data = encode(version, &gov, &entries);
+        data.extend_from_slice(&extra);
+        prop_assert_eq!(
+            RegistryPayload::parse_strict(&data).unwrap_err(),
+            RegistryParseError::UnsupportedVersion
+        );
+    }
+
+    /// `is_blacklisted` agrees with a direct scan of the entries at any time:
+    /// permanent entries (expires_at == 0) always match; timed entries match
+    /// only while median_time < expires_at.
+    #[test]
+    fn is_blacklisted_matches_scan(
+        entries in arb_entries(),
+        probe in prop::collection::vec(any::<u8>(), 0..8usize),
+        median_time in any::<u64>(),
+    ) {
+        let payload = RegistryPayload { version: 0x02, entries };
+        let expected = payload.entries.iter().any(|e| {
+            e.identifier == probe && (e.expires_at == 0 || median_time < e.expires_at)
+        });
+        prop_assert_eq!(payload.is_blacklisted(&probe, median_time), expected);
     }
 }
 

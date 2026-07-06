@@ -186,138 +186,27 @@ impl FirewallLockArgs {
     }
 }
 
-/// * Registry payload structure
-///
-/// Format (v2):
-/// - 4 bytes: magic number (0x424C4B4C "BLKL")
-/// - 1 byte: version (0x02)
-/// - 2 bytes: gov_header_len (LE u16)
-/// - gov_header_len bytes: governance header (pubkeys, threshold, validator merkle root)
-/// - 4 bytes: entry count (LE u32)
-/// - N bytes: entry data (sorted by identifier)
-///
-/// Each entry:
-/// - 1 byte: identifier length
-/// - N bytes: identifier (lock_args or type_args)
-/// - 8 bytes: expires_at (LE u64, 0 = permanent)
-#[derive(Debug)]
-pub struct RegistryPayload {
-    pub version: u8,
-    pub entries: alloc::vec::Vec<RegistryEntry>,
-}
+// The BLKL v2 registry payload parser and its `is_blacklisted` lookup live in
+// the shared `registry-format` crate so this lock and the `blacklist-registry`
+// type script decode the format with one fuzz-tested implementation.
+//
+// `parse_strict` is used below (rejecting trailing bytes) to enforce canonical
+// registry cell data; `map_registry_parse_err` maps the shared error back to
+// this script's diagnostic exit codes.
+pub use registry_format::RegistryPayload;
+use registry_format::RegistryParseError;
 
-#[derive(Debug, Clone)]
-pub struct RegistryEntry {
-    pub identifier: Bytes,
-    pub expires_at: u64, // * 0 = permanent, non-zero = Unix timestamp
-}
-
-impl RegistryPayload {
-    /// * Parse and validate registry data
-    ///
-    /// Returns InvalidRegistryData if:
-    /// - Magic number mismatch
-    /// - Unsupported version
-    /// - Malformed entry data
-    pub fn parse(data: &[u8]) -> Result<Self, SysError> {
-        if data.len() < 9 {
-            return Err(error::to_sys_error(error::INVALID_REGISTRY_DATA));
+/// Map a shared-crate parse error onto this lock's on-chain exit codes,
+/// preserving the diagnostics callers previously observed (`NotSorted` has its
+/// own code here; `TrailingBytes` is a new strict rejection folded into the
+/// generic malformed-data code).
+fn map_registry_parse_err(err: RegistryParseError) -> SysError {
+    match err {
+        RegistryParseError::UnsupportedVersion => error::to_sys_error(error::UNSUPPORTED_VERSION),
+        RegistryParseError::NotSorted => error::to_sys_error(error::REGISTRY_NOT_SORTED),
+        RegistryParseError::InvalidPayload | RegistryParseError::TrailingBytes => {
+            error::to_sys_error(error::INVALID_REGISTRY_DATA)
         }
-
-        // * Verify magic number "BLKL"
-        if &data[0..4] != b"BLKL" {
-            return Err(error::to_sys_error(error::INVALID_REGISTRY_DATA));
-        }
-
-        let version = data[4];
-        if version != 0x02 {
-            return Err(error::to_sys_error(error::UNSUPPORTED_VERSION));
-        }
-
-        // * BLKL v2: skip governance header using its length prefix.
-        if data.len() < 7 {
-            return Err(error::to_sys_error(error::INVALID_REGISTRY_DATA));
-        }
-        let gov_header_len = u16::from_le_bytes([data[5], data[6]]) as usize;
-        let entries_start = 7 + gov_header_len;
-        if data.len() < entries_start + 4 {
-            return Err(error::to_sys_error(error::INVALID_REGISTRY_DATA));
-        }
-
-        let entry_count = u32::from_le_bytes([
-            data[entries_start],
-            data[entries_start + 1],
-            data[entries_start + 2],
-            data[entries_start + 3],
-        ]) as usize;
-        // * Defensive bound: each entry takes at least 9 bytes (len + expires_at),
-        // * so reject impossible counts before allocating.
-        let remaining = data.len().saturating_sub(entries_start + 4);
-        let max_possible_entries = remaining / 9;
-        if entry_count > max_possible_entries {
-            return Err(error::to_sys_error(error::INVALID_REGISTRY_DATA));
-        }
-
-        let mut entries = alloc::vec::Vec::with_capacity(entry_count);
-        let mut offset = entries_start + 4;
-
-        for _ in 0..entry_count {
-            if offset >= data.len() {
-                return Err(error::to_sys_error(error::INVALID_REGISTRY_DATA));
-            }
-
-            let id_len = data[offset] as usize;
-            offset += 1;
-
-            if offset + id_len + 8 > data.len() {
-                return Err(error::to_sys_error(error::INVALID_REGISTRY_DATA));
-            }
-
-            let identifier = Bytes::from(data[offset..offset + id_len].to_vec());
-            offset += id_len;
-
-            let expires_at = u64::from_le_bytes([
-                data[offset],
-                data[offset + 1],
-                data[offset + 2],
-                data[offset + 3],
-                data[offset + 4],
-                data[offset + 5],
-                data[offset + 6],
-                data[offset + 7],
-            ]);
-            offset += 8;
-
-            entries.push(RegistryEntry {
-                identifier,
-                expires_at,
-            });
-        }
-
-        // * Verify entries are strictly sorted (no duplicates allowed)
-        for i in 1..entries.len() {
-            if entries[i].identifier.as_ref() <= entries[i - 1].identifier.as_ref() {
-                return Err(error::to_sys_error(error::REGISTRY_NOT_SORTED));
-            }
-        }
-
-        Ok(Self { version, entries })
-    }
-
-    /// * Check if identifier is blacklisted
-    ///
-    /// Uses median block timestamp for expiry evaluation
-    pub fn is_blacklisted(&self, identifier: &[u8], median_time: u64) -> bool {
-        // * Binary search for efficiency
-        self.entries
-            .binary_search_by(|entry| entry.identifier.as_ref().cmp(identifier))
-            .map(|idx| {
-                let entry = &self.entries[idx];
-                // * Permanent entries always active (expires_at == 0)
-                // * Temporary entries active only if not expired
-                entry.expires_at == 0 || median_time < entry.expires_at
-            })
-            .unwrap_or(false)
     }
 }
 
@@ -448,7 +337,7 @@ fn program_entry() -> Result<(), SysError> {
     let mut registries = alloc::vec::Vec::with_capacity(resolved.len());
     for (_spec_idx, dep_idx) in &resolved {
         let data = load_cell_data(*dep_idx, Source::CellDep)?;
-        registries.push(RegistryPayload::parse(&data)?);
+        registries.push(RegistryPayload::parse_strict(&data).map_err(map_registry_parse_err)?);
     }
 
     let median_time = get_median_time()?;
