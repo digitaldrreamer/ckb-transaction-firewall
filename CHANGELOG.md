@@ -2,6 +2,16 @@
 
 ## 2026-07-06
 
+### VM-level regression test for trailing-byte rejection
+
+- Added `test_reject_registry_update_with_trailing_bytes` to the
+  `blacklist-registry` VM suite. It builds a full governance update transaction
+  identical to the passing case except for one extra output-data byte, with
+  `new_root` recomputed over the trailing-inclusive bytes so the root binding
+  still passes — proving the transaction is rejected specifically by
+  `parse_strict` (exit code 22), not by the root check. Confirmed meaningful:
+  the same transaction is accepted when the contract uses the lenient parser.
+
 ### Rust SDK entry decoding unified with the on-chain scripts
 
 - **`registry-format`**: extracted the entry decoder into a standalone
