@@ -135,16 +135,20 @@ pub fn parse_entries(
     count_offset: usize,
     strict: bool,
 ) -> Result<Vec<RegistryEntry>, RegistryParseError> {
-    if count_offset + 4 > data.len() {
-        return Err(RegistryParseError::InvalidPayload);
-    }
+    // `count_offset` is caller-supplied (this is a public entry point), so guard
+    // the addition with `checked_add`: a near-`usize::MAX` offset must fail the
+    // bounds check rather than wrap around and pass it.
+    let offset_after_count = match count_offset.checked_add(4) {
+        Some(end) if end <= data.len() => end,
+        _ => return Err(RegistryParseError::InvalidPayload),
+    };
     let entry_count = u32::from_le_bytes([
         data[count_offset],
         data[count_offset + 1],
         data[count_offset + 2],
         data[count_offset + 3],
     ]) as usize;
-    let mut offset = count_offset + 4;
+    let mut offset = offset_after_count;
     // Each entry is at least 9 bytes (id_len + expires_at); reject impossible
     // counts before allocating to avoid OOM on malicious input.
     let remaining = data.len().saturating_sub(offset);
@@ -159,7 +163,10 @@ pub fn parse_entries(
         }
         let id_len = data[offset] as usize;
         offset += 1;
-        if offset + id_len + 8 > data.len() {
+        // `offset < data.len()` holds here (checked above), so `data.len() - offset`
+        // cannot underflow. Phrasing the bound as a subtraction keeps the addition
+        // `id_len + 8` (both small) from ever overflowing near `usize::MAX`.
+        if id_len + 8 > data.len() - offset {
             return Err(RegistryParseError::InvalidPayload);
         }
         let identifier = data[offset..offset + id_len].to_vec();
