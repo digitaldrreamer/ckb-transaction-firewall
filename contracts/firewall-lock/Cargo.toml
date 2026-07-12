@@ -16,6 +16,9 @@ molecule = { version = "0.8.0", default-features = false }
 # * Lightweight error handling
 cfg-if = "1.0"
 
+# * Shared BLKL v2 registry payload parser (no_std, fuzz-tested on host)
+registry-format = { path = "../../crates/registry-format" }
+
 [profile.release]
 overflow-checks = true
 opt-level = "s"        # * Optimize for size

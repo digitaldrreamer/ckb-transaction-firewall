@@ -457,6 +457,101 @@ fn test_pass_valid_registry_update_with_gov1_witness() {
     context.verify_tx(&tx, MAX_CYCLES).expect("tx should pass");
 }
 
+/// Registry cell data with trailing bytes after the declared entries is
+/// rejected end-to-end, even when the governance witness commits to the exact
+/// trailing-inclusive bytes.
+///
+/// This is the consensus-hardening regression for canonical encoding: the
+/// transaction is identical to `test_pass_valid_registry_update_with_gov1_witness`
+/// except for one extra output-data byte (with `new_root` recomputed over it, so
+/// the root binding still passes). `parse_strict` rejects it with
+/// `INVALID_REGISTRY_PAYLOAD`. Before trailing bytes were rejected, this
+/// transaction would have been accepted.
+#[test]
+fn test_reject_registry_update_with_trailing_bytes() {
+    let mut context = Context::default();
+
+    let registry_code_out_point = context.deploy_cell(Bytes::from(REGISTRY_BINARY.to_vec()));
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+
+    let governance_lock = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0x01]))
+        .expect("build governance lock");
+
+    let registry_type_args = build_registry_v2_type_args(&governance_lock, DUMMY_TYPE_ID);
+    let registry_type = context
+        .build_script(&registry_code_out_point, registry_type_args)
+        .expect("build registry type script");
+
+    let old_payload = build_registry_payload(&[]);
+    // Canonical new payload plus one trailing byte the parser must reject.
+    let mut new_bytes = build_registry_payload_single_id(&[0xBB]).to_vec();
+    new_bytes.push(0xFF);
+    let new_payload = Bytes::from(new_bytes);
+
+    let old_root = blake2b_256(old_payload.as_ref());
+    // Commit new_root over the trailing-inclusive data so the transaction clears
+    // the root-binding check and fails specifically in the payload parser.
+    let new_root = blake2b_256(new_payload.as_ref());
+    let (proposal_input, proposal_data_hash) =
+        create_proposal_input(&mut context, governance_lock.clone(), 0x01, &[0xBB], 0);
+
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000u64.pack())
+            .lock(governance_lock.clone())
+            .type_(Some(registry_type.clone()).pack())
+            .build(),
+        old_payload.clone(),
+    );
+
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
+
+    let output = CellOutput::new_builder()
+        .capacity(900u64.pack())
+        .lock(governance_lock.clone())
+        .type_(Some(registry_type).pack())
+        .build();
+
+    let gov_payload = build_gov1_binding(
+        [0x11u8; 32],
+        [0x22u8; 32],
+        old_root,
+        new_root,
+        proposal_data_hash,
+    );
+    let witness = WitnessArgs::new_builder()
+        .input_type(Some(gov_payload).pack())
+        .build()
+        .as_bytes();
+
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .input(proposal_input)
+        .output(output)
+        .output_data(new_payload.pack())
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(registry_code_out_point)
+                .build(),
+        )
+        .cell_dep(
+            CellDep::new_builder()
+                .out_point(always_success_out_point)
+                .build(),
+        )
+        .witness(witness.pack())
+        .build();
+
+    let tx = context.complete_tx(tx);
+    let err = context
+        .verify_tx(&tx, MAX_CYCLES)
+        .expect_err("tx with trailing registry bytes should fail");
+    assert_error_code(err, ERROR_INVALID_REGISTRY_PAYLOAD);
+}
+
 #[test]
 fn test_pass_registry_update_with_treasury_anchor_return() {
     let mut context = Context::default();

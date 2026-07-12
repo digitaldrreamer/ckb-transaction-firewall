@@ -13,6 +13,9 @@ ckb-std = { version = "0.16.4", default-features = false, features = ["allocator
 # * Hashing (pure Rust; avoids C toolchain for RISC-V builds)
 blake2b-ref = { version = "0.3.1", default-features = false }
 
+# * Shared BLKL v2 registry payload parser (no_std, fuzz-tested on host)
+registry-format = { path = "../../crates/registry-format" }
+
 [profile.release]
 overflow-checks = true
 opt-level = "z"        # * Optimize aggressively for binary size

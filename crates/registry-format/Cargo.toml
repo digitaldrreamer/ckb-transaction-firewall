@@ -1,0 +1,14 @@
+[package]
+name = "registry-format"
+version = "0.1.0"
+authors = ["digitaldrreamer", "others"]
+edition = "2021"
+license = "MIT"
+description = "Shared no_std parser for the BLKL v2 blacklist-registry payload format"
+
+[lib]
+name = "registry_format"
+path = "src/lib.rs"
+
+[dev-dependencies]
+proptest = "1"

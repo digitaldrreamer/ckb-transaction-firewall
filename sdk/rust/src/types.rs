@@ -150,7 +150,7 @@ pub struct FirewallConfig {
 /// A single blacklist entry: an identifier (arbitrary bytes) and an expiry
 /// timestamp in Unix seconds. `expires_at == 0` means the entry never expires.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegistryEntry {
     pub identifier: Vec<u8>,
     /// Unix seconds. `0` means the entry is permanent.
@@ -159,7 +159,7 @@ pub struct RegistryEntry {
 
 /// Governance header embedded in every BLKL v2 registry payload.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GovernanceHeader {
     pub signer_count: u8,
     pub threshold: u8,
@@ -171,7 +171,7 @@ pub struct GovernanceHeader {
 
 /// A parsed BLKL v2 registry payload.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegistryPayload {
     pub version: u8,
     pub entries: Vec<RegistryEntry>,

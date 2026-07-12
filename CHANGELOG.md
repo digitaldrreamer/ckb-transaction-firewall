@@ -1,5 +1,75 @@
 # Changelog
 
+## 2026-07-06
+
+### VM-level regression test for trailing-byte rejection
+
+- Added `test_reject_registry_update_with_trailing_bytes` to the
+  `blacklist-registry` VM suite. It builds a full governance update transaction
+  identical to the passing case except for one extra output-data byte, with
+  `new_root` recomputed over the trailing-inclusive bytes so the root binding
+  still passes — proving the transaction is rejected specifically by
+  `parse_strict` (exit code 22), not by the root check. Confirmed meaningful:
+  the same transaction is accepted when the contract uses the lenient parser.
+
+### Rust SDK entry decoding unified with the on-chain scripts
+
+- **`registry-format`**: extracted the entry decoder into a standalone
+  `parse_entries(data, count_offset, strict)`; `RegistryPayload::parse`/
+  `parse_strict` now call it, so there is a single copy of the bounds-checking,
+  sorting, and trailing-byte logic.
+- **`ckb-transaction-firewall-sdk` (Rust)**: `parse_registry_payload` now
+  delegates entry decoding to `registry_format::parse_entries` (strict) instead
+  of its own hand-rolled loop, keeping only its governance-header parsing. The
+  SDK's pre-flight check can no longer drift from consensus on the entry format.
+  Behaviour and error codes are unchanged (out-of-order → `RegistryNotSorted`;
+  malformed/trailing → `InvalidRegistryData`), verified by the SDK's 33 tests.
+  Adds a `path` + `version` dependency on `registry-format` (the version lets the
+  SDK still publish to crates.io once `registry-format` is released there).
+
+### Canonical registry encoding enforced on-chain — CONSENSUS CHANGE (requires redeploy)
+
+Both on-chain scripts now reject registry cell data that carries trailing bytes
+after the declared entries, enforcing a single canonical encoding. This is a
+consensus rule change: a new contract version must be deployed for it to take
+effect. It is safe for existing testnet state — the deployed registry cell is
+canonical (the SDK decoder has rejected trailing bytes since v0.3.1 and parses
+it successfully), so no live cell is stranded.
+
+- **`registry-format`**: added `RegistryPayload::parse_strict` (rejects trailing
+  bytes) alongside the existing lenient `parse`; split `RegistryParseError` into
+  `InvalidPayload` / `UnsupportedVersion` / `NotSorted` / `TrailingBytes` so each
+  script maps failures to its own exit codes without loss; moved the
+  `is_blacklisted` lookup into the crate. Fuzz suite extended to cover both
+  parsers, the strict trailing-byte rejection, error precedence, and
+  `is_blacklisted` (checked against a brute-force scan).
+- **`blacklist-registry`**: switched both registry parses to `parse_strict`.
+  Observable exit codes unchanged for previously-rejected inputs (`NotSorted` and
+  `TrailingBytes` both fold into `INVALID_REGISTRY_PAYLOAD`, as before).
+- **`firewall-lock`**: removed its private copy of the BLKL v2 parser,
+  `RegistryEntry`, and `is_blacklisted`; now uses the shared `registry-format`
+  crate via `parse_strict`. This eliminates the third independent copy of the
+  decoder — all on-chain registry parsing now flows through one fuzz-tested
+  implementation. Exit codes preserved (`REGISTRY_NOT_SORTED` = 10, version = 6,
+  malformed / trailing = 9).
+
+Verified behaviour-preserving for canonical data by the full VM unit suite (46
+tests), both contracts' host tests (24 + 19), and the RISC-V VM-compatibility
+check; the RISC-V atomic-instruction footprint of `firewall-lock` is unchanged.
+
+## 2026-07-05
+
+### `registry-format` (new shared crate) — on-chain parser + fuzz tests
+
+- **New `crates/registry-format`**: a `no_std`, `ckb-std`-free crate holding the single canonical BLKL v2 registry payload parser. The `blacklist-registry` type script now depends on it instead of carrying its own copy, so the consensus decoder and its host fuzz tests exercise one implementation that cannot silently drift.
+- **`blacklist-registry` refactor is behaviour-preserving**: the parser was moved verbatim; `RegistryParseError` maps back to the same on-chain diagnostic exit codes (`InvalidPayload` → 22, `UnsupportedVersion` → 23). Verified by re-running the full VM unit suite (46 tests) and the contract's host tests (24 tests), plus the RISC-V VM-compatibility check.
+- **Property/fuzz tests** (`crates/registry-format/tests/fuzz.rs`): parser never panics on arbitrary bytes (2048 cases), well-formed payloads round-trip, expiry timestamps (incl. `0` and `u64::MAX`) preserved, unsorted/duplicate identifiers and wrong versions rejected with the right error, every strict prefix rejected, and an absurd entry count cannot trigger an unbounded allocation. `trailing_bytes_ignored` pins the on-chain parser's documented divergence from the SDK decoder (the contract skips the governance header and ignores trailing bytes; the SDK rejects trailing bytes).
+
+### `ckb-transaction-firewall-sdk` (Rust) — tests
+
+- **Property/fuzz tests for the BLKL v2 registry decoder** (`tests/registry_fuzz.rs`). Addresses the mainnet-readiness feedback on the CKBuilder review (issue #19: "fuzz/property tests for registry parsing, dep resolution, sorting, malformed data, and expiry"). Coverage: parser never panics on arbitrary bytes (2048 cases), encode→parse round-trip is byte-exact, expiry timestamps (incl. `0` and `u64::MAX`) round-trip, unsorted/duplicate identifiers rejected as `RegistryNotSorted`, trailing bytes and every strict prefix rejected, and an absurd entry count cannot trigger an unbounded allocation. Wires the already-declared `proptest` dependency into the SDK crate.
+- `RegistryEntry`, `GovernanceHeader`, and `RegistryPayload` now derive `PartialEq`/`Eq` so decoded payloads can be compared directly (used by the round-trip property).
+
 ## 2026-06-04
 
 ### `@ckb-firewall/cli` v0.5.2
